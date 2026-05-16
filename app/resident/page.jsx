@@ -4,8 +4,14 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Bell, AlertTriangle, FileText, LogOut, Plus, ChevronRight, Home, Menu } from 'lucide-react'
 import Image from 'next/image'
+import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
+import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import RatingModal from '@/components/RatingModal'
+import { Star } from 'lucide-react'
+import NotificationBanner from '@/components/NotificationBanner'
+import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -44,6 +50,7 @@ export default function ResidentDashboard() {
   const [activeSection, setActiveSection] = useState('home')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [ratingModal, setRatingModal] = useState(null)
 
   useEffect(() => {
     const handleResize = () => {
@@ -88,6 +95,77 @@ export default function ResidentDashboard() {
     loadData()
   }, [])
 
+  // Real-time subscriptions
+  useEffect(() => {
+    if (!profile?.barangay_id) return
+
+    const bid = profile.barangay_id
+
+    // Subscribe to announcements (their barangay)
+    const announcementChannel = supabase
+      .channel('resident-announcements')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'announcements',
+        filter: `barangay_id=eq.${bid}`,
+        }, (payload) => {
+          setAnnouncements(prev => [payload.new, ...prev])
+          toast.success(`📢 New announcement: ${payload.new.title}`, { duration: 5000 })
+          notifyNewAnnouncement(payload.new)
+        })
+      .subscribe()
+
+   // Subscribe to their own incidents (status changes)
+    const incidentChannel = supabase
+      .channel('resident-incidents')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'incidents',
+      }, (payload) => {
+        setIncidents(prev => prev.map(i => {
+          if (i.id === payload.new.id) {
+            if (payload.old.status !== payload.new.status) {
+              const statusMessage = {
+                assigned: '🛡️ Tanod has been assigned to your incident',
+                resolved: '✅ Your incident has been resolved!',
+              }
+              if (statusMessage[payload.new.status]) {
+                toast.success(statusMessage[payload.new.status], {
+                  id: `incident-${payload.new.id}-${payload.new.status}`,
+                })
+                notifyStatusUpdate({ id: payload.new.id, title: payload.new.title }, payload.new.status)
+              }
+            }
+            return { ...i, ...payload.new }
+          }
+          return i
+        }))
+      })
+      .subscribe()
+
+    // Subscribe to their own tickets
+    const ticketChannel = supabase
+      .channel('resident-tickets')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'tickets',
+      }, (payload) => {
+        setTickets(prev => prev.map(t =>
+          t.id === payload.new.id ? { ...t, ...payload.new } : t
+        ))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(announcementChannel)
+      supabase.removeChannel(incidentChannel)
+      supabase.removeChannel(ticketChannel)
+    }
+  }, [profile?.barangay_id])
+
   async function handleLogout() {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -98,10 +176,32 @@ export default function ResidentDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }
 
+  async function handleRating({ rating, feedback }) {
+    const incidentId = ratingModal.id
+    await supabase.from('incidents').update({
+      rating,
+      rating_feedback: feedback,
+      rated_at: new Date().toISOString(),
+    }).eq('id', incidentId)
+
+    setIncidents(prev => prev.map(i =>
+      i.id === incidentId ? { ...i, rating, rating_feedback: feedback, rated_at: new Date().toISOString() } : i
+    ))
+    toast.success('Thank you for your feedback! ⭐')
+    setRatingModal(null)
+  }
+
   const statusColor = {
     pending: 'bg-amber-100 text-amber-700', assigned: 'bg-blue-100 text-blue-700',
     resolved: 'bg-emerald-100 text-emerald-700', open: 'bg-amber-100 text-amber-700',
     in_progress: 'bg-blue-100 text-blue-700', closed: 'bg-emerald-100 text-emerald-700',
+  }
+
+  const priorityConfig = {
+    Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
+    Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
+    High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
+    Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
   }
 
   const sectionTitle = {
@@ -226,6 +326,7 @@ export default function ResidentDashboard() {
         />
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+          <NotificationBanner />
 
           {loading && (
             <div className="fade-up">
@@ -257,7 +358,7 @@ export default function ResidentDashboard() {
                   <p className="text-gray-400 text-sm mt-1">Here's what's happening in {profile?.barangays?.name || 'your barangay'}.</p>
                 </div>
                 <div className="hidden sm:block w-16 h-16 relative">
-                  <Image src="/logo.png" alt="BH360" fill sizes="64px" className="object-contain opacity-20" />
+                  <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain opacity-20" />
                 </div>
               </div>
 
@@ -345,7 +446,7 @@ export default function ResidentDashboard() {
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-800 text-sm">{a.title}</h3>
                       <p className="text-gray-500 text-sm mt-1 leading-relaxed">{a.content}</p>
-                      <p className="text-gray-300 text-xs mt-2">{new Date(a.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                      <p className="text-gray-300 text-xs mt-2" title={fullDate(a.created_at)}>{timeAgoLong(a.created_at)}</p>
                     </div>
                   </div>
                 </div>
@@ -377,10 +478,46 @@ export default function ResidentDashboard() {
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{background: '#fff7ed'}}>
                         <AlertTriangle size={16} className="text-orange-500" />
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
+                          {inc.priority && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
+                              style={{
+                                background: priorityConfig[inc.priority]?.bg || '#f9fafb',
+                                color: priorityConfig[inc.priority]?.color || '#6b7280',
+                                ...(inc.priority === 'Critical' ? {animation: 'pulse 2s ease-in-out infinite'} : {})
+                              }}>
+                              <span>{priorityConfig[inc.priority]?.icon}</span> {inc.priority}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-gray-500 text-xs mt-1">{inc.description}</p>
                         <p className="text-gray-300 text-xs mt-1.5">📍 {inc.location}</p>
+
+                        {/* Show rating if already rated */}
+                        {inc.rating && (
+                          <div className="mt-3 p-3 rounded-xl flex items-center gap-3" style={{background: '#fffbeb', border: '1px solid #fef3c7'}}>
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3, 4, 5].map(s => (
+                                <Star key={s} size={12} fill={s <= inc.rating ? '#f59e0b' : 'none'} color={s <= inc.rating ? '#f59e0b' : '#d1d5db'} />
+                              ))}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-amber-700">Your rating</p>
+                              {inc.rating_feedback && <p className="text-xs text-amber-900 truncate">"{inc.rating_feedback}"</p>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Rate Service button for unrated resolved */}
+                        {inc.status === 'resolved' && !inc.rating && (
+                          <button onClick={() => setRatingModal(inc)}
+                            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105"
+                            style={{background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 4px 12px rgba(251,191,36,0.3)'}}>
+                            <Star size={12} fill="white" /> Rate the Service
+                          </button>
+                        )}
                       </div>
                     </div>
                     <span className={`text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusColor[inc.status]}`}>{inc.status}</span>
@@ -449,6 +586,12 @@ export default function ResidentDashboard() {
 
         </main>
       </div>
+      <RatingModal
+        open={!!ratingModal}
+        onClose={() => setRatingModal(null)}
+        onSubmit={handleRating}
+        incident={ratingModal}
+      />
     </div>
   )
 }

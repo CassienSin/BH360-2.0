@@ -2,11 +2,17 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, LogOut, Plus, ChevronRight, Shield, Menu, Users, KeyRound, Copy, Search, Filter, X } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, LogOut, Plus, ChevronRight, Shield, Menu, Users, KeyRound, Copy, Search, Filter, X, Map, Download, FileSpreadsheet, Star, Calendar } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import { FileText as FileTextIcon } from 'lucide-react'
+import { exportToCSV, exportToPDF } from '@/lib/export'
+import NotificationBanner from '@/components/NotificationBanner'
+import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -50,6 +56,13 @@ const categoryConfig = {
   Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
 }
 
+const priorityConfig = {
+  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
+  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵', order: 2 },
+  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠', order: 3 },
+  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
+}
+
 export default function OfficialDashboard() {
   const router = useRouter()
   const supabase = createClient()
@@ -68,6 +81,8 @@ export default function OfficialDashboard() {
   const [incidentCategoryFilter, setIncidentCategoryFilter] = useState('all')
   const [ticketSearch, setTicketSearch] = useState('')
   const [ticketFilter, setTicketFilter] = useState('all')
+  const [confirmDialog, setConfirmDialog] = useState(null) // { type, ...data }
+  const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
 
   useEffect(() => {
     const handleResize = () => {
@@ -136,18 +151,126 @@ export default function OfficialDashboard() {
     loadData()
   }, [])
 
+  // Real-time subscriptions
+  useEffect(() => {
+    if (!profile?.barangay_id) return
+
+    const bid = profile.barangay_id
+
+    // Subscribe to incident changes
+    const incidentChannel = supabase
+      .channel('official-incidents')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'incidents',
+        filter: `barangay_id=eq.${bid}`,
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const { data } = await supabase
+            .from('incidents')
+            .select('*, profiles!incidents_reported_by_fkey(full_name)')
+            .eq('id', payload.new.id)
+            .single()
+          if (data) {
+            setIncidents(prev => [data, ...prev])
+            if (data.priority === 'Critical') {
+              toast.error(`🚨 CRITICAL: ${data.title}`, { duration: 8000 })
+              notifyCriticalIncident(data)
+            } else if (data.priority === 'High') {
+              toast(`⚠️ HIGH PRIORITY: ${data.title}`, { duration: 6000, icon: '🟠' })
+              notifyNewIncident(data)
+            } else {
+              toast.success(`🆕 New incident: ${data.title}`, { duration: 5000 })
+              notifyNewIncident(data)
+            }
+          }
+        }
+        if (payload.eventType === 'UPDATE') {
+          setIncidents(prev => prev.map(i =>
+            i.id === payload.new.id ? { ...i, ...payload.new } : i
+          ))
+        }
+        if (payload.eventType === 'DELETE') {
+          setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    // Subscribe to ticket changes
+    const ticketChannel = supabase
+      .channel('official-tickets')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tickets',
+        filter: `barangay_id=eq.${bid}`,
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const { data } = await supabase
+            .from('tickets')
+            .select('*, profiles!tickets_created_by_fkey(full_name)')
+            .eq('id', payload.new.id)
+            .single()
+          if (data) {
+            setTickets(prev => [data, ...prev])
+            toast.success(`📋 New ticket: ${data.title}`, { duration: 5000 })
+          }
+        }
+        if (payload.eventType === 'UPDATE') {
+          setTickets(prev => prev.map(t =>
+            t.id === payload.new.id ? { ...t, ...payload.new } : t
+          ))
+        }
+      })
+      .subscribe()
+
+    // Subscribe to announcement changes
+    const announcementChannel = supabase
+      .channel('official-announcements')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'announcements',
+        filter: `barangay_id=eq.${bid}`,
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setAnnouncements(prev => [payload.new, ...prev])
+        }
+        if (payload.eventType === 'DELETE') {
+          setAnnouncements(prev => prev.filter(a => a.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(incidentChannel)
+      supabase.removeChannel(ticketChannel)
+      supabase.removeChannel(announcementChannel)
+    }
+  }, [profile?.barangay_id])
+
   async function handleLogout() { await supabase.auth.signOut(); window.location.href = '/login' }
 
-  const filteredIncidents = incidents.filter(inc => {
-    const matchesSearch = !incidentSearch ||
-      inc.title?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
-      inc.description?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
-      inc.location?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
-      inc.profiles?.full_name?.toLowerCase().includes(incidentSearch.toLowerCase())
-    const matchesFilter = incidentFilter === 'all' || inc.status === incidentFilter
-    const matchesCategory = incidentCategoryFilter === 'all' || inc.category === incidentCategoryFilter
-    return matchesSearch && matchesFilter && matchesCategory
-  })
+  const filteredIncidents = incidents
+    .filter(inc => {
+      const matchesSearch = !incidentSearch ||
+        inc.title?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
+        inc.description?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
+        inc.location?.toLowerCase().includes(incidentSearch.toLowerCase()) ||
+        inc.profiles?.full_name?.toLowerCase().includes(incidentSearch.toLowerCase())
+      const matchesFilter = incidentFilter === 'all' || inc.status === incidentFilter
+      const matchesCategory = incidentCategoryFilter === 'all' || inc.category === incidentCategoryFilter
+      const matchesPriority = incidentPriorityFilter === 'all' || inc.priority === incidentPriorityFilter
+      return matchesSearch && matchesFilter && matchesCategory && matchesPriority
+    })
+    .sort((a, b) => {
+      // Sort by priority (Critical first), then by date
+      const aPriority = priorityConfig[a.priority]?.order || 2
+      const bPriority = priorityConfig[b.priority]?.order || 2
+      if (aPriority !== bPriority) return bPriority - aPriority
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
 
   const filteredTickets = tickets.filter(t => {
     const matchesSearch = !ticketSearch ||
@@ -170,10 +293,103 @@ export default function OfficialDashboard() {
     toast.success(`${tanod?.full_name} dispatched successfully!`)
   }
 
-  async function resolveIncident(incidentId) {
-    await supabase.from('incidents').update({ status: 'resolved' }).eq('id', incidentId)
-    setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, status: 'resolved' } : i))
-    toast.success('Incident marked as resolved!')
+  async function handleExportIncidents(format) {
+    const columns = [
+      { label: 'Title', key: 'title' },
+      { label: 'Category', key: 'category' },
+      { label: 'Priority', key: 'priority' },
+      { label: 'Status', key: 'status' },
+      { label: 'Location', key: 'location' },
+      { label: 'Reporter', value: (r) => r.profiles?.full_name || '—' },
+      { label: 'Description', key: 'description' },
+      { label: 'Date Reported', value: (r) => new Date(r.created_at).toLocaleDateString('en-PH', { dateStyle: 'medium' }) },
+    ]
+
+    const data = filteredIncidents
+    const filename = `incidents-${profile?.barangays?.name?.replace(/\s/g, '-') || 'barangay'}`
+
+    if (format === 'csv') {
+      exportToCSV(data, filename, columns)
+      toast.success(`Exported ${data.length} incidents to CSV!`)
+    } else {
+      await exportToPDF(data, filename, columns, {
+        title: 'Incident Report',
+        subtitle: `${data.length} incidents${incidentFilter !== 'all' ? ` (${incidentFilter})` : ''}`,
+        barangay: profile?.barangays ? `${profile.barangays.name}, ${profile.barangays.city}` : '',
+        orientation: 'landscape',
+        paperSize: 'a4',
+      })
+      toast.success(`Exported ${data.length} incidents to PDF!`)
+    }
+  }
+
+  async function handleExportTickets(format) {
+    const columns = [
+      { label: 'Title', key: 'title' },
+      { label: 'Status', key: 'status' },
+      { label: 'Sender', value: (r) => r.profiles?.full_name || '—' },
+      { label: 'Description', key: 'description' },
+      { label: 'Date Created', value: (r) => new Date(r.created_at).toLocaleDateString('en-PH', { dateStyle: 'medium' }) },
+    ]
+
+    const data = filteredTickets
+    const filename = `tickets-${profile?.barangays?.name?.replace(/\s/g, '-') || 'barangay'}`
+
+    if (format === 'csv') {
+      exportToCSV(data, filename, columns)
+      toast.success(`Exported ${data.length} tickets to CSV!`)
+    } else {
+      await exportToPDF(data, filename, columns, {
+        title: 'Ticket Report',
+        subtitle: `${data.length} tickets`,
+        barangay: profile?.barangays ? `${profile.barangays.name}, ${profile.barangays.city}` : '',
+        orientation: 'portrait',
+        paperSize: 'a4',
+      })
+      toast.success(`Exported ${data.length} tickets to PDF!`)
+    }
+  }
+
+  async function handleExportUsers(format) {
+    const columns = [
+      { label: 'Full Name', key: 'full_name' },
+      { label: 'Role', key: 'role' },
+      { label: 'Phone', key: 'phone' },
+      { label: 'Address', key: 'address' },
+      { label: 'Joined', value: (r) => new Date(r.created_at).toLocaleDateString('en-PH', { dateStyle: 'medium' }) },
+    ]
+
+    const filename = `users-${profile?.barangays?.name?.replace(/\s/g, '-') || 'barangay'}`
+
+    if (format === 'csv') {
+      exportToCSV(users, filename, columns)
+      toast.success(`Exported ${users.length} users to CSV!`)
+    } else {
+      await exportToPDF(users, filename, columns, {
+        title: 'User Directory',
+        subtitle: `${users.length} registered users`,
+        barangay: profile?.barangays ? `${profile.barangays.name}, ${profile.barangays.city}` : '',
+        orientation: 'portrait',
+        paperSize: 'a4',
+      })
+      toast.success(`Exported ${users.length} users to PDF!`)
+    }
+  }
+
+  function resolveIncident(incident) {
+    setConfirmDialog({
+      type: 'resolve',
+      title: 'Mark as resolved?',
+      message: `Are you sure "${incident.title}" has been resolved? This will notify the resident and update the incident status.`,
+      confirmText: 'Yes, Mark Resolved',
+      variant: 'success',
+      onConfirm: async () => {
+        await supabase.from('incidents').update({ status: 'resolved' }).eq('id', incident.id)
+        setIncidents(prev => prev.map(i => i.id === incident.id ? { ...i, status: 'resolved' } : i))
+        toast.success('Incident marked as resolved!')
+        setConfirmDialog(null)
+      }
+    })
   }
 
   async function generateInviteCode(role) {
@@ -200,13 +416,14 @@ export default function OfficialDashboard() {
   const sectionTitle = {
     dashboard: 'Dashboard', incidents: 'Incidents', announcements: 'Announcements',
     tickets: 'Ticket Management', tanods: 'Tanod Management', analytics: 'AI Analytics',
-    users: 'User Management'
+    users: 'User Management', map: 'Incident Map', calendar: 'Calendar'
   }
   const sectionDesc = {
     dashboard: 'Overview of barangay operations', incidents: 'Monitor and respond to incidents',
     announcements: 'Manage community announcements', tickets: 'Handle resident support tickets',
     tanods: 'Manage field officers', analytics: 'AI-powered insights and trends',
-    users: 'Manage accounts and invite codes'
+    users: 'Manage accounts and invite codes', map: 'Visualize incidents on a map',
+    calendar: 'View activity by date'
   }
 
   const Skeleton = ({ className }) => <div className={`skeleton-shimmer ${className}`} />
@@ -267,6 +484,8 @@ export default function OfficialDashboard() {
             { key: 'users', label: 'User Management', icon: Users },
           ]},
           { section: 'INSIGHTS', items: [
+            { key: 'map', label: 'Incident Map', icon: Map },
+            { key: 'calendar', label: 'Calendar', icon: Calendar },
             { key: 'analytics', label: 'AI Analytics', icon: BarChart2, badge: 'AI' },
           ]},
         ]}
@@ -318,6 +537,7 @@ export default function OfficialDashboard() {
         />
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+           <NotificationBanner />
 
           {loading && (
             <div className="fade-up">
@@ -350,7 +570,7 @@ export default function OfficialDashboard() {
                   <p className="text-gray-400 text-sm mt-1">Managing {profile?.barangays?.name || 'your barangay'}</p>
                 </div>
                 <div className="hidden sm:block w-16 h-16 relative">
-                  <Image src="/logo.png" alt="BH360" fill sizes="64px" className="object-contain opacity-20" />
+                  <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain opacity-20" />
                 </div>
               </div>
 
@@ -408,7 +628,7 @@ export default function OfficialDashboard() {
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-gray-800">{inc.title}</p>
-                            <p className="text-xs text-gray-400">{inc.profiles?.full_name} · {inc.location}</p>
+                            <p className="text-xs text-gray-400" title={fullDate(inc.created_at)}>{inc.profiles?.full_name} · {inc.location} · {timeAgo(inc.created_at)}</p>
                           </div>
                         </div>
                         <span className={`text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusColor[inc.status]}`}>{inc.status}</span>
@@ -503,10 +723,54 @@ export default function OfficialDashboard() {
                     })}
                   </div>
 
-                  {(incidentSearch || incidentFilter !== 'all' || incidentCategoryFilter !== 'all') && (
+                  {/* Priority Filter */}
+                    <div className="flex gap-1.5 flex-wrap mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider w-full mb-1">Filter by Priority</p>
+                      <button onClick={() => setIncidentPriorityFilter('all')}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+                        style={{
+                          background: incidentPriorityFilter === 'all' ? '#5B54E8' : '#fafaff',
+                          color: incidentPriorityFilter === 'all' ? 'white' : '#6b7280',
+                          border: incidentPriorityFilter === 'all' ? 'none' : '1px solid #f0effe',
+                        }}>
+                        All Priorities
+                      </button>
+                      {Object.entries(priorityConfig).sort((a, b) => b[1].order - a[1].order).map(([p, conf]) => {
+                        const count = incidents.filter(i => i.priority === p).length
+                        if (count === 0) return null
+                        return (
+                          <button key={p} onClick={() => setIncidentPriorityFilter(p)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                            style={{
+                              background: incidentPriorityFilter === p ? conf.color : '#fafaff',
+                              color: incidentPriorityFilter === p ? 'white' : conf.color,
+                              border: incidentPriorityFilter === p ? 'none' : `1px solid ${conf.color}30`,
+                            }}>
+                            <span>{conf.icon}</span> {p} <span className="opacity-70">({count})</span>
+                          </button>
+                        )
+                      })}
+
+                      {/* Export buttons */}
+                        <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-xs text-gray-400 mr-auto">Export {filteredIncidents.length} {filteredIncidents.length === 1 ? 'incident' : 'incidents'}</p>
+                          <button onClick={() => handleExportIncidents('csv')} disabled={filteredIncidents.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+                            style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
+                            <FileSpreadsheet size={12} /> CSV
+                          </button>
+                          <button onClick={() => handleExportIncidents('pdf')} disabled={filteredIncidents.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+                            style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'}}>
+                            <Download size={12} /> PDF
+                          </button>
+                        </div>
+                    </div>
+
+                  {(incidentSearch || incidentFilter !== 'all' || incidentCategoryFilter !== 'all' || incidentPriorityFilter !== 'all') && (
                     <p className="text-xs text-gray-400 mt-3">
                       Showing {filteredIncidents.length} of {incidents.length} incidents
-                      <button onClick={() => { setIncidentSearch(''); setIncidentFilter('all'); setIncidentCategoryFilter('all') }}
+                      <button onClick={() => { setIncidentSearch(''); setIncidentFilter('all'); setIncidentCategoryFilter('all'); setIncidentPriorityFilter('all') }}
                         className="ml-2 font-semibold" style={{color: '#5B54E8'}}>
                         Clear filters
                       </button>
@@ -527,7 +791,7 @@ export default function OfficialDashboard() {
                   <Search size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
                   <p className="text-gray-500 text-sm font-medium">No incidents match your search</p>
                   <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
-                  <button onClick={() => { setIncidentSearch(''); setIncidentFilter('all'); setIncidentCategoryFilter('all') }}
+                  <button onClick={() => { setIncidentSearch(''); setIncidentFilter('all'); setIncidentCategoryFilter('all'); setIncidentPriorityFilter('all') }}
                     className="mt-4 text-xs font-semibold" style={{color: '#5B54E8'}}>
                     Clear filters →
                   </button>
@@ -543,10 +807,20 @@ export default function OfficialDashboard() {
                         <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl" style={{background: cat.bg}}>
                           {cat.icon}
                         </div>
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
                             <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${statusColor[inc.status]}`}>{inc.status}</span>
+                            {inc.priority && (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
+                                style={{
+                                  background: priorityConfig[inc.priority]?.bg || '#f9fafb',
+                                  color: priorityConfig[inc.priority]?.color || '#6b7280',
+                                  ...(inc.priority === 'Critical' ? {animation: 'pulse 2s ease-in-out infinite'} : {})
+                                }}>
+                                <span>{priorityConfig[inc.priority]?.icon}</span> {inc.priority}
+                              </span>
+                            )}
                             {inc.category && (
                               <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                                 style={{background: cat.bg, color: cat.color}}>
@@ -555,7 +829,48 @@ export default function OfficialDashboard() {
                             )}
                           </div>
                           <p className="text-gray-500 text-xs mt-1">{inc.description}</p>
-                          <p className="text-gray-300 text-xs mt-1">📍 {inc.location} · By {inc.profiles?.full_name}</p>
+                          <p className="text-gray-300 text-xs mt-1" title={fullDate(inc.created_at)}>📍 {inc.location} · By {inc.profiles?.full_name} · {timeAgo(inc.created_at)}</p>
+
+                          {/* Resident Rating */}
+                            {inc.rating && (
+                              <div className="mt-3 p-3 rounded-xl" style={{background: '#fffbeb', border: '1px solid #fef3c7'}}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div className="flex gap-0.5">
+                                    {[1, 2, 3, 4, 5].map(s => (
+                                      <Star key={s} size={12} fill={s <= inc.rating ? '#f59e0b' : 'none'} color={s <= inc.rating ? '#f59e0b' : '#d1d5db'} />
+                                    ))}
+                                  </div>
+                                  <span className="text-xs font-bold text-amber-700">{inc.rating}.0 / 5.0</span>
+                                  <span className="text-[10px] text-amber-600">· Resident feedback</span>
+                                </div>
+                                {inc.rating_feedback && (
+                                  <p className="text-xs text-amber-900 italic">"{inc.rating_feedback}"</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Resolution Details */}
+                            {inc.status === 'resolved' && inc.resolution_notes && (
+                              <div className="mt-3 p-3 rounded-xl" style={{background: '#f0fdf4', border: '1px solid #dcfce7'}}>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">Resolution Notes</p>
+                                <p className="text-xs text-emerald-900">{inc.resolution_notes}</p>
+                                {inc.resolution_image_url && (
+                                  <a href={inc.resolution_image_url} target="_blank" rel="noopener noreferrer"
+                                    className="block mt-2 rounded-lg overflow-hidden"
+                                    style={{border: '1px solid #dcfce7', maxWidth: '180px'}}>
+                                    <img src={inc.resolution_image_url} alt="Resolution proof" className="w-full max-h-24 object-cover" />
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {inc.image_url && (
+                            <a href={inc.image_url} target="_blank" rel="noopener noreferrer"
+                              className="block mt-3 rounded-2xl overflow-hidden transition-all hover:scale-[1.02]"
+                              style={{border: '1px solid #f0effe', maxWidth: '400px'}}>
+                              <img src={inc.image_url} alt="Incident" className="w-full max-h-64 object-cover" />
+                            </a>
+                          )}
                         </div>
                       </div>
                       {inc.status !== 'resolved' && (
@@ -567,7 +882,7 @@ export default function OfficialDashboard() {
                               {tanods.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
                             </select>
                           )}
-                          <button onClick={() => resolveIncident(inc.id)}
+                          <button onClick={() => resolveIncident(inc)}
                             className="text-xs bg-emerald-500 text-white px-3 py-2 rounded-xl hover:bg-emerald-600 font-semibold transition-colors">
                             ✓ Mark Resolved
                           </button>
@@ -637,6 +952,21 @@ export default function OfficialDashboard() {
                       </button>
                     </p>
                   )}
+
+                  {/* Export buttons */}
+                    <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
+                      <p className="text-xs text-gray-400 mr-auto">Export {filteredTickets.length} {filteredTickets.length === 1 ? 'ticket' : 'tickets'}</p>
+                      <button onClick={() => handleExportTickets('csv')} disabled={filteredTickets.length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+                        style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
+                        <FileSpreadsheet size={12} /> CSV
+                      </button>
+                      <button onClick={() => handleExportTickets('pdf')} disabled={filteredTickets.length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
+                        style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'}}>
+                        <Download size={12} /> PDF
+                      </button>
+                    </div>
                 </div>
               )}
 
@@ -708,7 +1038,7 @@ export default function OfficialDashboard() {
                     <div>
                       <h3 className="font-semibold text-gray-800 text-sm">{a.title}</h3>
                       <p className="text-gray-500 text-sm mt-1">{a.content}</p>
-                      <p className="text-gray-300 text-xs mt-2">{new Date(a.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                      <p className="text-gray-300 text-xs mt-2" title={fullDate(a.created_at)}>{timeAgoLong(a.created_at)}</p>
                     </div>
                   </div>
                 </div>
@@ -818,14 +1148,28 @@ export default function OfficialDashboard() {
               </div>
 
               <div className="white-card p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{background: '#f0effe'}}>
-                    <Users size={18} style={{color: '#5B54E8'}} />
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{background: '#f0effe'}}>
+                      <Users size={18} style={{color: '#5B54E8'}} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-800">All Users</h3>
+                      <p className="text-xs text-gray-400">{users.length} registered accounts in {profile?.barangays?.name}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800">All Users</h3>
-                    <p className="text-xs text-gray-400">{users.length} registered accounts in {profile?.barangays?.name}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleExportUsers('csv')} disabled={users.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40"
+                      style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
+                      <FileSpreadsheet size={12} /> CSV
+                    </button>
+                    <button onClick={() => handleExportUsers('pdf')} disabled={users.length === 0}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-40"
+                      style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'}}>
+                      <Download size={12} /> PDF
+                    </button>
                   </div>
                 </div>
 
@@ -859,8 +1203,55 @@ export default function OfficialDashboard() {
               </div>
             </div>
           )}
+
+          {!loading && profile?.barangay_id && activeSection === 'map' && (
+            <div className="fade-up space-y-4">
+              <div className="white-card p-8 text-center">
+                <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
+                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
+                  <Map size={28} className="text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800 mb-1">Incident Map View</h2>
+                <p className="text-gray-400 text-sm mb-6">Visualize all incidents geographically on an interactive map</p>
+                <button onClick={() => router.push('/official/map')}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
+                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
+                  Open Map View <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!loading && profile?.barangay_id && activeSection === 'calendar' && (
+            <div className="fade-up space-y-4">
+              <div className="white-card p-8 text-center">
+                <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
+                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
+                <Calendar size={28} className="text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-1">Calendar View</h2>
+              <p className="text-gray-400 text-sm mb-6">View incidents and announcements plotted by date</p>
+              <button onClick={() => router.push('/official/calendar')}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
+                style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
+                Open Calendar <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          )}
         </main>
+        </div>
+
+        {/* Confirm Dialog */}
+        <ConfirmDialog
+          open={!!confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+          onConfirm={confirmDialog?.onConfirm}
+          title={confirmDialog?.title}
+          message={confirmDialog?.message}
+          confirmText={confirmDialog?.confirmText}
+          variant={confirmDialog?.variant || 'danger'}
+        />
       </div>
-    </div>
-  )
-}
+    )
+  }

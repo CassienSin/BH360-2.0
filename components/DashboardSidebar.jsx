@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
 import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity, TrendingUp, Zap } from 'lucide-react'
+import ConfirmDialog from './ConfirmDialog'
 
 export default function DashboardSidebar({
   profile,
@@ -21,10 +22,15 @@ export default function DashboardSidebar({
   const [pinned, setPinned] = useState([])
   const [hoveredItem, setHoveredItem] = useState(null)
   const navRef = useRef(null)
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
 
   // Load pinned items from localStorage isn't allowed in artifacts; use in-memory only
 
-  async function handleLogout() {
+ function handleLogout() {
+    setLogoutConfirm(true)
+  }
+
+  async function confirmLogout() {
     await supabase.auth.signOut()
     window.location.href = '/login'
   }
@@ -304,9 +310,13 @@ export default function DashboardSidebar({
             style={{background: 'white', border: '1px solid #f0effe'}}>
             <div className="flex items-center gap-2.5">
               <div className="relative flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white"
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
                   style={{background: rc.gradient, boxShadow: `0 4px 12px ${rc.color}40`}}>
-                  {profile?.full_name?.[0]?.toUpperCase()}
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    profile?.full_name?.[0]?.toUpperCase()
+                  )}
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-emerald-500" />
               </div>
@@ -331,6 +341,17 @@ export default function DashboardSidebar({
           </button>
         )}
       </div>
-    </aside>
-  )
-}
+
+      <ConfirmDialog
+          open={logoutConfirm}
+          onClose={() => setLogoutConfirm(false)}
+          onConfirm={confirmLogout}
+          title="Sign out?"
+          message="Are you sure you want to sign out? You'll need to log in again to access your dashboard."
+          confirmText="Yes, Sign Out"
+          cancelText="Stay Signed In"
+          variant="logout"
+        />
+      </aside>
+    )
+  }

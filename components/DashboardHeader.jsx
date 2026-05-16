@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
+import ConfirmDialog from './ConfirmDialog'
+import { timeAgo } from '@/lib/timeAgo'
 
 export default function DashboardHeader({
   profile,
@@ -23,15 +25,17 @@ export default function DashboardHeader({
   const [searchQuery, setSearchQuery] = useState('')
   const [notifOpen, setNotifOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
-  const [currentTime, setCurrentTime] = useState(new Date())
+  const [currentTime, setCurrentTime] = useState(null)
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
 
   const searchRef = useRef(null)
   const notifRef = useRef(null)
   const userMenuRef = useRef(null)
   const searchInputRef = useRef(null)
 
-  // Live clock
+  // Live clock — only start on client to avoid hydration mismatch
   useEffect(() => {
+    setCurrentTime(new Date())
     const interval = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(interval)
   }, [])
@@ -65,7 +69,12 @@ export default function DashboardHeader({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  async function handleLogout() {
+  function handleLogout() {
+    setLogoutConfirm(true)
+    setUserMenuOpen(false)
+  }
+
+  async function confirmLogout() {
     await supabase.auth.signOut()
     window.location.href = '/login'
   }
@@ -97,13 +106,6 @@ export default function DashboardHeader({
   }
   const rc = roleConfig[profile?.role] || roleConfig.resident
 
-  function timeAgo(date) {
-    const seconds = Math.floor((new Date() - new Date(date)) / 1000)
-    if (seconds < 60) return 'just now'
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-    return `${Math.floor(seconds / 86400)}d ago`
-  }
 
   return (
     <>
@@ -168,14 +170,16 @@ export default function DashboardHeader({
         {/* RIGHT SIDE — Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
 
-          {/* Live clock */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
-            style={{background: '#fafaff', border: '1px solid #f0effe'}}>
-            <Clock size={12} className="text-gray-400" />
-            <span className="text-xs font-bold text-gray-600">
-              {currentTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-            </span>
-          </div>
+          {/* Live clock — only render on client */}
+            {currentTime && (
+              <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
+                style={{background: '#fafaff', border: '1px solid #f0effe'}}>
+                <Clock size={12} className="text-gray-400" />
+                <span className="text-xs font-bold text-gray-600">
+                  {currentTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                </span>
+              </div>
+            )}
 
           {/* Mobile search */}
           <button onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 50) }}
@@ -263,9 +267,13 @@ export default function DashboardHeader({
           <div className="relative" ref={userMenuRef}>
             <button onClick={() => setUserMenuOpen(!userMenuOpen)}
               className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white"
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
                 style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 2px 8px rgba(91,84,232,0.3)'}}>
-                {profile?.full_name?.[0]?.toUpperCase()}
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  profile?.full_name?.[0]?.toUpperCase()
+                )}
               </div>
               <ChevronDown size={12} className={`text-gray-400 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -277,9 +285,13 @@ export default function DashboardHeader({
                 {/* User info */}
                 <div className="px-4 py-4 border-b border-gray-100" style={{background: 'linear-gradient(135deg, #fafaff, white)'}}>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden"
                       style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
-                      {profile?.full_name?.[0]?.toUpperCase()}
+                      {profile?.avatar_url ? (
+                        <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        profile?.full_name?.[0]?.toUpperCase()
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{profile?.full_name}</p>
@@ -470,6 +482,17 @@ export default function DashboardHeader({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={logoutConfirm}
+        onClose={() => setLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+        title="Sign out?"
+        message="Are you sure you want to sign out? You'll need to log in again to access your dashboard."
+        confirmText="Yes, Sign Out"
+        cancelText="Stay Signed In"
+        variant="logout"
+      />
     </>
   )
 }
