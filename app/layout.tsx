@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from 'react-hot-toast'
+import InstallPrompt from "@/components/InstallPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,24 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "BarangayHub 360",
-  description: "Smart Barangay Management System",
+  description: "Smart Barangay Management System with AI-powered insights",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "BH360",
+  },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#5B54E8",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({
@@ -52,6 +70,20 @@ export default function RootLayout({
           }}
         />
         {children}
+        <InstallPrompt />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                  navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
+                    .catch(err => console.log('[PWA] SW registration failed:', err))
+                })
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   );
