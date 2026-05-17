@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { ArrowRight, AlertTriangle, Shield, BarChart2, FileText, MessageCircle, Bell, CheckCircle, Zap, Users, Star, ChevronRight, TrendingUp, Activity } from 'lucide-react'
+import { createClient } from '@/lib/supabase'
 
 const dots = [...Array(30)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -60,6 +61,26 @@ export default function LandingPage() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+  const supabase = createClient()
+  async function checkSession() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return // not logged in, stay on landing
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_super_admin')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.is_super_admin) router.push('/admin')
+    else if (profile?.role === 'official') router.push('/official')
+    else if (profile?.role === 'tanod') router.push('/tanod')
+    else if (profile?.role === 'resident') router.push('/resident')
+  }
+  checkSession()
+}, [])
 
   const features = [
     { icon: AlertTriangle, title: 'Instant Incident Reporting', desc: 'Residents report incidents in seconds. Officials receive real-time notifications.', color: '#fb923c', bg: '#fff7ed' },
