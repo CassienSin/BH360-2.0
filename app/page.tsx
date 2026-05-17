@@ -63,24 +63,30 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-  const supabase = createClient()
-  async function checkSession() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return // not logged in, stay on landing
+    const supabase = createClient()
+    async function checkSession() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return // not logged in, stay on landing
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, is_super_admin')
-      .eq('id', user.id)
-      .single()
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, is_super_admin, deactivated_at')
+        .eq('id', user.id)
+        .single()
 
-    if (profile?.is_super_admin) router.push('/admin')
-    else if (profile?.role === 'official') router.push('/official')
-    else if (profile?.role === 'tanod') router.push('/tanod')
-    else if (profile?.role === 'resident') router.push('/resident')
-  }
-  checkSession()
-}, [])
+      // Sign out deactivated users
+      if (profile?.deactivated_at) {
+        await supabase.auth.signOut()
+        return
+      }
+
+      if (profile?.is_super_admin) router.push('/admin')
+      else if (profile?.role === 'official') router.push('/official')
+      else if (profile?.role === 'tanod') router.push('/tanod')
+      else if (profile?.role === 'resident') router.push('/resident')
+    }
+    checkSession()
+  }, [])
 
   const features = [
     { icon: AlertTriangle, title: 'Instant Incident Reporting', desc: 'Residents report incidents in seconds. Officials receive real-time notifications.', color: '#fb923c', bg: '#fff7ed' },

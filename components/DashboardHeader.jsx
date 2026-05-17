@@ -317,12 +317,12 @@ export default function DashboardHeader({
                     <User size={14} className="text-gray-400" />
                     <span className="text-sm text-gray-700">My Profile</span>
                   </button>
-                  <button onClick={() => { toast('Settings coming soon!', { icon: '⚙️' }); setUserMenuOpen(false) }}
+                  <button onClick={() => { router.push('/settings'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
                     <Settings size={14} className="text-gray-400" />
                     <span className="text-sm text-gray-700">Settings</span>
                   </button>
-                  <button onClick={() => { toast('Help center coming soon!', { icon: '💡' }); setUserMenuOpen(false) }}
+                  <button onClick={() => { router.push('/help'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
                     <HelpCircle size={14} className="text-gray-400" />
                     <span className="text-sm text-gray-700">Help & Support</span>

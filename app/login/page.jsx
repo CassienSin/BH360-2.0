@@ -28,7 +28,21 @@ export default function LoginPage() {
     setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
-    const { data: profile } = await supabase.from('profiles').select('role, is_super_admin').eq('id', data.user.id).single()
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_super_admin, deactivated_at')
+      .eq('id', data.user.id)
+      .single()
+
+    // Block deactivated accounts
+    if (profile?.deactivated_at) {
+      await supabase.auth.signOut()
+      setError('This account has been deactivated. Please contact support to reactivate it.')
+      setLoading(false)
+      return
+    }
+
     if (profile?.is_super_admin) window.location.href = '/admin'
     else if (profile?.role === 'official') window.location.href = '/official'
     else if (profile?.role === 'tanod') window.location.href = '/tanod'

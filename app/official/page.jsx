@@ -149,14 +149,16 @@ export default function OfficialDashboard() {
         .select('*')
         .eq('role', 'tanod')
         .eq('barangay_id', bid)
+        .is('deactivated_at', null)
       setTanods(tan || [])
 
       const { data: allUsers } = await supabase.from('profiles')
         .select('*')
         .eq('barangay_id', bid)
+        .is('deactivated_at', null)
         .order('created_at', { ascending: false })
       setUsers(allUsers || [])
-
+      
       const { data: codes } = await supabase.from('invite_codes')
         .select('*, profiles(full_name)')
         .eq('barangay_id', bid)
