@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
 import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity, TrendingUp, Zap } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
+import { createPortal } from 'react-dom'
 
 export default function DashboardSidebar({
   profile,
@@ -66,8 +67,9 @@ export default function DashboardSidebar({
   const rc = roleColors[roleLabel] || roleColors.Resident
 
   return (
+    <>
     <aside className={`sidebar flex-shrink-0 flex flex-col bg-white ${sidebarOpen ? 'w-64 open' : 'w-16'}`}
-      style={{boxShadow: '4px 0 24px rgba(91,84,232,0.1)'}}>
+      style={{boxShadow: '4px 0 24px rgba(91,84,232,0.1)',  height: '100dvh', overflow: 'hidden',}}>
 
       {/* Logo / Brand */}
       <div className={`flex items-center gap-3 px-4 py-4 ${!sidebarOpen && 'justify-center'}`}
@@ -342,7 +344,10 @@ export default function DashboardSidebar({
         )}
       </div>
 
-      <ConfirmDialog
+      </aside>
+
+      {typeof document !== 'undefined' && createPortal(
+        <ConfirmDialog
           open={logoutConfirm}
           onClose={() => setLogoutConfirm(false)}
           onConfirm={confirmLogout}
@@ -351,7 +356,16 @@ export default function DashboardSidebar({
           confirmText="Yes, Sign Out"
           cancelText="Stay Signed In"
           variant="logout"
+        />,
+        document.body
+      )}
+
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
         />
-      </aside>
-    )
-  }
+      )}
+    </>
+  )
+}
