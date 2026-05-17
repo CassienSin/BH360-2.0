@@ -28,10 +28,12 @@ export default function LoginPage() {
     setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-    if (profile?.role === 'official') window.location.href = '/official'
+    const { data: profile } = await supabase.from('profiles').select('role, is_super_admin').eq('id', data.user.id).single()
+    if (profile?.is_super_admin) window.location.href = '/admin'
+    else if (profile?.role === 'official') window.location.href = '/official'
     else if (profile?.role === 'tanod') window.location.href = '/tanod'
-    else window.location.href = '/resident'
+    else if (profile?.role === 'resident') window.location.href = '/resident'
+    else window.location.href = '/'
   }
 
   return (

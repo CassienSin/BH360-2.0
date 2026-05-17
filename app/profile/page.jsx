@@ -245,6 +245,7 @@ export default function ProfilePage() {
   }
 
   function getDashboardPath() {
+    if (profile?.is_super_admin) return '/admin'
     if (profile?.role === 'official') return '/official'
     if (profile?.role === 'tanod') return '/tanod'
     return '/resident'
@@ -254,8 +255,11 @@ export default function ProfilePage() {
     resident: { label: 'Resident', color: '#5B54E8', bg: '#f0effe', gradient: 'linear-gradient(135deg, #5B54E8, #7C75F0)' },
     official: { label: 'Barangay Official', color: '#f97316', bg: '#fff7ed', gradient: 'linear-gradient(135deg, #f97316, #ea580c)' },
     tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4', gradient: 'linear-gradient(135deg, #22c55e, #16a34a)' },
+    super_admin: { label: 'Super Admin', color: '#1f2937', bg: '#f3f4f6', gradient: 'linear-gradient(135deg, #1f2937, #4b5563)' },
   }
-  const rc = roleConfig[profile?.role] || roleConfig.resident
+  const rc = profile?.is_super_admin
+    ? roleConfig.super_admin
+    : (roleConfig[profile?.role] || roleConfig.resident)
 
   // Activity stats
   const resolvedCount = profile?.role === 'tanod'
