@@ -70,19 +70,27 @@ export default function TanodDashboard() {
   const [profile, setProfile] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) return JSON.parse(saved)
-    return window.innerWidth >= 768  // true on desktop, false on mobile
-  })
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [resolveModal, setResolveModal] = useState(null)
   const [directionsMenu, setDirectionsMenu] = useState(null)
 
   useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-  }, [sidebarOpen])
+    setMounted(true)
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) {
+      setSidebarOpen(JSON.parse(saved))
+    } else if (window.innerWidth < 768) {
+      setSidebarOpen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+    }
+  }, [sidebarOpen, mounted])
 
   useEffect(() => {
     const handleResize = () => {

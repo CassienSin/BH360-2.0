@@ -48,18 +48,26 @@ export default function ResidentDashboard() {
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [activeSection, setActiveSection] = useState('home')
- const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) return JSON.parse(saved)
-    return window.innerWidth >= 768  // true on desktop, false on mobile
-  })
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ratingModal, setRatingModal] = useState(null)
 
   useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-  }, [sidebarOpen])
+    setMounted(true)
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) {
+      setSidebarOpen(JSON.parse(saved))
+    } else if (window.innerWidth < 768) {
+      setSidebarOpen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+    }
+  }, [sidebarOpen, mounted])
 
   useEffect(() => {
     const handleResize = () => {
@@ -439,27 +447,96 @@ export default function ResidentDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
             <div className="space-y-3 fade-up max-w-3xl mx-auto">
-              {announcements.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <Bell size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
-                  <p className="text-gray-400 text-sm">No announcements yet.</p>
-                </div>
-              )}
-              {announcements.map(a => (
-                <div key={a.id} className="white-card p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)'}}>
-                      <Bell size={16} className="text-white" />
+
+              {/* Header card */}
+              {announcements.length > 0 && (
+                <div className="white-card p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                      <Bell size={20} className="text-white" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-800 text-sm">{a.title}</h3>
-                      <p className="text-gray-500 text-sm mt-1 leading-relaxed">{a.content}</p>
-                      <p className="text-gray-300 text-xs mt-2" title={fullDate(a.created_at)}>{timeAgoLong(a.created_at)}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-800">Community Updates</h3>
+                      <p className="text-xs text-gray-400">
+                        {announcements.length} {announcements.length === 1 ? 'announcement' : 'announcements'} from {profile?.barangays?.name}
+                      </p>
                     </div>
+                    {announcements.filter(a => {
+                      const days = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                      return days <= 1
+                    }).length > 0 && (
+                      <span className="text-[10px] px-2 py-1 rounded-full font-bold flex-shrink-0"
+                        style={{background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite'}}>
+                        {announcements.filter(a => {
+                          const days = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                          return days <= 1
+                        }).length} NEW
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Empty state */}
+              {announcements.length === 0 && (
+                <div className="white-card p-10 text-center">
+                  <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
+                    style={{background: '#f0effe'}}>
+                    <Bell size={28} style={{color: '#5B54E8', opacity: 0.5}} />
+                  </div>
+                  <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
+                  <p className="text-gray-400 text-xs mt-1">Check back later — your barangay will post updates here</p>
+                </div>
+              )}
+
+              {/* Announcement cards */}
+              {announcements.map((a, i) => {
+                const daysAgo = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                const isNew = daysAgo <= 1
+                const isThisWeek = daysAgo <= 7
+
+                return (
+                  <div key={a.id} className="white-card p-5 relative overflow-hidden">
+                    {/* New badge accent bar */}
+                    {isNew && (
+                      <div className="absolute top-0 left-0 right-0 h-1"
+                        style={{background: 'linear-gradient(90deg, #5B54E8, #7C75F0, #5B54E8)', animation: 'shimmer 2s linear infinite'}} />
+                    )}
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                        style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
+                        <Bell size={18} className="text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
+                          {isNew && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                              style={{background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite'}}>
+                              NEW
+                            </span>
+                          )}
+                          {!isNew && isThisWeek && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                              style={{background: '#f0fdf4', color: '#16a34a'}}>
+                              THIS WEEK
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
+
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400">
+                          <span title={fullDate(a.created_at)}>📅 {timeAgoLong(a.created_at)}</span>
+                          <span>·</span>
+                          <span className="font-semibold" style={{color: '#5B54E8'}}>From Barangay Office</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -483,11 +560,11 @@ export default function ResidentDashboard() {
               {incidents.map(inc => (
                 <div key={inc.id} className="white-card p-5">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{background: '#fff7ed'}}>
                         <AlertTriangle size={16} className="text-orange-500" />
-                      </div>
-                      <div className="flex-1">
+                        </div>
+                        <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
                           {inc.priority && (

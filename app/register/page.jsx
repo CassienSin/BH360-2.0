@@ -301,6 +301,13 @@ export default function RegisterPage() {
                   <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                     <KeyRound size={10} /> Contact your barangay captain to get an invite code
                   </p>
+                  <p className="text-xs mt-2">
+                    Don't have a code yet?{' '}
+                    <button type="button" onClick={() => router.push('/request-access')}
+                      className="font-bold hover:underline" style={{color: '#5B54E8'}}>
+                      Request access →
+                    </button>
+                  </p>
                 </div>
               )}
 

@@ -201,7 +201,7 @@ export default function DashboardHeader({
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl overflow-hidden fade-up"
+              <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] sm:w-80 sm:max-w-none rounded-2xl overflow-hidden fade-up"
                 style={{background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff'}}>
 
                 <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"
@@ -279,7 +279,7 @@ export default function DashboardHeader({
             </button>
 
             {userMenuOpen && (
-              <div className="absolute right-0 mt-2 w-64 rounded-2xl overflow-hidden fade-up"
+              <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] sm:w-64 rounded-2xl overflow-hidden fade-up"
                 style={{background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff'}}>
 
                 {/* User info */}

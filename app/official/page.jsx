@@ -74,12 +74,8 @@ export default function OfficialDashboard() {
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [activeSection, setActiveSection] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) return JSON.parse(saved)
-    return window.innerWidth >= 768  // true on desktop, false on mobile
-  })
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [incidentSearch, setIncidentSearch] = useState('')
   const [incidentFilter, setIncidentFilter] = useState('all')
@@ -90,8 +86,20 @@ export default function OfficialDashboard() {
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
 
   useEffect(() => {
-    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-  }, [sidebarOpen])
+    setMounted(true)
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) {
+      setSidebarOpen(JSON.parse(saved))
+    } else if (window.innerWidth < 768) {
+      setSidebarOpen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+    }
+  }, [sidebarOpen, mounted])
 
   useEffect(() => {
     const handleResize = () => {
@@ -274,10 +282,18 @@ export default function OfficialDashboard() {
       return matchesSearch && matchesFilter && matchesCategory && matchesPriority
     })
     .sort((a, b) => {
-      // Sort by priority (Critical first), then by date
+      // Sort by status first (pending/assigned before resolved)
+      const statusOrder = { pending: 1, assigned: 2, resolved: 3 }
+      const aStatus = statusOrder[a.status] || 4
+      const bStatus = statusOrder[b.status] || 4
+      if (aStatus !== bStatus) return aStatus - bStatus
+
+      // Then by priority (Critical first)
       const aPriority = priorityConfig[a.priority]?.order || 2
       const bPriority = priorityConfig[b.priority]?.order || 2
       if (aPriority !== bPriority) return bPriority - aPriority
+
+      // Finally by date (newest first)
       return new Date(b.created_at) - new Date(a.created_at)
     })
 
@@ -811,7 +827,7 @@ export default function OfficialDashboard() {
                 const cat = categoryConfig[inc.category] || categoryConfig.Other
                 return (
                   <div key={inc.id} className="white-card p-5">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1">
                         <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl" style={{background: cat.bg}}>
                           {cat.icon}
@@ -882,21 +898,21 @@ export default function OfficialDashboard() {
                           )}
                         </div>
                       </div>
-                      {inc.status !== 'resolved' && (
-                        <div className="flex flex-col gap-2 flex-shrink-0">
-                          {inc.status === 'pending' && (
-                            <select onChange={e => e.target.value && dispatchTanod(inc.id, e.target.value)}
-                              className="text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-purple-400 bg-white">
-                              <option value="">Dispatch Tanod...</option>
-                              {tanods.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                            </select>
-                          )}
-                          <button onClick={() => resolveIncident(inc)}
-                            className="text-xs bg-emerald-500 text-white px-3 py-2 rounded-xl hover:bg-emerald-600 font-semibold transition-colors">
-                            ✓ Mark Resolved
-                          </button>
-                        </div>
-                      )}
+                        {inc.status !== 'resolved' && (
+                          <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0 w-full sm:w-auto mt-3 sm:mt-0">
+                            {inc.status === 'pending' && (
+                              <select onChange={e => e.target.value && dispatchTanod(inc.id, e.target.value)}
+                                className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-purple-400 bg-white">
+                                <option value="">Dispatch Tanod...</option>
+                                {tanods.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                              </select>
+                            )}
+                            <button onClick={() => resolveIncident(inc)}
+                              className="flex-1 text-xs bg-emerald-500 text-white px-3 py-2 rounded-xl hover:bg-emerald-600 font-semibold transition-colors whitespace-nowrap">
+                              ✓ Mark Resolved
+                            </button>
+                          </div>
+                        )}
                     </div>
                   </div>
                 )
@@ -1024,34 +1040,126 @@ export default function OfficialDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
             <div className="space-y-3 fade-up">
-              <div className="flex justify-end mb-2">
-                <button onClick={() => router.push('/official/announcement/new')}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white"
-                  style={{color: '#5B54E8', boxShadow: '0 4px 16px rgba(91,84,232,0.2)'}}>
-                  <Plus size={16} /> New Announcement
-                </button>
-              </div>
-              {announcements.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <Bell size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
-                  <p className="text-gray-400 text-sm">No announcements yet.</p>
-                </div>
-              )}
-              {announcements.map(a => (
-                <div key={a.id} className="white-card p-5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)'}}>
-                      <Bell size={16} className="text-white" />
+
+              {/* Header with stats + New button */}
+              <div className="white-card p-5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                      style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                      <Bell size={20} className="text-white" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-800 text-sm">{a.title}</h3>
-                      <p className="text-gray-500 text-sm mt-1">{a.content}</p>
-                      <p className="text-gray-300 text-xs mt-2" title={fullDate(a.created_at)}>{timeAgoLong(a.created_at)}</p>
+                      <h3 className="font-bold text-gray-800">Community Broadcasts</h3>
+                      <p className="text-xs text-gray-400">
+                        {announcements.length} total · Reaches all residents in {profile?.barangays?.name}
+                      </p>
                     </div>
                   </div>
+                  <button onClick={() => router.push('/official/announcement/new')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
+                    style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                    <Plus size={14} /> New Announcement
+                  </button>
                 </div>
-              ))}
+
+                {/* Quick stats */}
+                {announcements.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100">
+                    <div className="text-center">
+                      <p className="text-xl font-black" style={{color: '#5B54E8'}}>{announcements.length}</p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Total</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-black" style={{color: '#22c55e'}}>
+                        {announcements.filter(a => {
+                          const days = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                          return days <= 7
+                        }).length}
+                      </p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">This Week</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xl font-black" style={{color: '#f97316'}}>
+                        {announcements.filter(a => {
+                          const days = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                          return days <= 1
+                        }).length}
+                      </p>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Today</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Empty state */}
+              {announcements.length === 0 && (
+                <div className="white-card p-10 text-center">
+                  <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
+                    style={{background: '#f0effe'}}>
+                    <Bell size={28} style={{color: '#5B54E8', opacity: 0.5}} />
+                  </div>
+                  <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
+                  <p className="text-gray-400 text-xs mt-1">Start broadcasting updates to your community</p>
+                  <button onClick={() => router.push('/official/announcement/new')}
+                    className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-white text-sm font-bold transition-all hover:scale-105"
+                    style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                    <Plus size={14} /> Create First Announcement
+                  </button>
+                </div>
+              )}
+
+              {/* Announcement cards */}
+              {announcements.map((a, i) => {
+                const daysAgo = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                const isNew = daysAgo <= 1
+                const isThisWeek = daysAgo <= 7
+
+                return (
+                  <div key={a.id} className="white-card p-5 relative overflow-hidden">
+                    {/* New badge accent bar */}
+                    {isNew && (
+                      <div className="absolute top-0 left-0 right-0 h-1"
+                        style={{background: 'linear-gradient(90deg, #5B54E8, #7C75F0, #5B54E8)', animation: 'shimmer 2s linear infinite'}} />
+                    )}
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
+                        style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
+                        <Bell size={18} className="text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
+                          {isNew && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                              style={{background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite'}}>
+                              NEW
+                            </span>
+                          )}
+                          {!isNew && isThisWeek && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                              style={{background: '#f0fdf4', color: '#16a34a'}}>
+                              THIS WEEK
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
+
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400">
+                          <span className="flex items-center gap-1" title={fullDate(a.created_at)}>
+                            📅 {timeAgoLong(a.created_at)}
+                          </span>
+                          <span>·</span>
+                          <span className="flex items-center gap-1">
+                            👥 All residents
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
