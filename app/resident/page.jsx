@@ -48,9 +48,18 @@ export default function ResidentDashboard() {
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+ const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) return JSON.parse(saved)
+    return window.innerWidth >= 768  // true on desktop, false on mobile
+  })
   const [loading, setLoading] = useState(true)
   const [ratingModal, setRatingModal] = useState(null)
+
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+  }, [sidebarOpen])
 
   useEffect(() => {
     const handleResize = () => {

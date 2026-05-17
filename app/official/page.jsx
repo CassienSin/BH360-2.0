@@ -74,7 +74,12 @@ export default function OfficialDashboard() {
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [activeSection, setActiveSection] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true
+    const saved = localStorage.getItem('sidebarOpen')
+    if (saved !== null) return JSON.parse(saved)
+    return window.innerWidth >= 768  // true on desktop, false on mobile
+  })
   const [loading, setLoading] = useState(true)
   const [incidentSearch, setIncidentSearch] = useState('')
   const [incidentFilter, setIncidentFilter] = useState('all')
@@ -83,6 +88,10 @@ export default function OfficialDashboard() {
   const [ticketFilter, setTicketFilter] = useState('all')
   const [confirmDialog, setConfirmDialog] = useState(null) // { type, ...data }
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
+
+  useEffect(() => {
+    localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
+  }, [sidebarOpen])
 
   useEffect(() => {
     const handleResize = () => {
