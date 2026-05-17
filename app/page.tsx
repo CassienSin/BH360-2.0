@@ -110,8 +110,9 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
         style={{
-          background: scrolled ? 'rgba(255,255,255,0.85)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(20px)' : 'blur(0px)',
+          background: scrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
+          backdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
+          WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
           borderBottom: scrolled ? '1px solid #f0effe' : '1px solid transparent',
           boxShadow: scrolled ? '0 2px 12px rgba(91,84,232,0.06)' : 'none',
         }}>
