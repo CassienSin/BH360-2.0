@@ -47,7 +47,7 @@ export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('applications')
   const [statusFilter, setStatusFilter] = useState('pending')
   const [search, setSearch] = useState('')
-  const [reviewing, setReviewing] = useState(null) // application being reviewed
+  const [reviewing, setReviewing] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -71,15 +71,16 @@ export default function AdminPanel() {
         .order('created_at', { ascending: false })
       setApplications(apps || [])
 
-      // Load all barangays with their user counts
+      // Load all barangays
       const { data: bgs } = await supabase.from('barangays')
         .select('id, name, city, province')
         .order('name')
       setBarangays(bgs || [])
 
-      // Load all users
+      // Load all REGULAR users (excluding super admins)
       const { data: allUsers } = await supabase.from('profiles')
         .select('*, barangays(name)')
+        .or('is_super_admin.is.null,is_super_admin.eq.false')
         .order('created_at', { ascending: false })
         .limit(100)
       setUsers(allUsers || [])
@@ -223,6 +224,7 @@ export default function AdminPanel() {
 
     const { data: allUsers } = await supabase.from('profiles')
       .select('*, barangays(name)')
+      .or('is_super_admin.is.null,is_super_admin.eq.false')
       .order('created_at', { ascending: false })
       .limit(100)
     setUsers(allUsers || [])
@@ -250,8 +252,7 @@ export default function AdminPanel() {
   const approvedCount = applications.filter(a => a.status === 'approved').length
   const rejectedCount = applications.filter(a => a.status === 'rejected').length
 
-  const barangaysWithOfficials = new Set(users.filter(u => u.role === 'official').map(u => u.barangay_id))
-  const totalBarangaysWithUsers = new Set(users.map(u => u.barangay_id)).size
+  const totalBarangaysWithUsers = new Set(users.map(u => u.barangay_id).filter(Boolean)).size
 
   if (loading) {
     return (
@@ -271,6 +272,7 @@ export default function AdminPanel() {
           style={{background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite'}} />
       </div>
 
+      {/* Premium Header */}
       <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
         style={{boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe'}}>
 
@@ -696,38 +698,70 @@ export default function AdminPanel() {
 
         {/* USERS TAB */}
         {activeTab === 'users' && (
-          <div className="white-card p-5 fade-up">
-            <h3 className="font-bold text-gray-800 mb-4">Recent Users ({users.length})</h3>
-            <div className="space-y-2">
-              {users.map(u => {
-                const roleConfig = {
-                  resident: { color: '#5B54E8', bg: '#f0effe' },
-                  official: { color: '#f97316', bg: '#fff7ed' },
-                  tanod: { color: '#22c55e', bg: '#f0fdf4' },
-                }
-                const rc = roleConfig[u.role] || roleConfig.resident
+          <div className="space-y-4 fade-up">
+
+            {/* Stats by role */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { role: 'resident', label: 'Residents', color: '#5B54E8', bg: '#f0effe' },
+                { role: 'official', label: 'Officials', color: '#f97316', bg: '#fff7ed' },
+                { role: 'tanod', label: 'Tanods', color: '#22c55e', bg: '#f0fdf4' },
+              ].map(r => {
+                const count = users.filter(u => u.role === r.role).length
                 return (
-                  <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{background: '#fafafa', border: '1px solid #f0effe'}}>
-                    <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                      style={{background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)`}}>
-                      {u.avatar_url ? (
-                        <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        u.full_name?.[0]?.toUpperCase()
-                      )}
+                  <div key={r.role} className="white-card p-4 text-center">
+                    <div className="w-10 h-10 rounded-2xl mx-auto mb-2 flex items-center justify-center"
+                      style={{background: r.bg}}>
+                      <Users size={16} style={{color: r.color}} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
-                      <p className="text-xs text-gray-400 truncate">{u.barangays?.name || 'No barangay'}</p>
-                    </div>
-                    <span className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-                      style={{background: rc.bg, color: rc.color}}>
-                      {u.role}
-                    </span>
+                    <p className="text-2xl font-black" style={{color: r.color}}>{count}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{r.label}</p>
                   </div>
                 )
               })}
+            </div>
+
+            {/* Users list */}
+            <div className="white-card p-5">
+              <h3 className="font-bold text-gray-800 mb-4">Barangay Users ({users.length})</h3>
+              {users.length === 0 ? (
+                <div className="text-center py-8">
+                  <Users size={32} className="mx-auto text-gray-300 mb-2" />
+                  <p className="text-sm text-gray-400">No users yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {users.map(u => {
+                    const roleConfig = {
+                      resident: { color: '#5B54E8', bg: '#f0effe' },
+                      official: { color: '#f97316', bg: '#fff7ed' },
+                      tanod: { color: '#22c55e', bg: '#f0fdf4' },
+                    }
+                    const rc = roleConfig[u.role] || roleConfig.resident
+                    return (
+                      <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                        style={{background: '#fafafa', border: '1px solid #f0effe'}}>
+                        <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
+                          style={{background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)`}}>
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            u.full_name?.[0]?.toUpperCase()
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
+                          <p className="text-xs text-gray-400 truncate">{u.barangays?.name || 'No barangay'}</p>
+                        </div>
+                        <span className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
+                          style={{background: rc.bg, color: rc.color}}>
+                          {u.role}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -781,16 +815,16 @@ export default function AdminPanel() {
       )}
 
       {/* Logout Confirmation */}
-        <ConfirmDialog
-          open={logoutConfirm}
-          onClose={() => setLogoutConfirm(false)}
-          onConfirm={handleLogout}
-          title="Sign out of Super Admin?"
-          message="Are you sure you want to sign out? You'll need to log in again to access the admin panel."
-          confirmText="Yes, Sign Out"
-          cancelText="Stay Signed In"
-          variant="logout"
-        />
+      <ConfirmDialog
+        open={logoutConfirm}
+        onClose={() => setLogoutConfirm(false)}
+        onConfirm={handleLogout}
+        title="Sign out of Super Admin?"
+        message="Are you sure you want to sign out? You'll need to log in again to access the admin panel."
+        confirmText="Yes, Sign Out"
+        cancelText="Stay Signed In"
+        variant="logout"
+      />
     </div>
   )
 }

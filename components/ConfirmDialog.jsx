@@ -68,17 +68,17 @@ export default function ConfirmDialog({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', animation: 'fadeUp 0.2s ease'}}
       onClick={onClose}>
 
-      <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1"
+      <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1 relative"
         style={{background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)'}}
         onClick={e => e.stopPropagation()}>
 
         {/* Close button */}
         <button onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+          className="absolute top-4 right-4 w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors z-10">
           <X size={16} />
         </button>
 
