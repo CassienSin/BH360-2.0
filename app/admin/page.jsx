@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, Briefcase, MapPin, MessageSquare, Copy, Search, Filter, Users, Building2, AlertTriangle, Loader2, KeyRound, ArrowLeft, Sparkles } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, Briefcase, MapPin, MessageSquare, Copy, Search, Filter, Users, Building2, AlertTriangle, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell } from 'lucide-react'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
@@ -48,6 +49,9 @@ export default function AdminPanel() {
   const [search, setSearch] = useState('')
   const [reviewing, setReviewing] = useState(null) // application being reviewed
   const [rejectReason, setRejectReason] = useState('')
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [currentTime, setCurrentTime] = useState(null)
 
   useEffect(() => {
     async function loadData() {
@@ -90,6 +94,12 @@ export default function AdminPanel() {
       setLoading(false)
     }
     loadData()
+  }, [])
+
+  useEffect(() => {
+    setCurrentTime(new Date())
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
+    return () => clearInterval(interval)
   }, [])
 
   async function handleApprove(app) {
@@ -199,6 +209,34 @@ export default function AdminPanel() {
     toast.success('Copied to clipboard!')
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  }
+
+  async function refreshData() {
+    setRefreshing(true)
+    const { data: apps } = await supabase.from('barangay_applications')
+      .select('*, barangays(name, city, province)')
+      .order('created_at', { ascending: false })
+    setApplications(apps || [])
+
+    const { data: allUsers } = await supabase.from('profiles')
+      .select('*, barangays(name)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setUsers(allUsers || [])
+
+    const { data: codes } = await supabase.from('invite_codes')
+      .select('*, barangays(name)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setInviteCodes(codes || [])
+
+    setRefreshing(false)
+    toast.success('Data refreshed!')
+  }
+
   const filteredApps = applications.filter(a => {
     const matchesStatus = statusFilter === 'all' || a.status === statusFilter
     const matchesSearch = !search ||
@@ -233,24 +271,99 @@ export default function AdminPanel() {
           style={{background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite'}} />
       </div>
 
-      <header className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
+      <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
         style={{boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe'}}>
+
+        {/* LEFT — Back & Brand */}
         <button onClick={() => router.push('/')}
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0">
-          <ArrowLeft size={18} className="text-gray-600" />
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+          title="Back to home">
+          <ArrowLeft size={18} />
         </button>
-        <div className="flex items-center gap-3 flex-1">
-          <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{background: 'linear-gradient(135deg, #1f2937, #374151)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)'}}>
-            <Shield size={16} className="text-white" />
+
+        <div className="h-9 w-px hidden sm:block" style={{background: '#f0effe'}} />
+
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="relative flex-shrink-0">
+            <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #1f2937, #4b5563)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+              }}>
+              <Shield size={18} className="text-white" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+              style={{background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)'}}>
+              <Sparkles size={8} className="text-white" />
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-800 flex items-center gap-2">
-              Super Admin Panel
-              <Sparkles size={14} style={{color: '#f59e0b'}} />
-            </h1>
-            <p className="text-xs text-gray-400">System administration · {profile?.full_name}</p>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-gray-800 truncate" style={{letterSpacing: '-0.5px'}}>
+                Super Admin
+              </h1>
+              <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+                style={{background: 'linear-gradient(135deg, #1f2937, #4b5563)'}}>
+                <Sparkles size={9} className="text-yellow-300" />
+                <span className="text-[10px] font-black text-white tracking-wider">ROOT</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-xs text-gray-500 truncate">{profile?.full_name} · Online</p>
+            </div>
           </div>
+        </div>
+
+        {/* RIGHT — Actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+
+          {/* Live clock */}
+          {currentTime && (
+            <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
+              style={{background: '#fafaff', border: '1px solid #f0effe'}}>
+              <Clock size={12} className="text-gray-400" />
+              <span className="text-xs font-bold text-gray-600">
+                {currentTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </span>
+            </div>
+          )}
+
+          {/* Refresh button */}
+          <button onClick={refreshData} disabled={refreshing}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
+            title="Refresh data">
+            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+          </button>
+
+          {/* Pending count indicator */}
+          {pendingCount > 0 && (
+            <div className="relative">
+              <button onClick={() => setActiveTab('applications')}
+                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
+                title={`${pendingCount} pending applications`}>
+                <Bell size={15} className="text-gray-400" />
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                  style={{background: '#ef4444', boxShadow: '0 2px 8px rgba(239,68,68,0.4)'}}>
+                  {pendingCount}
+                </span>
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-75" />
+              </button>
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="h-9 w-px hidden sm:block" style={{background: '#f0effe'}} />
+
+          {/* Logout button */}
+          <button onClick={() => setLogoutConfirm(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
+            style={{background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca'}}
+            title="Sign out">
+            <LogOut size={13} />
+            <span className="hidden sm:block">Sign Out</span>
+          </button>
         </div>
       </header>
 
@@ -666,6 +779,18 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* Logout Confirmation */}
+        <ConfirmDialog
+          open={logoutConfirm}
+          onClose={() => setLogoutConfirm(false)}
+          onConfirm={handleLogout}
+          title="Sign out of Super Admin?"
+          message="Are you sure you want to sign out? You'll need to log in again to access the admin panel."
+          confirmText="Yes, Sign Out"
+          cancelText="Stay Signed In"
+          variant="logout"
+        />
     </div>
   )
 }
