@@ -149,7 +149,7 @@ export default function LandingPage() {
               <span className="font-semibold text-white"> faster response times, happier residents.</span>
             </p>
 
-            <div className="flex items-center justify-center gap-3 fade-up-3 flex-wrap mb-12">
+            <div className="flex items-center justify-center gap-3 fade-up-3 flex-wrap mb-6">
               <button onClick={() => router.push('/register')}
                 className="flex items-center gap-2 px-7 py-4 rounded-2xl text-sm font-bold transition-all hover:scale-105"
                 style={{background: 'white', color: '#5B54E8', boxShadow: '0 8px 40px rgba(0,0,0,0.25)'}}>
@@ -161,6 +161,15 @@ export default function LandingPage() {
                 Sign In
               </button>
             </div>
+
+            {/* Request access link */}
+            <p className="text-purple-200 text-xs fade-up-4 mb-6">
+              New barangay?{' '}
+              <button onClick={() => router.push('/request-access')}
+                className="font-bold hover:underline transition-colors text-white">
+                Request access →
+              </button>
+            </p>
 
             {/* Trust line */}
             <p className="text-purple-200 text-xs fade-up-4 flex items-center justify-center gap-2 flex-wrap">
@@ -474,7 +483,7 @@ export default function LandingPage() {
             Join the smart governance revolution. Free for every barangay, forever.
           </p>
 
-          <div className="flex items-center justify-center gap-3 flex-wrap mb-8">
+          <div className="flex items-center justify-center gap-3 flex-wrap mb-6">
             <button onClick={() => router.push('/register')}
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-sm font-bold transition-all hover:scale-105"
               style={{background: 'white', color: '#5B54E8', boxShadow: '0 8px 40px rgba(0,0,0,0.25)'}}>
@@ -486,6 +495,16 @@ export default function LandingPage() {
               Sign In
             </button>
           </div>
+
+          {/* Request access link */}
+          <p className="text-center text-xs mb-6" style={{color: 'rgba(255,255,255,0.7)'}}>
+            Barangay Official?{' '}
+            <button onClick={() => router.push('/request-access')}
+              className="font-bold hover:underline transition-colors"
+              style={{color: 'white'}}>
+              Request access for your barangay →
+            </button>
+          </p>
 
           <p className="text-purple-200 text-xs flex items-center justify-center gap-3 flex-wrap">
             <span className="flex items-center gap-1.5"><CheckCircle size={12} /> No credit card</span>
