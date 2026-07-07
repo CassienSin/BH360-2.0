@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, Globe, Shield, Trash2, Download, Smartphone, CheckCircle, AlertTriangle, Volume2, VolumeX, Save, Loader2, Lock } from 'lucide-react'
+import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { isSupported, getPermission, requestPermission, showNotification } from '@/lib/notifications'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -16,7 +17,7 @@ const dots = [...Array(20)].map((_, i) => ({
 }))
 
 const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{overflow: 'hidden', pointerEvents: 'none'}}>
+  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
     {dots.map((dot, i) => (
       <div key={i} style={{
         position: 'absolute',
@@ -34,14 +35,35 @@ const AnimatedDots = () => (
   </div>
 )
 
+// Hoisted out of the page component and given switch semantics so screen
+// readers announce it as an on/off control rather than a plain button.
+const Toggle = ({ enabled, onChange, label, desc }) => (
+  <button onClick={() => onChange(!enabled)}
+    role="switch"
+    aria-checked={enabled}
+    className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
+    <div className="flex-1 text-left min-w-0">
+      <p className="text-sm font-bold text-gray-800">{label}</p>
+      <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+    </div>
+    <div className="w-10 h-6 rounded-full relative flex-shrink-0 transition-colors"
+      style={{ background: enabled ? '#5B54E8' : '#e5e7eb' }}>
+      <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+        style={{ left: enabled ? '20px' : '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
+    </div>
+  </button>
+)
+
 export default function SettingsPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState('default')
+  const [exporting, setExporting] = useState(false)
 
   const [prefs, setPrefs] = useState({
     incidents: true,
@@ -52,29 +74,40 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState('en')
 
   useEffect(() => {
+    let cancelled = false
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
-      const { data: prof } = await supabase.from('profiles')
+      const { data: prof, error } = await supabase.from('profiles')
         .select('*, barangays(name, city)')
-        .eq('id', user.id).single()
+        .eq('id', user.id).maybeSingle()
 
-      setProfile(prof)
-      if (prof?.notification_prefs) setPrefs(prof.notification_prefs)
-      if (prof?.language) setLanguage(prof.language)
-
-      // Check browser notification permission
-      if ('Notification' in window) {
-        setNotificationPermission(Notification.permission)
+      if (cancelled) return
+      if (error || !prof) {
+        toast.error('Could not load your settings. Please refresh.')
+        setLoading(false)
+        return
       }
 
+      setProfile(prof)
+      if (prof.notification_prefs) setPrefs(prof.notification_prefs)
+      if (prof.language) setLanguage(prof.language)
+      if (isSupported()) setNotificationPermission(getPermission())
       setLoading(false)
     }
     load()
-  }, [])
+    return () => { cancelled = true }
+  }, [supabase, router])
+
+  // Any change to prefs/language marks the page dirty so the Save button
+  // can show there's something to save — previously toggling and pressing
+  // Back silently discarded changes with no hint anything was unsaved.
+  function updatePrefs(next) { setPrefs(next); setDirty(true) }
+  function updateLanguage(next) { setLanguage(next); setDirty(true) }
 
   async function saveSettings() {
+    if (!profile || saving) return
     setSaving(true)
     const { error } = await supabase.from('profiles').update({
       notification_prefs: prefs,
@@ -82,62 +115,91 @@ export default function SettingsPage() {
     }).eq('id', profile.id)
 
     if (error) {
-      toast.error('Failed to save settings')
+      toast.error('Failed to save settings: ' + error.message)
     } else {
       toast.success('Settings saved!')
+      setDirty(false)
     }
     setSaving(false)
   }
 
-  async function requestNotificationPermission() {
-    if (!('Notification' in window)) {
+  // Uses the shared notifications lib — which handles the Android Chrome
+  // constructor crash and legacy Safari — instead of duplicating raw
+  // Notification calls here (the raw `new Notification(...)` test toast
+  // was the exact Android crash we fixed in the lib).
+  async function enableNotifications() {
+    if (!isSupported()) {
       toast.error('Browser notifications not supported')
       return
     }
-    const permission = await Notification.requestPermission()
+    const permission = await requestPermission()
     setNotificationPermission(permission)
     if (permission === 'granted') {
       toast.success('Notifications enabled!')
-      new Notification('BarangayHub 360', {
-        body: 'Notifications are now active 🎉',
-        icon: '/logo.png',
-      })
+      sendTestNotification()
+    } else if (permission === 'denied') {
+      toast.error('Notifications blocked. You can enable them in browser settings.')
     }
   }
 
+  // force: true because this page is visible — the lib normally suppresses
+  // notifications while the user is looking at the app, which would make
+  // the test button appear to do nothing.
+  function sendTestNotification() {
+    showNotification('BarangayHub 360', {
+      body: 'Notifications are working! 🎉',
+      force: true,
+    })
+  }
+
   async function downloadMyData() {
-    toast.loading('Preparing your data...')
+    if (!profile || exporting) return
+    setExporting(true)
+    const toastId = toast.loading('Preparing your data...')
 
-    const { data: incidents } = await supabase.from('incidents')
-      .select('*').eq('reported_by', profile.id)
-    const { data: tickets } = await supabase.from('tickets')
-      .select('*').eq('created_by', profile.id)
+    try {
+      const [incidentsRes, ticketsRes] = await Promise.all([
+        supabase.from('incidents').select('*').eq('reported_by', profile.id),
+        supabase.from('tickets').select('*').eq('created_by', profile.id),
+      ])
 
-    const data = {
-      profile: {
-        full_name: profile.full_name,
-        email: profile.email,
-        role: profile.role,
-        phone: profile.phone,
-        address: profile.address,
-        barangay: profile.barangays,
-        created_at: profile.created_at,
-      },
-      incidents: incidents || [],
-      tickets: tickets || [],
-      exported_at: new Date().toISOString(),
+      if (incidentsRes.error || ticketsRes.error) {
+        throw incidentsRes.error || ticketsRes.error
+      }
+
+      const data = {
+        profile: {
+          full_name: profile.full_name,
+          email: profile.email,
+          role: profile.role,
+          phone: profile.phone,
+          address: profile.address,
+          barangay: profile.barangays,
+          created_at: profile.created_at,
+        },
+        incidents: incidentsRes.data || [],
+        tickets: ticketsRes.data || [],
+        exported_at: new Date().toISOString(),
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const safeName = (profile.full_name || 'user').replace(/\s+/g, '-')
+      a.download = `bh360-data-${safeName}.json`
+      document.body.appendChild(a) // Firefox needs the anchor in the DOM
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+
+      toast.success('Data exported!', { id: toastId })
+    } catch (err) {
+      console.error('downloadMyData failed:', err)
+      toast.error('Could not export your data. Please try again.', { id: toastId })
+    } finally {
+      setExporting(false)
     }
-
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `bh360-data-${profile.full_name?.replace(/\s/g, '-')}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-
-    toast.dismiss()
-    toast.success('Data exported!')
   }
 
   async function deactivateAccount() {
@@ -159,24 +221,9 @@ export default function SettingsPage() {
 
     setTimeout(async () => {
       await supabase.auth.signOut()
-      window.location.href = '/'
+      window.location.replace('/')
     }, 1500)
   }
-
-  const Toggle = ({ enabled, onChange, label, desc }) => (
-    <button onClick={() => onChange(!enabled)}
-      className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
-      <div className="flex-1 text-left min-w-0">
-        <p className="text-sm font-bold text-gray-800">{label}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
-      </div>
-      <div className="w-10 h-6 rounded-full relative flex-shrink-0 transition-colors"
-        style={{background: enabled ? '#5B54E8' : '#e5e7eb'}}>
-        <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
-          style={{left: enabled ? '20px' : '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'}} />
-      </div>
-    </button>
-  )
 
   if (loading) {
     return (
@@ -191,24 +238,27 @@ export default function SettingsPage() {
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite'}} />
+          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
       </div>
 
-      <header className="bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0"
-        style={{boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe'}}>
-        <button onClick={() => router.back()}
+      <header className="bg-white z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0"
+        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
+        <button onClick={() => router.back()} aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
           <ArrowLeft size={18} />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate" style={{letterSpacing: '-0.3px'}}>Settings</h1>
+          <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>Settings</h1>
           <p className="text-xs text-gray-400 truncate">Customize your experience</p>
         </div>
-        <button onClick={saveSettings} disabled={saving}
-          className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-50 flex-shrink-0"
-          style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
+        <button onClick={saveSettings} disabled={saving || !dirty}
+          className="relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
+          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-          <span className="hidden sm:inline">Save</span>
+          <span className="hidden sm:inline">{dirty ? 'Save changes' : 'Saved'}</span>
+          {dirty && !saving && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-white" />
+          )}
         </button>
       </header>
 
@@ -218,8 +268,8 @@ export default function SettingsPage() {
         <div className="white-card p-5 fade-up">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{background: '#f0effe'}}>
-              <Bell size={20} style={{color: '#5B54E8'}} />
+              style={{ background: '#f0effe' }}>
+              <Bell size={20} style={{ color: '#5B54E8' }} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
@@ -241,20 +291,27 @@ export default function SettingsPage() {
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold"
-                  style={{color: notificationPermission === 'granted' ? '#16a34a' : notificationPermission === 'denied' ? '#dc2626' : '#d97706'}}>
+                  style={{ color: notificationPermission === 'granted' ? '#16a34a' : notificationPermission === 'denied' ? '#dc2626' : '#d97706' }}>
                   Browser Notifications: {notificationPermission === 'granted' ? 'Enabled' : notificationPermission === 'denied' ? 'Blocked' : 'Not enabled'}
                 </p>
                 <p className="text-xs mt-0.5"
-                  style={{color: notificationPermission === 'granted' ? '#15803d' : notificationPermission === 'denied' ? '#991b1b' : '#92400e'}}>
-                  {notificationPermission === 'granted' ? 'You\'ll receive push notifications' :
-                   notificationPermission === 'denied' ? 'Enable in browser settings' :
-                   'Click to allow notifications'}
+                  style={{ color: notificationPermission === 'granted' ? '#15803d' : notificationPermission === 'denied' ? '#991b1b' : '#92400e' }}>
+                  {notificationPermission === 'granted' ? "You'll receive push notifications" :
+                    notificationPermission === 'denied' ? 'Enable in browser settings' :
+                      'Click to allow notifications'}
                 </p>
-                {notificationPermission !== 'granted' && notificationPermission !== 'denied' && (
-                  <button onClick={requestNotificationPermission}
+                {notificationPermission === 'default' && (
+                  <button onClick={enableNotifications}
                     className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg text-white"
-                    style={{background: '#5B54E8'}}>
+                    style={{ background: '#5B54E8' }}>
                     Enable Notifications
+                  </button>
+                )}
+                {notificationPermission === 'granted' && (
+                  <button onClick={sendTestNotification}
+                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg"
+                    style={{ background: 'white', color: '#16a34a', border: '1px solid #dcfce7' }}>
+                    Send test notification
                   </button>
                 )}
               </div>
@@ -264,25 +321,25 @@ export default function SettingsPage() {
           <div className="space-y-1">
             <Toggle
               enabled={prefs.incidents}
-              onChange={v => setPrefs({...prefs, incidents: v})}
+              onChange={v => updatePrefs({ ...prefs, incidents: v })}
               label="Incident Updates"
               desc="New incidents, assignments, and status changes"
             />
             <Toggle
               enabled={prefs.tickets}
-              onChange={v => setPrefs({...prefs, tickets: v})}
+              onChange={v => updatePrefs({ ...prefs, tickets: v })}
               label="Ticket Messages"
               desc="New replies and status updates on tickets"
             />
             <Toggle
               enabled={prefs.announcements}
-              onChange={v => setPrefs({...prefs, announcements: v})}
+              onChange={v => updatePrefs({ ...prefs, announcements: v })}
               label="Announcements"
               desc="New community broadcasts"
             />
             <Toggle
               enabled={prefs.sounds}
-              onChange={v => setPrefs({...prefs, sounds: v})}
+              onChange={v => updatePrefs({ ...prefs, sounds: v })}
               label="Sound Effects"
               desc="Play sounds for important alerts"
             />
@@ -293,7 +350,7 @@ export default function SettingsPage() {
         <div className="white-card p-5 fade-up-1">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{background: '#f0fdf4'}}>
+              style={{ background: '#f0fdf4' }}>
               <Globe size={20} className="text-emerald-500" />
             </div>
             <div>
@@ -307,14 +364,15 @@ export default function SettingsPage() {
               { value: 'en', label: 'English', flag: '🇺🇸' },
               { value: 'tl', label: 'Tagalog', flag: '🇵🇭' },
             ].map(lang => (
-              <button key={lang.value} onClick={() => setLanguage(lang.value)}
+              <button key={lang.value} onClick={() => updateLanguage(lang.value)}
+                aria-pressed={language === lang.value}
                 className="p-3 rounded-2xl transition-all hover:scale-[1.02]"
                 style={{
                   background: language === lang.value ? '#f0effe' : '#fafaff',
                   border: `2px solid ${language === lang.value ? '#5B54E8' : '#f0effe'}`,
                 }}>
-                <p className="text-2xl mb-1">{lang.flag}</p>
-                <p className="text-sm font-bold" style={{color: language === lang.value ? '#5B54E8' : '#374151'}}>
+                <p className="text-2xl mb-1" aria-hidden="true">{lang.flag}</p>
+                <p className="text-sm font-bold" style={{ color: language === lang.value ? '#5B54E8' : '#374151' }}>
                   {lang.label}
                 </p>
               </button>
@@ -329,7 +387,7 @@ export default function SettingsPage() {
         <div className="white-card p-5 fade-up-2">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{background: '#fff7ed'}}>
+              style={{ background: '#fff7ed' }}>
               <Smartphone size={20} className="text-orange-500" />
             </div>
             <div className="flex-1">
@@ -348,7 +406,7 @@ export default function SettingsPage() {
         <div className="white-card p-5 fade-up-3">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{background: '#eff6ff'}}>
+              style={{ background: '#eff6ff' }}>
               <Shield size={20} className="text-blue-500" />
             </div>
             <div>
@@ -358,10 +416,12 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-2">
-            <button onClick={downloadMyData}
-              className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
+            <button onClick={downloadMyData} disabled={exporting}
+              className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50 disabled:opacity-60">
               <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                <Download size={16} className="text-blue-500 flex-shrink-0" />
+                {exporting
+                  ? <Loader2 size={16} className="text-blue-500 flex-shrink-0 animate-spin" />
+                  : <Download size={16} className="text-blue-500 flex-shrink-0" />}
                 <div>
                   <p className="text-sm font-bold text-gray-800">Download My Data</p>
                   <p className="text-xs text-gray-400">Export all your data as JSON</p>
@@ -383,12 +443,12 @@ export default function SettingsPage() {
           </div>
         </div>
 
-       {/* Account Status / Deactivation */}
+        {/* Account Status / Deactivation */}
         <div className="rounded-3xl p-5 fade-up-3"
-          style={{background: '#fffbeb', border: '1px solid #fef3c7'}}>
+          style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{background: '#fef3c7'}}>
+              style={{ background: '#fef3c7' }}>
               <AlertTriangle size={20} className="text-amber-600" />
             </div>
             <div>
@@ -397,7 +457,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="p-3 rounded-2xl mb-3" style={{background: 'rgba(255,255,255,0.6)'}}>
+          <div className="p-3 rounded-2xl mb-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
             <p className="text-xs text-amber-900 leading-relaxed">
               <strong>What deactivation means:</strong> Your account will be marked as inactive. You won't be able to sign in, and your profile won't appear in user lists. Your data (incidents, tickets, ratings) stays preserved.
             </p>
@@ -408,7 +468,7 @@ export default function SettingsPage() {
 
           <button onClick={() => setDeleteConfirm(true)}
             className="w-full flex items-center justify-center gap-2 p-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02]"
-            style={{background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 16px rgba(245,158,11,0.3)'}}>
+            style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 16px rgba(245,158,11,0.3)' }}>
             <Lock size={14} /> Deactivate My Account
           </button>
         </div>

@@ -1,12 +1,11 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, Briefcase, MapPin, MessageSquare, Copy, Search, Filter, Users, Building2, AlertTriangle, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import { timeAgo, fullDate } from '@/lib/timeAgo'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -17,7 +16,7 @@ const dots = [...Array(20)].map((_, i) => ({
 }))
 
 const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{overflow: 'hidden', pointerEvents: 'none'}}>
+  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
     {dots.map((dot, i) => (
       <div key={i} style={{
         position: 'absolute',
@@ -35,12 +34,54 @@ const AnimatedDots = () => (
   </div>
 )
 
+// Extracted so the 1-second tick only re-renders this tiny component,
+// not the whole admin panel (which can hold hundreds of list rows).
+function LiveClock() {
+  const [now, setNow] = useState(null)
+  useEffect(() => {
+    setNow(new Date())
+    const interval = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+  if (!now) return null
+  return (
+    <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
+      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+      <Clock size={12} className="text-gray-400" />
+      <span className="text-xs font-bold text-gray-600">
+        {now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
+      </span>
+    </div>
+  )
+}
+
+// Cryptographically secure invite code. Math.random() is predictable and
+// must never be used for codes that gate privileged roles.
+function generateSecureCode(prefix) {
+  const bytes = new Uint8Array(6)
+  crypto.getRandomValues(bytes)
+  // Unambiguous alphabet (no 0/O, 1/I/L) so codes survive being read aloud.
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  const code = Array.from(bytes, b => alphabet[b % alphabet.length]).join('')
+  return `${prefix.toUpperCase()}-${code}`
+}
+
+const ROLE_CONFIG = {
+  resident: { color: '#5B54E8', bg: '#f0effe' },
+  official: { color: '#f97316', bg: '#fff7ed' },
+  tanod: { color: '#22c55e', bg: '#f0fdf4' },
+}
+
 export default function AdminPanel() {
   const router = useRouter()
-  const supabase = createClient()
+  // Memoize so we don't construct a new client on every render.
+  const supabase = useMemo(() => createClient(), [])
+
   const [profile, setProfile] = useState(null)
   const [applications, setApplications] = useState([])
-  const [barangays, setBarangays] = useState([])
+  const [barangayResults, setBarangayResults] = useState([])
+  const [barangaySearch, setBarangaySearch] = useState('')
+  const [searchingBarangays, setSearchingBarangays] = useState(false)
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [loading, setLoading] = useState(true)
@@ -51,76 +92,130 @@ export default function AdminPanel() {
   const [rejectReason, setRejectReason] = useState('')
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
-  const [currentTime, setCurrentTime] = useState(null)
+  const [processing, setProcessing] = useState(false) // guards against double-clicks
+  const [approveConfirm, setApproveConfirm] = useState(null) // { app, officialCount }
 
-  useEffect(() => {
-    async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
-
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (!prof?.is_super_admin) {
-        toast.error('Access denied. Super admin only.')
-        return router.push('/login')
-      }
-      setProfile(prof)
-
-      // Load applications with barangay info
-      const { data: apps } = await supabase.from('barangay_applications')
+  // One shared fetch used by initial load AND refresh — previously duplicated.
+  // Promise.all runs the queries in parallel instead of one after another.
+  const fetchAll = useCallback(async () => {
+    const [appsRes, usersRes, codesRes] = await Promise.all([
+      supabase.from('barangay_applications')
         .select('*, barangays(name, city, province)')
-        .order('created_at', { ascending: false })
-      setApplications(apps || [])
-
-      // Load all barangays
-      const { data: bgs } = await supabase.from('barangays')
-        .select('id, name, city, province')
-        .order('name')
-      setBarangays(bgs || [])
-
-      // Load all REGULAR users (excluding super admins)
-      const { data: allUsers } = await supabase.from('profiles')
+        .order('created_at', { ascending: false }),
+      supabase.from('profiles')
         .select('*, barangays(name)')
         .or('is_super_admin.is.null,is_super_admin.eq.false')
         .order('created_at', { ascending: false })
-        .limit(100)
-      setUsers(allUsers || [])
-
-      // Load all invite codes
-      const { data: codes } = await supabase.from('invite_codes')
+        .limit(100),
+      supabase.from('invite_codes')
         .select('*, barangays(name)')
         .order('created_at', { ascending: false })
-        .limit(100)
-      setInviteCodes(codes || [])
+        .limit(100),
+    ])
 
-      setLoading(false)
+    const firstError = appsRes.error || usersRes.error || codesRes.error
+    if (firstError) {
+      toast.error('Some data failed to load: ' + firstError.message)
     }
-    loadData()
-  }, [])
+
+    setApplications(appsRes.data || [])
+    setUsers(usersRes.data || [])
+    setInviteCodes(codesRes.data || [])
+  }, [supabase])
+
+  // Debounced server-side barangay search. This scales to any table size —
+  // we never try to load every barangay into the browser (Supabase caps
+  // selects at 1,000 rows anyway). Empty search shows the first 20 by name.
+  useEffect(() => {
+    if (loading) return
+    // Strip characters that would break the PostgREST .or() filter syntax
+    const q = barangaySearch.trim().replace(/[,()%]/g, '')
+    setSearchingBarangays(true)
+    const t = setTimeout(async () => {
+      let query = supabase.from('barangays')
+        .select('id, name, city, province')
+        .order('name')
+        .limit(20)
+      if (q) query = query.or(`name.ilike.%${q}%,city.ilike.%${q}%,province.ilike.%${q}%`)
+      const { data, error } = await query
+      if (error) toast.error('Barangay search failed: ' + error.message)
+      setBarangayResults(data || [])
+      setSearchingBarangays(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [barangaySearch, loading, supabase])
 
   useEffect(() => {
-    setCurrentTime(new Date())
-    const interval = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
+    let cancelled = false
+    async function init() {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) return router.push('/login')
 
+      const { data: prof, error: profError } = await supabase
+        .from('profiles').select('*').eq('id', user.id).single()
+
+      // NOTE: this check is UX only — a malicious user can bypass any
+      // client-side gate. Real enforcement must live in RLS policies
+      // (and ideally a middleware/server-component check on this route).
+      if (profError || !prof?.is_super_admin) {
+        toast.error('Access denied. Super admin only.')
+        return router.push('/login')
+      }
+      if (cancelled) return
+
+      setProfile(prof)
+      await fetchAll()
+      if (!cancelled) setLoading(false)
+    }
+    init()
+    return () => { cancelled = true }
+  }, [supabase, router, fetchAll])
+
+  async function refreshData() {
+    setRefreshing(true)
+    await fetchAll()
+    setRefreshing(false)
+    toast.success('Data refreshed!')
+  }
+
+  // Step 1: check for existing officials with an accurate COUNT
+  // (the old .limit(1) query could only ever report "1 official(s)").
   async function handleApprove(app) {
-    // Check if barangay already has an official
-    const { data: existingOfficial } = await supabase
+    if (processing) return
+    setProcessing(true)
+
+    const { count, error } = await supabase
       .from('profiles')
-      .select('id')
+      .select('id', { count: 'exact', head: true })
       .eq('barangay_id', app.barangay_id)
       .eq('role', 'official')
-      .limit(1)
 
-    if (existingOfficial && existingOfficial.length > 0) {
-      const confirmed = confirm(`This barangay already has ${existingOfficial.length} official(s). Generate code anyway?`)
-      if (!confirmed) return
+    setProcessing(false)
+
+    if (error) {
+      toast.error('Could not verify existing officials: ' + error.message)
+      return
     }
 
-    // Generate unique code
-    const code = `OFFICIAL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    if (count && count > 0) {
+      // Consistent UI: use the app's ConfirmDialog instead of window.confirm
+      setApproveConfirm({ app, officialCount: count })
+      return
+    }
 
-    // Insert invite code
+    await doApprove(app)
+  }
+
+  // Step 2: generate code + update application.
+  // NOTE: these two writes are not atomic. For real safety, move them into a
+  // single Postgres function called via supabase.rpc('approve_application', ...)
+  // so a failure can't leave an orphaned invite code behind.
+  async function doApprove(app) {
+    if (processing) return
+    setProcessing(true)
+
+    const code = generateSecureCode('OFFICIAL')
+
     const { error: codeError } = await supabase.from('invite_codes').insert({
       code,
       role: 'official',
@@ -128,58 +223,71 @@ export default function AdminPanel() {
     })
 
     if (codeError) {
+      setProcessing(false)
       toast.error('Failed to generate code: ' + codeError.message)
       return
     }
 
-    // Update application
+    const reviewedAt = new Date().toISOString()
     const { error: updateError } = await supabase.from('barangay_applications').update({
       status: 'approved',
       reviewed_by: profile.id,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: reviewedAt,
       generated_code: code,
     }).eq('id', app.id)
 
     if (updateError) {
-      toast.error('Failed to update application')
+      setProcessing(false)
+      // Best-effort cleanup so the code doesn't float around unclaimed.
+      await supabase.from('invite_codes').delete().eq('code', code)
+      toast.error('Failed to update application — code was rolled back')
       return
     }
 
     setApplications(prev => prev.map(a =>
-      a.id === app.id ? { ...a, status: 'approved', generated_code: code, reviewed_at: new Date().toISOString() } : a
+      a.id === app.id ? { ...a, status: 'approved', generated_code: code, reviewed_at: reviewedAt } : a
     ))
-
-    // Reload codes
-    const { data: codes } = await supabase.from('invite_codes')
-      .select('*, barangays(name)')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setInviteCodes(codes || [])
+    // Prepend locally instead of refetching the whole codes list.
+    setInviteCodes(prev => [{
+      id: `local-${code}`,
+      code,
+      role: 'official',
+      barangay_id: app.barangay_id,
+      used: false,
+      created_at: reviewedAt,
+      barangays: app.barangays ? { name: app.barangays.name } : null,
+    }, ...prev])
 
     setReviewing(null)
+    setProcessing(false)
     toast.success(`Approved! Code: ${code}`, { duration: 6000 })
   }
 
   async function handleReject(app, reason) {
+    if (processing) return
     if (!reason.trim()) {
       toast.error('Please provide a rejection reason')
       return
     }
+    setProcessing(true)
 
+    const reviewedAt = new Date().toISOString()
     const { error } = await supabase.from('barangay_applications').update({
       status: 'rejected',
       reviewed_by: profile.id,
-      reviewed_at: new Date().toISOString(),
+      reviewed_at: reviewedAt,
       rejection_reason: reason.trim(),
     }).eq('id', app.id)
 
+    setProcessing(false)
+
     if (error) {
-      toast.error('Failed to reject application')
+      toast.error('Failed to reject application: ' + error.message)
       return
     }
 
     setApplications(prev => prev.map(a =>
-      a.id === app.id ? { ...a, status: 'rejected', rejection_reason: reason.trim(), reviewed_at: new Date().toISOString() } : a
+      a.id === app.id ? { ...a, status: 'rejected', rejection_reason: reason.trim(), reviewed_at: reviewedAt } : a
     ))
 
     setReviewing(null)
@@ -188,7 +296,10 @@ export default function AdminPanel() {
   }
 
   async function generateCustomCode(barangayId, role) {
-    const code = `${role.toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    if (processing) return
+    setProcessing(true)
+
+    const code = generateSecureCode(role)
 
     const { data, error } = await supabase.from('invite_codes').insert({
       code,
@@ -196,8 +307,10 @@ export default function AdminPanel() {
       barangay_id: barangayId,
     }).select('*, barangays(name)').single()
 
+    setProcessing(false)
+
     if (error) {
-      toast.error('Failed to generate code')
+      toast.error('Failed to generate code: ' + error.message)
       return
     }
 
@@ -205,9 +318,13 @@ export default function AdminPanel() {
     toast.success(`Code generated: ${code}`, { duration: 6000 })
   }
 
-  function copyToClipboard(text) {
-    navigator.clipboard.writeText(text)
-    toast.success('Copied to clipboard!')
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('Copied to clipboard!')
+    } catch {
+      toast.error('Could not copy — please copy manually')
+    }
   }
 
   async function handleLogout() {
@@ -215,44 +332,28 @@ export default function AdminPanel() {
     window.location.href = '/login'
   }
 
-  async function refreshData() {
-    setRefreshing(true)
-    const { data: apps } = await supabase.from('barangay_applications')
-      .select('*, barangays(name, city, province)')
-      .order('created_at', { ascending: false })
-    setApplications(apps || [])
+  // Derived data memoized so keystrokes elsewhere don't refilter needlessly.
+  const filteredApps = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return applications.filter(a => {
+      const matchesStatus = statusFilter === 'all' || a.status === statusFilter
+      const matchesSearch = !q ||
+        a.full_name?.toLowerCase().includes(q) ||
+        a.email?.toLowerCase().includes(q) ||
+        a.barangays?.name?.toLowerCase().includes(q)
+      return matchesStatus && matchesSearch
+    })
+  }, [applications, statusFilter, search])
 
-    const { data: allUsers } = await supabase.from('profiles')
-      .select('*, barangays(name)')
-      .or('is_super_admin.is.null,is_super_admin.eq.false')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setUsers(allUsers || [])
+  const { pendingCount, approvedCount } = useMemo(() => ({
+    pendingCount: applications.filter(a => a.status === 'pending').length,
+    approvedCount: applications.filter(a => a.status === 'approved').length,
+  }), [applications])
 
-    const { data: codes } = await supabase.from('invite_codes')
-      .select('*, barangays(name)')
-      .order('created_at', { ascending: false })
-      .limit(100)
-    setInviteCodes(codes || [])
-
-    setRefreshing(false)
-    toast.success('Data refreshed!')
-  }
-
-  const filteredApps = applications.filter(a => {
-    const matchesStatus = statusFilter === 'all' || a.status === statusFilter
-    const matchesSearch = !search ||
-      a.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      a.email?.toLowerCase().includes(search.toLowerCase()) ||
-      a.barangays?.name?.toLowerCase().includes(search.toLowerCase())
-    return matchesStatus && matchesSearch
-  })
-
-  const pendingCount = applications.filter(a => a.status === 'pending').length
-  const approvedCount = applications.filter(a => a.status === 'approved').length
-  const rejectedCount = applications.filter(a => a.status === 'rejected').length
-
-  const totalBarangaysWithUsers = new Set(users.map(u => u.barangay_id).filter(Boolean)).size
+  const totalBarangaysWithUsers = useMemo(
+    () => new Set(users.map(u => u.barangay_id).filter(Boolean)).size,
+    [users]
+  )
 
   if (loading) {
     return (
@@ -267,14 +368,14 @@ export default function AdminPanel() {
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite'}} />
+          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
         <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite'}} />
+          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
       {/* Premium Header */}
       <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
-        style={{boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe'}}>
+        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
 
         {/* LEFT — Back & Brand */}
         <button onClick={() => router.push('/')}
@@ -283,7 +384,7 @@ export default function AdminPanel() {
           <ArrowLeft size={18} />
         </button>
 
-        <div className="h-9 w-px hidden sm:block" style={{background: '#f0effe'}} />
+        <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} />
 
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative flex-shrink-0">
@@ -295,18 +396,18 @@ export default function AdminPanel() {
               <Shield size={18} className="text-white" />
             </div>
             <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-              style={{background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)'}}>
+              style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)' }}>
               <Sparkles size={8} className="text-white" />
             </div>
           </div>
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-gray-800 truncate" style={{letterSpacing: '-0.5px'}}>
+              <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.5px' }}>
                 Super Admin
               </h1>
               <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                style={{background: 'linear-gradient(135deg, #1f2937, #4b5563)'}}>
+                style={{ background: 'linear-gradient(135deg, #1f2937, #4b5563)' }}>
                 <Sparkles size={9} className="text-yellow-300" />
                 <span className="text-[10px] font-black text-white tracking-wider">ROOT</span>
               </div>
@@ -321,16 +422,7 @@ export default function AdminPanel() {
         {/* RIGHT — Actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
 
-          {/* Live clock */}
-          {currentTime && (
-            <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{background: '#fafaff', border: '1px solid #f0effe'}}>
-              <Clock size={12} className="text-gray-400" />
-              <span className="text-xs font-bold text-gray-600">
-                {currentTime.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-              </span>
-            </div>
-          )}
+          <LiveClock />
 
           {/* Refresh button */}
           <button onClick={refreshData} disabled={refreshing}
@@ -347,7 +439,7 @@ export default function AdminPanel() {
                 title={`${pendingCount} pending applications`}>
                 <Bell size={15} className="text-gray-400" />
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                  style={{background: '#ef4444', boxShadow: '0 2px 8px rgba(239,68,68,0.4)'}}>
+                  style={{ background: '#ef4444', boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}>
                   {pendingCount}
                 </span>
                 <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-75" />
@@ -356,12 +448,12 @@ export default function AdminPanel() {
           )}
 
           {/* Divider */}
-          <div className="h-9 w-px hidden sm:block" style={{background: '#f0effe'}} />
+          <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} />
 
           {/* Logout button */}
           <button onClick={() => setLogoutConfirm(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-            style={{background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca'}}
+            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
             title="Sign out">
             <LogOut size={13} />
             <span className="hidden sm:block">Sign Out</span>
@@ -376,48 +468,48 @@ export default function AdminPanel() {
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{background: '#fff7ed'}}>
+                style={{ background: '#fff7ed' }}>
                 <Inbox size={14} className="text-orange-500" />
               </div>
               <p className="text-xs text-gray-400">Pending</p>
             </div>
-            <p className="text-2xl font-black" style={{color: '#f97316'}}>{pendingCount}</p>
+            <p className="text-2xl font-black" style={{ color: '#f97316' }}>{pendingCount}</p>
             <p className="text-xs text-gray-500 mt-0.5">Applications</p>
           </div>
 
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{background: '#f0fdf4'}}>
+                style={{ background: '#f0fdf4' }}>
                 <CheckCircle size={14} className="text-emerald-500" />
               </div>
               <p className="text-xs text-gray-400">Approved</p>
             </div>
-            <p className="text-2xl font-black" style={{color: '#22c55e'}}>{approvedCount}</p>
+            <p className="text-2xl font-black" style={{ color: '#22c55e' }}>{approvedCount}</p>
             <p className="text-xs text-gray-500 mt-0.5">Total approved</p>
           </div>
 
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{background: '#f0effe'}}>
-                <Building2 size={14} style={{color: '#5B54E8'}} />
+                style={{ background: '#f0effe' }}>
+                <Building2 size={14} style={{ color: '#5B54E8' }} />
               </div>
               <p className="text-xs text-gray-400">Active</p>
             </div>
-            <p className="text-2xl font-black" style={{color: '#5B54E8'}}>{totalBarangaysWithUsers}</p>
+            <p className="text-2xl font-black" style={{ color: '#5B54E8' }}>{totalBarangaysWithUsers}</p>
             <p className="text-xs text-gray-500 mt-0.5">Barangays w/ users</p>
           </div>
 
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{background: '#eff6ff'}}>
+                style={{ background: '#eff6ff' }}>
                 <Users size={14} className="text-blue-500" />
               </div>
               <p className="text-xs text-gray-400">Total Users</p>
             </div>
-            <p className="text-2xl font-black" style={{color: '#3b82f6'}}>{users.length}</p>
+            <p className="text-2xl font-black" style={{ color: '#3b82f6' }}>{users.length}{users.length >= 100 ? '+' : ''}</p>
             <p className="text-xs text-gray-500 mt-0.5">Registered</p>
           </div>
         </div>
@@ -496,7 +588,7 @@ export default function AdminPanel() {
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
-                        style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)'}}>
+                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
                         {app.full_name?.[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -520,26 +612,26 @@ export default function AdminPanel() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{background: '#fafaff', border: '1px solid #f0effe'}}>
+                      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
                       <Mail size={12} className="text-gray-400 flex-shrink-0" />
                       <span className="text-gray-700 truncate">{app.email}</span>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{background: '#fafaff', border: '1px solid #f0effe'}}>
+                      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
                       <Phone size={12} className="text-gray-400 flex-shrink-0" />
                       <span className="text-gray-700 truncate">{app.phone}</span>
                     </div>
                     <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{background: '#f0effe', border: '1px solid #e8e3ff'}}>
-                      <MapPin size={12} style={{color: '#5B54E8'}} className="flex-shrink-0" />
-                      <span className="font-semibold" style={{color: '#5B54E8'}}>
+                      style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
+                      <MapPin size={12} style={{ color: '#5B54E8' }} className="flex-shrink-0" />
+                      <span className="font-semibold" style={{ color: '#5B54E8' }}>
                         {app.barangays?.name}, {app.barangays?.city}, {app.barangays?.province}
                       </span>
                     </div>
                   </div>
 
                   {app.message && (
-                    <div className="p-3 rounded-xl mb-3" style={{background: '#fafaff', border: '1px solid #f0effe'}}>
+                    <div className="p-3 rounded-xl mb-3" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
                       <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
                         <MessageSquare size={10} /> Message
                       </p>
@@ -549,7 +641,7 @@ export default function AdminPanel() {
 
                   {app.status === 'approved' && app.generated_code && (
                     <div className="flex items-center gap-2 p-3 rounded-xl mb-3"
-                      style={{background: '#f0fdf4', border: '1px solid #dcfce7'}}>
+                      style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
                       <CheckCircle size={14} className="text-emerald-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Generated Code</p>
@@ -564,7 +656,7 @@ export default function AdminPanel() {
 
                   {app.status === 'rejected' && app.rejection_reason && (
                     <div className="flex items-start gap-2 p-3 rounded-xl mb-3"
-                      style={{background: '#fef2f2', border: '1px solid #fecaca'}}>
+                      style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
                       <XCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">Rejection Reason</p>
@@ -575,14 +667,16 @@ export default function AdminPanel() {
 
                   {app.status === 'pending' && (
                     <div className="flex gap-2">
-                      <button onClick={() => handleApprove(app)}
-                        className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02]"
-                        style={{background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 12px rgba(34,197,94,0.3)'}}>
-                        <CheckCircle size={12} /> Approve & Generate Code
+                      <button onClick={() => handleApprove(app)} disabled={processing}
+                        className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 12px rgba(34,197,94,0.3)' }}>
+                        {processing
+                          ? <Loader2 size={12} className="animate-spin" />
+                          : <CheckCircle size={12} />} Approve & Generate Code
                       </button>
-                      <button onClick={() => setReviewing(app)}
-                        className="px-4 py-2.5 rounded-xl text-xs font-bold transition-colors hover:bg-red-100"
-                        style={{background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca'}}>
+                      <button onClick={() => setReviewing(app)} disabled={processing}
+                        className="px-4 py-2.5 rounded-xl text-xs font-bold transition-colors hover:bg-red-100 disabled:opacity-60"
+                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
                         <XCircle size={12} className="inline" /> Reject
                       </button>
                     </div>
@@ -599,8 +693,8 @@ export default function AdminPanel() {
             <div className="white-card p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{background: '#f0effe'}}>
-                  <KeyRound size={18} style={{color: '#5B54E8'}} />
+                  style={{ background: '#f0effe' }}>
+                  <KeyRound size={18} style={{ color: '#5B54E8' }} />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800">Quick Code Generator</h3>
@@ -608,29 +702,53 @@ export default function AdminPanel() {
                 </div>
               </div>
 
+              {/* Search — results come from the database, not a preloaded list */}
+              <div className="relative mb-3">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input value={barangaySearch} onChange={e => setBarangaySearch(e.target.value)}
+                  placeholder="Search barangay, city, or province..."
+                  className="input-field w-full rounded-2xl pl-10 pr-10 py-2.5 text-sm text-gray-800" />
+                {searchingBarangays && (
+                  <Loader2 size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                )}
+              </div>
+
               <div className="space-y-2">
-                {barangays.slice(0, 20).map(b => (
+                {barangayResults.length === 0 && !searchingBarangays && (
+                  <div className="text-center py-6">
+                    <Building2 size={28} className="mx-auto text-gray-300 mb-2" />
+                    <p className="text-xs text-gray-400">
+                      {barangaySearch ? `No barangays match "${barangaySearch}"` : 'No barangays found'}
+                    </p>
+                  </div>
+                )}
+                {barangayResults.map(b => (
                   <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{background: '#fafafa', border: '1px solid #f0effe'}}>
+                    style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
                     <Building2 size={14} className="text-gray-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{b.name}</p>
                       <p className="text-xs text-gray-400 truncate">{b.city}, {b.province}</p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
-                      <button onClick={() => generateCustomCode(b.id, 'official')}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
-                        style={{background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa'}}>
+                      <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
                         + Official
                       </button>
-                      <button onClick={() => generateCustomCode(b.id, 'tanod')}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105"
-                        style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
+                      <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
                         + Tanod
                       </button>
                     </div>
                   </div>
                 ))}
+                {barangayResults.length === 20 && (
+                  <p className="text-xs text-gray-400 text-center pt-2">
+                    Showing first 20 matches — refine your search to narrow down
+                  </p>
+                )}
               </div>
             </div>
 
@@ -639,10 +757,10 @@ export default function AdminPanel() {
               <div className="space-y-2">
                 {inviteCodes.slice(0, 30).map(code => (
                   <div key={code.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{background: code.used ? '#f9fafb' : '#f0effe', border: `1px solid ${code.used ? '#e5e7eb' : '#e8e3ff'}`}}>
+                    style={{ background: code.used ? '#f9fafb' : '#f0effe', border: `1px solid ${code.used ? '#e5e7eb' : '#e8e3ff'}` }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-bold" style={{color: code.used ? '#9ca3af' : '#5B54E8'}}>
+                        <span className="font-mono text-sm font-bold" style={{ color: code.used ? '#9ca3af' : '#5B54E8' }}>
                           {code.code}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
@@ -655,7 +773,7 @@ export default function AdminPanel() {
                     {!code.used && (
                       <button onClick={() => copyToClipboard(code.code)}
                         className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
-                        <Copy size={12} style={{color: '#5B54E8'}} />
+                        <Copy size={12} style={{ color: '#5B54E8' }} />
                       </button>
                     )}
                   </div>
@@ -679,8 +797,8 @@ export default function AdminPanel() {
 
                 return (
                   <div key={bId} className="flex items-center gap-3 px-3 py-3 rounded-xl"
-                    style={{background: '#fafafa', border: '1px solid #f0effe'}}>
-                    <Building2 size={16} style={{color: '#5B54E8'}} className="flex-shrink-0" />
+                    style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
+                    <Building2 size={16} style={{ color: '#5B54E8' }} className="flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{b?.name}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
@@ -703,18 +821,19 @@ export default function AdminPanel() {
             {/* Stats by role */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { role: 'resident', label: 'Residents', color: '#5B54E8', bg: '#f0effe' },
-                { role: 'official', label: 'Officials', color: '#f97316', bg: '#fff7ed' },
-                { role: 'tanod', label: 'Tanods', color: '#22c55e', bg: '#f0fdf4' },
+                { role: 'resident', label: 'Residents' },
+                { role: 'official', label: 'Officials' },
+                { role: 'tanod', label: 'Tanods' },
               ].map(r => {
+                const rc = ROLE_CONFIG[r.role]
                 const count = users.filter(u => u.role === r.role).length
                 return (
                   <div key={r.role} className="white-card p-4 text-center">
                     <div className="w-10 h-10 rounded-2xl mx-auto mb-2 flex items-center justify-center"
-                      style={{background: r.bg}}>
-                      <Users size={16} style={{color: r.color}} />
+                      style={{ background: rc.bg }}>
+                      <Users size={16} style={{ color: rc.color }} />
                     </div>
-                    <p className="text-2xl font-black" style={{color: r.color}}>{count}</p>
+                    <p className="text-2xl font-black" style={{ color: rc.color }}>{count}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{r.label}</p>
                   </div>
                 )
@@ -723,7 +842,7 @@ export default function AdminPanel() {
 
             {/* Users list */}
             <div className="white-card p-5">
-              <h3 className="font-bold text-gray-800 mb-4">Barangay Users ({users.length})</h3>
+              <h3 className="font-bold text-gray-800 mb-4">Barangay Users ({users.length}{users.length >= 100 ? '+' : ''})</h3>
               {users.length === 0 ? (
                 <div className="text-center py-8">
                   <Users size={32} className="mx-auto text-gray-300 mb-2" />
@@ -732,19 +851,14 @@ export default function AdminPanel() {
               ) : (
                 <div className="space-y-2">
                   {users.map(u => {
-                    const roleConfig = {
-                      resident: { color: '#5B54E8', bg: '#f0effe' },
-                      official: { color: '#f97316', bg: '#fff7ed' },
-                      tanod: { color: '#22c55e', bg: '#f0fdf4' },
-                    }
-                    const rc = roleConfig[u.role] || roleConfig.resident
+                    const rc = ROLE_CONFIG[u.role] || ROLE_CONFIG.resident
                     return (
                       <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                        style={{background: '#fafafa', border: '1px solid #f0effe'}}>
+                        style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
                         <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                          style={{background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)`}}>
+                          style={{ background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)` }}>
                           {u.avatar_url ? (
-                            <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                            <img src={u.avatar_url} alt={u.full_name || 'User avatar'} className="w-full h-full object-cover" />
                           ) : (
                             u.full_name?.[0]?.toUpperCase()
                           )}
@@ -754,7 +868,7 @@ export default function AdminPanel() {
                           <p className="text-xs text-gray-400 truncate">{u.barangays?.name || 'No barangay'}</p>
                         </div>
                         <span className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-                          style={{background: rc.bg, color: rc.color}}>
+                          style={{ background: rc.bg, color: rc.color }}>
                           {u.role}
                         </span>
                       </div>
@@ -771,15 +885,15 @@ export default function AdminPanel() {
       {/* Rejection Modal */}
       {reviewing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)'}}
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
           onClick={() => setReviewing(null)}>
           <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1"
-            style={{background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)'}}
+            style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)'}}>
+                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}>
                   <XCircle size={22} className="text-white" />
                 </div>
                 <div>
@@ -800,19 +914,36 @@ export default function AdminPanel() {
               <div className="flex gap-3 mt-5">
                 <button onClick={() => { setReviewing(null); setRejectReason('') }}
                   className="flex-1 py-3 rounded-2xl text-sm font-bold transition-colors hover:bg-gray-50"
-                  style={{background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe'}}>
+                  style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
                   Cancel
                 </button>
-                <button onClick={() => handleReject(reviewing, rejectReason)} disabled={!rejectReason.trim()}
-                  className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60"
-                  style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 8px 32px rgba(239,68,68,0.4)'}}>
-                  Confirm Reject
+                <button onClick={() => handleReject(reviewing, rejectReason)}
+                  disabled={!rejectReason.trim() || processing}
+                  className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 8px 32px rgba(239,68,68,0.4)' }}>
+                  {processing ? 'Rejecting…' : 'Confirm Reject'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Approve anyway confirmation (replaces window.confirm for consistent UI) */}
+      <ConfirmDialog
+        open={!!approveConfirm}
+        onClose={() => setApproveConfirm(null)}
+        onConfirm={() => {
+          const app = approveConfirm?.app
+          setApproveConfirm(null)
+          if (app) doApprove(app)
+        }}
+        title="Barangay already has an official"
+        message={`This barangay already has ${approveConfirm?.officialCount} official${approveConfirm?.officialCount === 1 ? '' : 's'}. Generate another official code anyway?`}
+        confirmText="Yes, Generate Code"
+        cancelText="Cancel"
+        variant="warning"
+      />
 
       {/* Logout Confirmation */}
       <ConfirmDialog
