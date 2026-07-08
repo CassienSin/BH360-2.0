@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowRight, AlertTriangle, Shield, BarChart2, FileText, MessageCircle, Bell, CheckCircle, Zap, Users, Star, TrendingUp, Activity } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { dashboardPath } from '@/lib/roles'
 
 const dots = [...Array(30)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -53,20 +54,13 @@ const AnimatedDots = () => (
   </div>
 )
 
-// Same helper as the login page — one source of truth per role.
-function dashboardPath(profile) {
-  if (profile?.is_super_admin) return '/admin'
-  if (profile?.role === 'official') return '/official'
-  if (profile?.role === 'tanod') return '/tanod'
-  if (profile?.role === 'resident') return '/resident'
-  return null
-}
+
 
 // Tailwind can't see dynamically-built class names like `bg-${color}-100`,
 // so those classes never make it into the CSS build — the status pills in
 // the hero mockup were rendering completely unstyled. Full literal class
 // strings are the fix.
-const MOCK_STATUS_CLASSES = {
+const MOCK_STATUS_CLASSES: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-700',
   assigned: 'bg-blue-100 text-blue-700',
   resolved: 'bg-emerald-100 text-emerald-700',

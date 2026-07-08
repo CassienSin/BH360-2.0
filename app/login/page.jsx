@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle, Shield, Users, Activity } from 'lucide-react'
 import Image from 'next/image'
+import { dashboardPath } from '@/lib/roles'
 
 const dots = [...Array(25)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -12,14 +13,6 @@ const dots = [...Array(25)].map((_, i) => ({
   delay: (i * 0.7) % 4,
 }))
 
-// One place that decides where each role lands
-function dashboardPath(profile) {
-  if (profile?.is_super_admin) return '/admin'
-  if (profile?.role === 'official') return '/official'
-  if (profile?.role === 'tanod') return '/tanod'
-  if (profile?.role === 'resident') return '/resident'
-  return '/'
-}
 
 // Friendlier wording for the most common auth errors
 function friendlyAuthError(message) {
