@@ -1,5 +1,6 @@
 /* 1. IMPORTS (Must be at the top) */
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&display=swap');
+/* Sora is now self-hosted via next/font in app/layout.tsx (exposed as
+   --font-sora) — the render-blocking Google Fonts @import is gone. */
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -9,13 +10,23 @@
 
 /* 3. TAILWIND THEME CONFIGURATION */
 @theme inline {
-  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono);
-  --font-heading: "Sora", sans-serif;
+  --font-sans: var(--font-sora), "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono, ui-monospace, 'SF Mono', Monaco, monospace);
+  --font-heading: var(--font-sora), "Sora", sans-serif;
+
+  /* Brand tokens — the purple is currently hardcoded (#5B54E8) in ~30
+     places across components. These expose it as Tailwind utilities
+     (text-brand, bg-brand-soft, border-brand-border, ring-brand, …) so
+     new code can reference the token instead of the hex. */
+  --color-brand: var(--brand);
+  --color-brand-light: var(--brand-light);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-border: var(--brand-border);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -64,38 +75,49 @@
 
 /* 4. CSS VARIABLES */
 :root {
+  /* Single source of truth for the brand palette */
+  --brand: #5B54E8;
+  --brand-light: #7C75F0;
+  --brand-dark: #4A43D4;
+  --brand-soft: #f0effe;
+  --brand-border: #e8e3ff;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  /* Aligned with the brand — shadcn components (Badge, Button, …) were
+     rendering near-black "primary" while the whole app is purple. */
+  --primary: var(--brand);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: var(--brand-soft);
+  --accent-foreground: var(--brand-dark);
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: var(--brand);
+  /* Charts were 5 shades of gray — now the app's actual data colors, so
+     recharts/chart.js output matches the incident/status palette. */
+  --chart-1: var(--brand);
+  --chart-2: #22c55e;
+  --chart-3: #f97316;
+  --chart-4: #3b82f6;
+  --chart-5: #f59e0b;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-accent: var(--brand-soft);
+  --sidebar-accent-foreground: var(--brand-dark);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: var(--brand);
 }
 
 .dark {
@@ -105,8 +127,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: var(--brand-light);
+  --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -116,15 +138,15 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: var(--brand-light);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: var(--brand-light);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--brand-light);
 }
 
 /* 5. BASE STYLES */
@@ -134,6 +156,15 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  /* Keyboard users get a visible focus ring on the app's custom buttons
+     and links, which had no focus styles at all. Mouse/touch users see
+     nothing (focus-visible only fires for keyboard focus). */
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 }
 
@@ -197,21 +228,38 @@
 .white-card {
   @apply bg-white rounded-[24px] transition-all duration-200 shadow-[0_8px_32px_rgba(91,84,232,0.12)];
 }
-.white-card:hover {
-  @apply -translate-y-0.5 shadow-[0_16px_48px_rgba(91,84,232,0.18)];
-}
 
 .glass-card {
   @apply rounded-[20px] border border-white/25 bg-white/12 backdrop-blur-[20px] transition-all duration-200;
 }
-.glass-card:hover {
-  @apply -translate-y-0.5 bg-white/18;
+
+/* Hover lifts only on devices that actually hover. On touch screens
+   these fired on tap and stuck — cards stayed "lifted" until the next
+   tap somewhere else, which reads as glitchy. */
+@media (hover: hover) {
+  .white-card:hover {
+    @apply -translate-y-0.5 shadow-[0_16px_48px_rgba(91,84,232,0.18)];
+  }
+  .glass-card:hover {
+    @apply -translate-y-0.5 bg-white/18;
+  }
 }
 
 .skeleton-shimmer {
   @apply rounded-[12px] animate-shimmer;
   background: linear-gradient(90deg, #f0effe 25%, #e8e3ff 50%, #f0effe 75%);
   background-size: 200% 100%;
+}
+
+/* THE MOBILE "UNFIT AFTER REFRESH" FIX: iOS Safari auto-zooms whenever a
+   focused input has a font-size under 16px — and the app's inputs are all
+   text-sm (14px). The zoom then PERSISTS across refresh, so the page
+   reloads oversized and cut off. 16px form controls on mobile stop the
+   auto-zoom at the source, without blocking pinch-zoom for anyone. */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 .input-field {
@@ -226,10 +274,6 @@
   background-size: 200% auto;
   @apply transition-all duration-300 shadow-[0_4px_24px_rgba(91,84,232,0.35)];
 }
-.btn-primary:hover {
-  background-position: right center;
-  @apply -translate-y-px shadow-[0_8px_32px_rgba(91,84,232,0.5)];
-}
 
 .bg-brand {
   background: linear-gradient(145deg, #4A43D4 0%, #6B5FEE 35%, #7C75F0 60%, #5B54E8 100%);
@@ -240,11 +284,17 @@
 .markdown ol { @apply list-decimal pl-5 my-1; }
 
 /* 8. SCROLLBAR */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 84, 232, 0.25) transparent;
+}
+/* WebKit (Chrome, Safari, Edge) */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { 
-  background: rgba(91, 84, 232, 0.2); 
-  border-radius: 10px; 
+::-webkit-scrollbar-thumb {
+  background: rgba(91, 84, 232, 0.2);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(91, 84, 232, 0.4); }
 
@@ -255,10 +305,6 @@
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   transition: all 0.3s ease;
 }
-.btn-hero-primary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.3);
-}
 
 .btn-hero-secondary {
   background: rgba(255,255,255,0.15);
@@ -266,10 +312,21 @@
   color: white;
   transition: all 0.3s ease;
 }
-.btn-hero-secondary:hover {
-  transform: translateY(-3px);
-  background: rgba(255,255,255,0.25);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+
+@media (hover: hover) {
+  .btn-primary:hover {
+    background-position: right center;
+    @apply -translate-y-px shadow-[0_8px_32px_rgba(91,84,232,0.5)];
+  }
+  .btn-hero-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+  }
+  .btn-hero-secondary:hover {
+    transform: translateY(-3px);
+    background: rgba(255,255,255,0.25);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  }
 }
 
 /* ===== MOBILE RESPONSIVE ===== */
@@ -360,9 +417,11 @@
   transition: all 0.2s ease;
 }
 
-.markdown.ai-analysis ul li:hover {
-  border-color: #e8e3ff;
-  transform: translateX(2px);
+@media (hover: hover) {
+  .markdown.ai-analysis ul li:hover {
+    border-color: #e8e3ff;
+    transform: translateX(2px);
+  }
 }
 
 .markdown.ai-analysis ul li::before {
@@ -447,4 +506,21 @@
   font-style: italic;
   color: #4b5563;
   font-size: 14px;
+}
+
+/* ===== REDUCED MOTION ===== */
+/* Respect the OS-level "reduce motion" setting — the app is animation-
+   heavy (floating logos, drifting dots, pulsing markers, staggered
+   fade-ups), which is a real problem for people with vestibular
+   disorders. Near-zero durations let 'both'-filled animations still
+   land on their end state, so fade-up content stays visible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
