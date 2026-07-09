@@ -69,6 +69,11 @@ const MOCK_STATUS_CLASSES: Record<string, string> = {
 export default function LandingPage() {
   const router = useRouter()
   const [scrolled, setScrolled] = useState(false)
+  // false = show the branded splash instead of landing content.
+  // Prevents the PWA cold-start flash: launching the installed app while
+  // logged in used to show the full landing page for ~1s while the
+  // Supabase session check round-tripped, then jump to the dashboard.
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -80,9 +85,33 @@ export default function LandingPage() {
   useEffect(() => {
     const supabase = createClient()
     let cancelled = false
+
+    // Instant, synchronous check — no network. Supabase (supabase-js
+    // default) stores its session under an `sb-...-auth-token` key in
+    // localStorage. If there's no token, this visitor is logged out:
+    // show the landing page immediately instead of a pointless splash.
+    // Logged-out users never see the splash at all.
+    let hasToken = false
+    try {
+      hasToken = Object.keys(localStorage).some(
+        k => k.startsWith('sb-') && k.includes('auth-token')
+      )
+    } catch {
+      // localStorage unavailable (private mode edge cases) — fall through
+      // to the network check with the splash showing briefly.
+    }
+
+    if (!hasToken) setReady(true)
+
+    // Full check runs either way — belt and suspenders. It covers
+    // cookie-based sessions the localStorage sniff can't see, and it
+    // catches stale tokens (token present but session expired).
     async function checkSession() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return // not logged in, stay on landing
+      if (cancelled) return
+
+      // Not logged in after all (expired/invalid token) — show landing.
+      if (!user) { setReady(true); return }
 
       const { data: profile } = await supabase
         .from('profiles')
@@ -92,9 +121,10 @@ export default function LandingPage() {
 
       if (cancelled) return
 
-      // Sign out deactivated users
+      // Sign out deactivated users, then show them the landing page
       if (profile?.deactivated_at) {
         await supabase.auth.signOut()
+        if (!cancelled) setReady(true)
         return
       }
 
@@ -103,7 +133,11 @@ export default function LandingPage() {
       // page in history, so on mobile, Back from the dashboard landed
       // here — and this effect immediately pushed the user forward
       // again, trapping them in a redirect loop.
-      if (path) router.replace(path)
+      if (path) {
+        router.replace(path) // stay on the splash until the redirect lands
+      } else {
+        setReady(true) // logged in but no valid role — fall back to landing
+      }
     }
     checkSession()
     return () => { cancelled = true }
@@ -130,6 +164,24 @@ export default function LandingPage() {
     { name: 'Maria Cruz', role: 'Resident', text: 'Reporting an issue takes seconds. Officials respond fast. This is how government should work.', rating: 5 },
     { name: 'Tanod Reyes', role: 'Field Officer', text: 'I always know where I need to go. The dashboard is a game-changer for the field.', rating: 5 },
   ]
+
+  // Branded splash — shown only while a token exists and the session
+  // check / redirect is in flight. Logged-in PWA launches see this
+  // (reads as a native app launch screen) instead of a landing-page
+  // flash. Logged-out visitors skip it entirely.
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-brand flex flex-col items-center justify-center gap-6">
+        <div className="w-20 h-20 relative" style={{ animation: 'float 2.5s ease-in-out infinite' }}>
+          <Image src="/logo.png" alt="BH360" fill sizes="80px" priority className="object-contain drop-shadow-2xl" />
+        </div>
+        <div className="text-center">
+          <p className="text-white font-bold text-sm">BarangayHub 360</p>
+          <p className="text-purple-200 text-xs mt-1">Loading your dashboard…</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden">
