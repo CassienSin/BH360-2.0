@@ -114,10 +114,10 @@ export default function OfficialDashboard() {
   useEffect(() => {
     async function loadData() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return router.push('/login')
+      if (!session) return router.replace('/login')
       const user = session.user
       const { data: prof } = await supabase.from('profiles').select('*, barangays(id, name, city, province)').eq('id', user.id).single()
-      if (prof?.role !== 'official') return router.push('/login')
+      if (prof?.role !== 'official') return router.replace('/login')
       setProfile(prof)
 
       if (!prof?.barangay_id) {
@@ -268,8 +268,6 @@ export default function OfficialDashboard() {
       supabase.removeChannel(announcementChannel)
     }
   }, [profile?.barangay_id])
-
-  async function handleLogout() { await supabase.auth.signOut(); window.location.href = '/login' }
 
   const filteredIncidents = incidents
     .filter(inc => {

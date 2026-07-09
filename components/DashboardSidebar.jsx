@@ -53,8 +53,14 @@ export default function DashboardSidebar({
   }, [pinKey])
 
   async function confirmLogout() {
+    // Close the dialog BEFORE navigating — mobile browsers snapshot the page
+    // into the back-forward cache at unload, and an open dialog in that
+    // snapshot is what made Back resurrect the confirm prompt.
+    setLogoutConfirm(false)
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    // replace, not href: removes the dashboard from history so Back
+    // can't return to a signed-out session.
+    window.location.replace('/login')
   }
 
   function navClick(key) {

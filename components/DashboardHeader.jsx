@@ -118,8 +118,14 @@ export default function DashboardHeader({
   }
 
   async function confirmLogout() {
+    // Close the dialog BEFORE navigating — the back-forward cache snapshots
+    // the page at unload, and an open dialog in that snapshot is what made
+    // Back resurrect the confirm prompt.
+    setLogoutConfirm(false)
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    // replace, not href: removes this page from history so Back can't
+    // return to a signed-out dashboard.
+    window.location.replace('/login')
   }
 
   // Search filter — lowercase the query once, not eight times per item

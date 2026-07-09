@@ -329,7 +329,7 @@ export default function AdminPanel() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    window.location.href = '/login'
+    window.location.replace('/login')
   }
 
   // Derived data memoized so keystrokes elsewhere don't refilter needlessly.
