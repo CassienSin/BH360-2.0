@@ -102,13 +102,15 @@ export default function RegisterPage() {
     setInviteLoading(true)
     setError('')
 
-    const { data: code, error: codeError } = await supabase
-      .from('invite_codes')
-      .select('*, barangays(id, name, city, province)')
-      .eq('code', inviteCode.trim().toUpperCase())
-      .eq('role', selectedRole)
-      .eq('used', false)
-      .maybeSingle()
+    // Codes are validated through a SECURITY DEFINER Postgres function —
+    // the invite_codes table itself is never readable by clients, so
+    // nobody can harvest valid codes from the browser console. The
+    // function also handles upper/trim normalization server-side.
+    const { data, error: codeError } = await supabase
+      .rpc('validate_invite_code', {
+        input_code: inviteCode,
+        input_role: selectedRole,
+      })
 
     setInviteLoading(false)
 
@@ -116,15 +118,21 @@ export default function RegisterPage() {
       setError('Could not verify the code right now. Please try again.')
       return
     }
-    if (!code) {
+    // RPC returns an ARRAY of rows (not a single object like maybeSingle)
+    if (!data || data.length === 0) {
       setError('Invalid or already used invite code. Please check and try again.')
       return
     }
 
-    setVerifiedBarangay(code.barangays)
-    setSelectedBarangayId(code.barangay_id)
+    const match = data[0]
+    setVerifiedBarangay({
+      name: match.barangay_name,
+      city: match.barangay_city,
+      province: match.barangay_province,
+    })
+    setSelectedBarangayId(match.barangay_id)
     setStep(2)
-    toast.success(`Welcome to ${code.barangays?.name || 'your barangay'}! ✓`)
+    toast.success(`Welcome to ${match.barangay_name || 'your barangay'}! ✓`)
   }
 
   async function handleRegister(e) {
@@ -191,20 +199,19 @@ export default function RegisterPage() {
     }
 
     // Claim the invite code BEFORE creating the role-bearing profile, and
-    // atomically: the .eq('used', false) condition plus checking that a row
-    // actually updated means two people racing on the same code can't both
-    // become officials. Previously the code was only marked used at the very
-    // end, unchecked — a failure (or a race) silently left it reusable.
+    // atomically via a SECURITY DEFINER function: it only flips used=false
+    // codes and returns true only if THIS call did the flip — two people
+    // racing on the same code can't both become officials, and no client
+    // ever needs UPDATE access to the invite_codes table.
     if (selectedRole !== 'resident') {
       const { data: claimed, error: claimError } = await supabase
-        .from('invite_codes')
-        .update({ used: true, used_by: data.user.id })
-        .eq('code', inviteCode.trim().toUpperCase())
-        .eq('role', selectedRole)
-        .eq('used', false)
-        .select('id')
+        .rpc('claim_invite_code', {
+          input_code: inviteCode,
+          input_role: selectedRole,
+          claimer: data.user.id,
+        })
 
-      if (claimError || !claimed || claimed.length === 0) {
+      if (claimError || !claimed) {
         await supabase.auth.signOut()
         setError('This invite code was just used or is no longer valid. Please request a new code.')
         setLoading(false)
