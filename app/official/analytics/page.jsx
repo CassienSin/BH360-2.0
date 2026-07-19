@@ -5,55 +5,12 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Loader2, Ticket, Minus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
+import { CATEGORY_CONFIG } from '@/lib/incident-config'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area,
 } from 'recharts'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
-const CATEGORY_CONFIG = {
-  Noise: { icon: '🔊', color: '#f97316' },
-  Theft: { icon: '🚨', color: '#ef4444' },
-  Violence: { icon: '⚠️', color: '#dc2626' },
-  Fire: { icon: '🔥', color: '#ea580c' },
-  Flood: { icon: '🌊', color: '#3b82f6' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6' },
-  Animals: { icon: '🐕', color: '#a16207' },
-  Medical: { icon: '🚑', color: '#dc2626' },
-  Traffic: { icon: '🚦', color: '#0891b2' },
-  Vandalism: { icon: '🎨', color: '#7c3aed' },
-  Drugs: { icon: '💊', color: '#be185d' },
-  Other: { icon: '📝', color: '#6b7280' },
-}
+import AnimatedDots from '@/components/AnimatedDots'
 
 const HOURS_MS = 1000 * 60 * 60
 

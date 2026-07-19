@@ -4,58 +4,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Filter, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
-const CATEGORY_CONFIG = {
-  Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  Theft: { icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  Violence: { icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  Fire: { icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  Flood: { icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  Animals: { icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  Medical: { icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  Traffic: { icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  Vandalism: { icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  Drugs: { icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-}
-
-const PRIORITY_CONFIG = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
-}
+import { CATEGORY_CONFIG, PRIORITY_CONFIG } from '@/lib/incident-config'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']

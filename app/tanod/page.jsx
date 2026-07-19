@@ -1,74 +1,24 @@
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 import { MapPin, CheckCircle, Clock, AlertTriangle, Home, Phone, Navigation, TrendingUp, Award, Zap, FileText, Star } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
+import AnimatedDots from '@/components/AnimatedDots'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ResolveModal from '@/components/ResolveModal'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAssignment } from '@/lib/notifications'
+import { CATEGORY_CONFIG, PRIORITY_CONFIG } from '@/lib/incident-config'
+import { useRequireRole } from '@/lib/useRequireRole'
+import { useSidebar } from '@/lib/useSidebar'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
 const HOURS_MS = 1000 * 60 * 60
 const INCIDENT_SELECT = '*, profiles!incidents_reported_by_fkey(full_name, phone)'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
-const CATEGORY_CONFIG = {
-  Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  Theft: { icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  Violence: { icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  Fire: { icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  Flood: { icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  Animals: { icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  Medical: { icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  Traffic: { icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  Vandalism: { icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  Drugs: { icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-}
-
-const PRIORITY_CONFIG = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵', order: 2 },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠', order: 3 },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
-}
 
 const SECTION_TITLES = {
   home: 'Home',
@@ -85,13 +35,10 @@ const ACHIEVEMENTS = [
 ]
 
 export default function TanodDashboard() {
-  const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
-  const [profile, setProfile] = useState(null)
+  const { supabase, profile } = useRequireRole('tanod')
+  const { sidebarOpen, setSidebarOpen, closeOnMobile } = useSidebar()
   const [incidents, setIncidents] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [resolveModal, setResolveModal] = useState(null)
   const [directionsMenu, setDirectionsMenu] = useState(null)
@@ -104,39 +51,7 @@ export default function TanodDashboard() {
     incidentIdsRef.current = new Set(incidents.map(i => i.id))
   }, [incidents])
 
-  // ---- Sidebar persistence ----
-  useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) {
-      setSidebarOpen(JSON.parse(saved))
-    } else if (window.innerWidth < 768) {
-      setSidebarOpen(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
-
-  // Only react when the viewport actually crosses the breakpoint.
-  // The old version also ran on mount, which stomped the saved preference.
-  useEffect(() => {
-    let wasMobile = window.innerWidth < 768
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768
-      if (isMobile !== wasMobile) {
-        setSidebarOpen(!isMobile)
-        wasMobile = isMobile
-      }
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  // ---- Data loading ----
+  // ---- Data loading (waits for the auth gate to hand us a profile) ----
   const fetchIncidents = useCallback(async (userId) => {
     const { data, error } = await supabase
       .from('incidents')
@@ -148,33 +63,13 @@ export default function TanodDashboard() {
   }, [supabase])
 
   useEffect(() => {
+    if (!profile?.id) return
     let cancelled = false
 
     async function loadData() {
       try {
-        const { data: { session }, error: authError } = await supabase.auth.getSession()
-        if (authError || !session) {
-          router.push('/login')
-          return
-        }
-        const user = session.user
-
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('*, barangays(id, name, city, province)')
-          .eq('id', user.id)
-          .single()
-
-        if (cancelled) return
-        if (prof?.role !== 'tanod') {
-          router.push('/login')
-          return
-        }
-        setProfile(prof)
-
-        const inc = await fetchIncidents(user.id)
-        if (cancelled) return
-        setIncidents(inc)
+        const inc = await fetchIncidents(profile.id)
+        if (!cancelled) setIncidents(inc)
       } catch (err) {
         console.error('Failed to load dashboard:', err)
         if (!cancelled) toast.error('Failed to load your assignments. Please refresh.')
@@ -185,7 +80,7 @@ export default function TanodDashboard() {
     loadData()
 
     return () => { cancelled = true }
-  }, [supabase, router, fetchIncidents])
+  }, [profile?.id, fetchIncidents])
 
   // Revalidate when the tab regains focus. The realtime filter only delivers
   // rows where assigned_to is still this tanod, so re-assignments AWAY from
@@ -267,7 +162,7 @@ export default function TanodDashboard() {
 
   function navClick(key) {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    closeOnMobile()
   }
 
   async function handleResolve({ notes, imageUrl, resolvedAt }) {

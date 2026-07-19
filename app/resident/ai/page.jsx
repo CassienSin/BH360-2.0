@@ -5,6 +5,7 @@ import { ArrowLeft, Send, Bot, Lightbulb, FileText, Bell, MessageCircle, Trash2 
 import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const MAX_INPUT_LENGTH = 500
 
@@ -23,36 +24,6 @@ const QUICK_QUESTIONS = [
 ]
 
 // Stable pseudo-random dots, computed once at module load
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
 let messageId = 0
 const nextId = () => `msg-${++messageId}-${Date.now()}`
 

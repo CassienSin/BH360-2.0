@@ -5,33 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, HelpCircle, MessageSquare, Bug, BookOpen, Phone, ChevronDown, Send, Mail, Sparkles, Search, AlertTriangle, Shield, Star, FileText, Bell, Map, BarChart2, Loader2, CheckCircle } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{overflow: 'hidden', pointerEvents: 'none'}}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
+import AnimatedDots from '@/components/AnimatedDots'
 
 const faqByRole = {
   resident: [

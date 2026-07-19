@@ -7,21 +7,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-
-const categoryConfig = {
-  Noise: { color: '#f97316', emoji: '🔊' },
-  Theft: { color: '#ef4444', emoji: '🚨' },
-  Violence: { color: '#dc2626', emoji: '⚠️' },
-  Fire: { color: '#ea580c', emoji: '🔥' },
-  Flood: { color: '#3b82f6', emoji: '🌊' },
-  Infrastructure: { color: '#8b5cf6', emoji: '🛠️' },
-  Animals: { color: '#a16207', emoji: '🐕' },
-  Medical: { color: '#dc2626', emoji: '🚑' },
-  Traffic: { color: '#0891b2', emoji: '🚦' },
-  Vandalism: { color: '#7c3aed', emoji: '🎨' },
-  Drugs: { color: '#be185d', emoji: '💊' },
-  Other: { color: '#6b7280', emoji: '📝' },
-}
+import { CATEGORY_CONFIG as categoryConfig } from '@/lib/incident-config'
 
 // Inject the pulse keyframes ONCE per page. Previously every single marker
 // carried its own duplicate <style> tag inside its HTML.
@@ -75,7 +61,7 @@ function getIcon(category, status) {
           border: 3px solid white;
           font-size: 14px;
         ">
-          ${cat.emoji}
+          ${cat.icon}
         </div>
         ${isResolved ? `<div style="
           position: absolute;
@@ -182,7 +168,7 @@ export default function IncidentMap({ incidents = [], height = '70vh', onInciden
                       fontSize: '16px',
                       flexShrink: 0,
                     }}>
-                      {cat.emoji}
+                      {cat.icon}
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ fontWeight: 700, fontSize: '13px', color: '#1f2937', margin: 0 }}>{inc.title}</p>

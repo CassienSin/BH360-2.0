@@ -6,53 +6,7 @@ import Image from 'next/image'
 import { ArrowRight, AlertTriangle, Shield, BarChart2, FileText, MessageCircle, Bell, CheckCircle, Zap, Users, Star, TrendingUp, Activity } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { dashboardPath } from '@/lib/roles'
-
-const dots = [...Array(30)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const smallDots = [...Array(20)].map((_, i) => ({
-  left: ((i * 31 + 5) % 100),
-  top: ((i * 19 + 11) % 100),
-  duration: ((i * 4) % 8) + 5,
-  delay: (i * 0.9) % 6,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-    {smallDots.map((dot, i) => (
-      <div key={`sm-${i}`} style={{
-        position: 'absolute',
-        width: '3px',
-        height: '3px',
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.25)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `floatReverse ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-      }} />
-    ))}
-  </div>
-)
+import AnimatedDots from '@/components/AnimatedDots'
 
 
 
@@ -229,7 +183,7 @@ export default function LandingPage() {
           <div className="absolute bottom-0 left-20 w-[400px] h-[400px] rounded-full opacity-15"
             style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
         </div>
-        <AnimatedDots />
+        <AnimatedDots count={30} smallCount={20} />
 
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10">
           <div className="text-center max-w-3xl mx-auto">
@@ -572,7 +526,7 @@ export default function LandingPage() {
           <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-15"
             style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)' }} />
         </div>
-        <AnimatedDots />
+        <AnimatedDots count={30} smallCount={20} />
 
         <div className="max-w-3xl mx-auto text-center relative z-10">
           <div className="w-24 h-24 mx-auto mb-8 relative" style={{ animation: 'float 6s ease-in-out infinite' }}>

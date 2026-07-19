@@ -2,45 +2,10 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Send, Clock, CheckCircle, AlertCircle, Sparkles, Shield, FileQuestion, FileText, AlertCircle as AlertIcon, Star, Loader2 } from 'lucide-react'
+import { ArrowLeft, Send, Clock, CheckCircle, AlertCircle, Sparkles, Shield, FileText, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
-
-const DOTS = Array.from({ length: 15 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
-const CATEGORY_CONFIG = {
-  inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
-  request: { label: 'Request', icon: FileText, color: '#5B54E8', bg: '#f0effe' },
-  complaint: { label: 'Complaint', icon: AlertIcon, color: '#f97316', bg: '#fff7ed' },
-  feedback: { label: 'Feedback', icon: Star, color: '#22c55e', bg: '#f0fdf4' },
-}
+import { TICKET_CATEGORY_CONFIG as CATEGORY_CONFIG } from '@/lib/incident-config'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const STATUS_CONFIG = {
   open: { color: '#f59e0b', bg: '#fef3c7', label: 'Open', icon: AlertCircle, desc: 'Awaiting response' },
@@ -193,7 +158,7 @@ export default function TicketChat() {
   if (pageLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden">
-        <AnimatedDots />
+        <AnimatedDots count={15} />
         <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 relative z-10">
           <Loader2 size={24} className="animate-spin text-white" />
           <p className="text-white text-sm font-semibold">Loading ticket...</p>
@@ -206,7 +171,7 @@ export default function TicketChat() {
   if (notFound) {
     return (
       <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden px-4">
-        <AnimatedDots />
+        <AnimatedDots count={15} />
         <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
           <AlertCircle size={28} className="text-white opacity-90" />
           <p className="text-white text-sm font-bold">Ticket not found</p>
@@ -225,7 +190,7 @@ export default function TicketChat() {
 
   return (
     <div className="h-screen flex flex-col relative overflow-hidden bg-brand">
-      <AnimatedDots />
+      <AnimatedDots count={15} />
 
       {/* Background effects */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">

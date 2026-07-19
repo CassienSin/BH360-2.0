@@ -6,6 +6,7 @@ import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as Im
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -45,36 +46,6 @@ const PRIORITIES = [
   { value: 'High', label: 'High', desc: 'Urgent', color: '#f97316', bg: '#fff7ed', icon: '🟠' },
   { value: 'Critical', label: 'Critical', desc: 'Emergency!', color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
 ]
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
 
 const MapPicker = dynamic(() => import('@/components/MapPicker'), {
   ssr: false,

@@ -2,16 +2,10 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Send, X, User, Clock, CheckCircle, AlertCircle, Sparkles, FileQuestion, FileText, AlertCircle as AlertIcon, Star, MapPin, Phone, Loader2, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Send, X, User, Clock, CheckCircle, AlertCircle, Sparkles, MapPin, Phone, Loader2, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
-
-const CATEGORY_CONFIG = {
-  inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
-  request: { label: 'Request', icon: FileText, color: '#5B54E8', bg: '#f0effe' },
-  complaint: { label: 'Complaint', icon: AlertIcon, color: '#f97316', bg: '#fff7ed' },
-  feedback: { label: 'Feedback', icon: Star, color: '#22c55e', bg: '#f0fdf4' },
-}
+import { TICKET_CATEGORY_CONFIG as CATEGORY_CONFIG } from '@/lib/incident-config'
 
 const STATUS_CONFIG = {
   open: { color: '#f59e0b', bg: '#fef3c7', label: 'Open', icon: AlertCircle, desc: 'Awaiting response' },

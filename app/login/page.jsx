@@ -4,15 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle, Shield, Users, Activity } from 'lucide-react'
 import Image from 'next/image'
 import { dashboardPath } from '@/lib/roles'
-
-const dots = [...Array(25)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
+import AnimatedDots from '@/components/AnimatedDots'
 
 // Friendlier wording for the most common auth errors
 function friendlyAuthError(message) {
@@ -110,20 +102,7 @@ export default function LoginPage() {
           style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
         <div className="absolute bottom-0 left-20 w-[400px] h-[400px] rounded-full opacity-15"
           style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-        {dots.map((dot, i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            width: `${dot.size}px`,
-            height: `${dot.size}px`,
-            borderRadius: '50%',
-            background: 'rgba(255,255,255,0.4)',
-            left: `${dot.left}%`,
-            top: `${dot.top}%`,
-            animation: `float ${dot.duration}s ease-in-out infinite`,
-            animationDelay: `${dot.delay}s`,
-            filter: 'blur(0.5px)',
-          }} />
-        ))}
+        <AnimatedDots count={25} />
       </div>
 
       {/* Left panel — Brand showcase */}

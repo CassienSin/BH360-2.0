@@ -5,38 +5,12 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { Home, ArrowLeft } from 'lucide-react'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
+import AnimatedDots from '@/components/AnimatedDots'
 
 export default function NotFound() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-brand flex items-center justify-center p-4">
-      {/* Animated background dots */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        {DOTS.map((dot, i) => (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              width: `${dot.size}px`,
-              height: `${dot.size}px`,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.4)',
-              left: `${dot.left}%`,
-              top: `${dot.top}%`,
-              animation: `float ${dot.duration}s ease-in-out infinite`,
-              animationDelay: `${dot.delay}s`,
-              filter: 'blur(0.5px)',
-            }}
-          />
-        ))}
-      </div>
+      <AnimatedDots />
 
       {/* Background glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">

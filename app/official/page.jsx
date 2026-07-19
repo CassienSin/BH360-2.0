@@ -1,72 +1,25 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, LogOut, Plus, ChevronRight, Shield, Menu, Users, KeyRound, Copy, Search, Filter, X, Map, Download, FileSpreadsheet, Star, Calendar } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import AnimatedDots from '@/components/AnimatedDots'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
-import { FileText as FileTextIcon } from 'lucide-react'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{overflow: 'hidden', pointerEvents: 'none'}}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
-
-const categoryConfig = {
-  Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  Theft: { icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  Violence: { icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  Fire: { icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  Flood: { icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  Animals: { icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  Medical: { icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  Traffic: { icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  Vandalism: { icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  Drugs: { icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-}
-
-const priorityConfig = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵', order: 2 },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠', order: 3 },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
-}
+import { CATEGORY_CONFIG as categoryConfig, PRIORITY_CONFIG as priorityConfig } from '@/lib/incident-config'
+import { useRequireRole } from '@/lib/useRequireRole'
+import { useSidebar } from '@/lib/useSidebar'
 
 export default function OfficialDashboard() {
   const router = useRouter()
-  const supabase = createClient()
-  const [profile, setProfile] = useState(null)
+  const { supabase, profile } = useRequireRole('official')
+  const { sidebarOpen, setSidebarOpen, closeOnMobile } = useSidebar()
   const [announcements, setAnnouncements] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
@@ -74,8 +27,6 @@ export default function OfficialDashboard() {
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [activeSection, setActiveSection] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [incidentSearch, setIncidentSearch] = useState('')
   const [incidentFilter, setIncidentFilter] = useState('all')
@@ -86,63 +37,35 @@ export default function OfficialDashboard() {
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
 
   useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) {
-      setSidebarOpen(JSON.parse(saved))
-    } else if (window.innerWidth < 768) {
-      setSidebarOpen(false)
+    if (!profile) return
+    if (!profile.barangay_id) {
+      setLoading(false)
+      return
     }
-  }, [])
 
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
+    const bid = profile.barangay_id
+    let cancelled = false
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) setSidebarOpen(true)
-      else setSidebarOpen(false)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  useEffect(() => {
     async function loadData() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return router.replace('/login')
-      const user = session.user
-      const { data: prof } = await supabase.from('profiles').select('*, barangays(id, name, city, province)').eq('id', user.id).single()
-      if (prof?.role !== 'official') return router.replace('/login')
-      setProfile(prof)
-
-      if (!prof?.barangay_id) {
-        setLoading(false)
-        return
-      }
-
-      const bid = prof.barangay_id
-
       const { data: inc } = await supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false })
+      if (cancelled) return
       setIncidents(inc || [])
 
       const { data: tix } = await supabase.from('tickets')
         .select('*, profiles!tickets_created_by_fkey(full_name)')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false })
+      if (cancelled) return
       setTickets(tix || [])
 
       const { data: ann } = await supabase.from('announcements')
         .select('*')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false })
+      if (cancelled) return
       setAnnouncements(ann || [])
 
       const { data: tan } = await supabase.from('profiles')
@@ -150,6 +73,7 @@ export default function OfficialDashboard() {
         .eq('role', 'tanod')
         .eq('barangay_id', bid)
         .is('deactivated_at', null)
+      if (cancelled) return
       setTanods(tan || [])
 
       const { data: allUsers } = await supabase.from('profiles')
@@ -157,18 +81,21 @@ export default function OfficialDashboard() {
         .eq('barangay_id', bid)
         .is('deactivated_at', null)
         .order('created_at', { ascending: false })
+      if (cancelled) return
       setUsers(allUsers || [])
-      
+
       const { data: codes } = await supabase.from('invite_codes')
         .select('*, profiles(full_name)')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false })
+      if (cancelled) return
       setInviteCodes(codes || [])
 
       setLoading(false)
     }
     loadData()
-  }, [])
+    return () => { cancelled = true }
+  }, [profile?.id, profile?.barangay_id, supabase])
 
   // Real-time subscriptions
   useEffect(() => {
@@ -308,7 +235,7 @@ export default function OfficialDashboard() {
 
   function navClick(key) {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    closeOnMobile()
   }
 
   async function dispatchTanod(incidentId, tanodId) {

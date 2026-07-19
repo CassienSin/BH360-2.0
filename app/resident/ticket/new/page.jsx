@@ -4,41 +4,12 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, FileText, AlignLeft, Tag, CheckCircle, Send, Sparkles, HelpCircle, Loader2, Lightbulb, FileQuestion, AlertCircle, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
 const DESC_MIN = 10
 const DESC_MAX = 1000
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
 
 const CATEGORIES = [
   { value: 'inquiry', label: 'Inquiry', desc: 'Ask a question or get information', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },

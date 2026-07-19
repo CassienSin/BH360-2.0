@@ -1,64 +1,25 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
 import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import AnimatedDots from '@/components/AnimatedDots'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
-
-// sessionStorage/localStorage can throw in some privacy modes
-function storageGet(key) {
-  try { return localStorage.getItem(key) } catch { return null }
-}
-function storageSet(key, value) {
-  try { localStorage.setItem(key, value) } catch { /* ignore */ }
-}
+import { PRIORITY_CONFIG as priorityConfig } from '@/lib/incident-config'
+import { useRequireRole } from '@/lib/useRequireRole'
+import { useSidebar } from '@/lib/useSidebar'
 
 // Hoisted — these were recreated on every render
 const statusColor = {
   pending: 'bg-amber-100 text-amber-700', assigned: 'bg-blue-100 text-blue-700',
   resolved: 'bg-emerald-100 text-emerald-700', open: 'bg-amber-100 text-amber-700',
   in_progress: 'bg-blue-100 text-blue-700', closed: 'bg-emerald-100 text-emerald-700',
-}
-
-const priorityConfig = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
 }
 
 const sectionTitle = {
@@ -99,87 +60,43 @@ const HomeSkeleton = () => (
 
 export default function ResidentDashboard() {
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
-  const [profile, setProfile] = useState(null)
+  // No role requirement — any signed-in profile may view the resident
+  // dashboard; the login page routes elevated roles to their own portals.
+  const { supabase, profile, authLoading } = useRequireRole()
+  const { sidebarOpen, setSidebarOpen, closeOnMobile } = useSidebar()
   const [announcements, setAnnouncements] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [ratingModal, setRatingModal] = useState(null)
 
-  // ONE sidebar effect instead of four fighting each other. The old code
-  // had: a localStorage restore, a persister, a resize handler that
-  // force-opened on ≥768px / force-closed on <768px on EVERY resize (which
-  // stomped both the saved preference and the user's choice — close the
-  // sidebar on desktop and any resize reopened it), plus a duplicate
-  // matchMedia effect. Now: start closed (so a mobile refresh never
-  // renders the drawer open), then on mount restore the saved preference
-  // on desktop; only react when actually CROSSING the breakpoint.
+  // Profile failed to load (the hook already toasted) — drop the skeleton
   useEffect(() => {
-    setMounted(true)
-    const desktop = window.matchMedia('(min-width: 768px)')
+    if (!authLoading && !profile) setLoading(false)
+  }, [authLoading, profile])
 
-    const applyFor = (isDesktop) => {
-      if (!isDesktop) { setSidebarOpen(false); return }
-      const saved = storageGet('sidebarOpen')
-      setSidebarOpen(saved !== null ? saved === 'true' : true)
+  useEffect(() => {
+    if (!profile?.id) return
+    if (!profile.barangay_id) {
+      setLoading(false)
+      return
     }
 
-    applyFor(desktop.matches)
-    const onChange = (e) => applyFor(e.matches)
-    desktop.addEventListener('change', onChange)
-    return () => desktop.removeEventListener('change', onChange)
-  }, [])
-
-  // Persist the preference — but only the DESKTOP preference. Saving the
-  // mobile auto-close used to poison the stored value.
-  useEffect(() => {
-    if (mounted && window.matchMedia('(min-width: 768px)').matches) {
-      storageSet('sidebarOpen', String(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
-
-  useEffect(() => {
     let cancelled = false
     async function loadData() {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return router.push('/login')
-      const user = session.user
-
-      const { data: prof, error: profError } = await supabase
-        .from('profiles')
-        .select('*, barangays(id, name, city, province)')
-        .eq('id', user.id)
-        .maybeSingle()
-
-      if (cancelled) return
-      if (profError || !prof) {
-        toast.error('Could not load your profile. Please refresh.')
-        setLoading(false)
-        return
-      }
-      setProfile(prof)
-
-      if (!prof.barangay_id) {
-        setLoading(false)
-        return
-      }
-
       // Parallel instead of one-after-another — noticeably faster first paint
       const [annRes, incRes, tixRes] = await Promise.all([
         supabase.from('announcements').select('*')
-          .eq('barangay_id', prof.barangay_id)
+          .eq('barangay_id', profile.barangay_id)
           .order('created_at', { ascending: false })
           .limit(50),
         supabase.from('incidents').select('*')
-          .eq('reported_by', user.id)
+          .eq('reported_by', profile.id)
           .order('created_at', { ascending: false })
           .limit(100),
         supabase.from('tickets').select('*')
-          .eq('created_by', user.id)
+          .eq('created_by', profile.id)
           .order('created_at', { ascending: false })
           .limit(100),
       ])
@@ -195,7 +112,7 @@ export default function ResidentDashboard() {
     }
     loadData()
     return () => { cancelled = true }
-  }, [supabase, router])
+  }, [profile?.id, profile?.barangay_id, supabase])
 
   // Real-time subscriptions — one channel, and the incident/ticket
   // listeners are now FILTERED to this user's own rows. Previously they
@@ -267,7 +184,7 @@ export default function ResidentDashboard() {
 
   function navClick(key) {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    closeOnMobile()
   }
 
   // Throws on failure so the improved RatingModal shows its error state

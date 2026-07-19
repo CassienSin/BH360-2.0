@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
+import { CATEGORY_CONFIG } from '@/lib/incident-config'
+import AnimatedDots from '@/components/AnimatedDots'
 
 const IncidentMap = dynamic(() => import('@/components/IncidentMap'), {
   ssr: false,
@@ -17,21 +19,6 @@ const IncidentMap = dynamic(() => import('@/components/IncidentMap'), {
     </div>
   ),
 })
-
-const CATEGORY_CONFIG = {
-  Noise: { color: '#f97316', emoji: '🔊' },
-  Theft: { color: '#ef4444', emoji: '🚨' },
-  Violence: { color: '#dc2626', emoji: '⚠️' },
-  Fire: { color: '#ea580c', emoji: '🔥' },
-  Flood: { color: '#3b82f6', emoji: '🌊' },
-  Infrastructure: { color: '#8b5cf6', emoji: '🛠️' },
-  Animals: { color: '#a16207', emoji: '🐕' },
-  Medical: { color: '#dc2626', emoji: '🚑' },
-  Traffic: { color: '#0891b2', emoji: '🚦' },
-  Vandalism: { color: '#7c3aed', emoji: '🎨' },
-  Drugs: { color: '#be185d', emoji: '💊' },
-  Other: { color: '#6b7280', emoji: '📝' },
-}
 
 const STATUS_FILTERS = [
   { value: 'active', label: '🔴 Active Only', color: '#dc2626' },
@@ -46,36 +33,6 @@ function matchesStatus(incident, statusFilter) {
   if (statusFilter === 'active') return incident.status === 'pending' || incident.status === 'assigned'
   return incident.status === statusFilter
 }
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
 
 export default function MapView() {
   const router = useRouter()
@@ -351,7 +308,7 @@ export default function MapView() {
                     border: categoryFilter === cat ? `1px solid ${conf.color}` : `1px solid ${conf.color}20`,
                   }}
                 >
-                  <span aria-hidden="true">{conf.emoji}</span> {cat} ({count})
+                  <span aria-hidden="true">{conf.icon}</span> {cat} ({count})
                 </button>
               )
             })}
@@ -414,7 +371,7 @@ export default function MapView() {
                     className="flex items-center gap-2 px-3 py-2 rounded-xl"
                     style={{ background: '#fafaff', border: '1px solid #f0effe' }}
                   >
-                    <span className="text-base" aria-hidden="true">{cat.emoji}</span>
+                    <span className="text-base" aria-hidden="true">{cat.icon}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-700 truncate">{inc.title}</p>
                       <p className="text-[10px] text-gray-400 truncate">📍 {inc.location}</p>
