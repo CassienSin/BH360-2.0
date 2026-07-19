@@ -1,5 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { getAuthenticatedUser } from '@/lib/supabase-server'
 
 // ── Limits ────────────────────────────────────────────────────────────────
 const MAX_MESSAGES = 20          // conversation window sent upstream
@@ -37,15 +36,8 @@ export async function POST(request) {
   try {
     // ── 1. Require a signed-in user ──────────────────────────────────────
     // Without this, ANYONE who finds the URL can burn your Anthropic
-    // credits from a curl loop. Adjust to match your lib/supabase server
-    // helper if you already have one.
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { cookies: { getAll: () => cookieStore.getAll() } }
-    )
-    const { data: { user } } = await supabase.auth.getUser()
+    // credits from a curl loop.
+    const { user } = await getAuthenticatedUser()
     if (!user) {
       return Response.json({ reply: 'Please sign in to use the assistant.' }, { status: 401 })
     }
