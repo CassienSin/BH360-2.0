@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles } from 'lucide-react'
+import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles, CheckCheck } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
 import { timeAgo } from '@/lib/timeAgo'
 
@@ -33,6 +33,11 @@ const roleConfig = {
   tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4' },
 }
 
+// Stable key per notification. Include type so an incident id and a
+// ticket id that happen to match don't collide. Module-level: it never
+// changes, so it shouldn't be re-created every render.
+const notifKey = (n) => `${n.type || 'notif'}:${n.id}`
+
 export default function DashboardHeader({
   profile,
   sidebarOpen,
@@ -46,6 +51,53 @@ export default function DashboardHeader({
 }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+
+  // ---- Read tracking ----
+  const [readKeys, setReadKeys] = useState(new Set())
+
+  // Load this user's read markers once per login
+  useEffect(() => {
+    if (!profile?.id) return
+    let cancelled = false
+    supabase
+      .from('notification_reads')
+      .select('notif_key')
+      .eq('user_id', profile.id)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Failed to load read markers:', error)
+          return
+        }
+        if (!cancelled && data) setReadKeys(new Set(data.map(r => r.notif_key)))
+      })
+    return () => { cancelled = true }
+  }, [profile?.id, supabase])
+
+  const isRead = useCallback((n) => readKeys.has(notifKey(n)), [readKeys])
+
+  async function markRead(n) {
+    const key = notifKey(n)
+    if (readKeys.has(key)) return
+    // Optimistic update — the dot reacts instantly, the DB write follows
+    setReadKeys(prev => new Set(prev).add(key))
+    const { error } = await supabase.from('notification_reads').upsert(
+      { user_id: profile.id, notif_key: key },
+      { onConflict: 'user_id,notif_key' }
+    )
+    if (error) console.error('Failed to mark notification read:', error)
+  }
+
+  async function markAllRead() {
+    const rows = notifications
+      .filter(n => !readKeys.has(notifKey(n)))
+      .map(n => ({ user_id: profile.id, notif_key: notifKey(n) }))
+    if (rows.length === 0) return
+    setReadKeys(prev => new Set([...prev, ...rows.map(r => r.notif_key)]))
+    const { error } = await supabase
+      .from('notification_reads')
+      .upsert(rows, { onConflict: 'user_id,notif_key' })
+    if (error) console.error('Failed to mark all read:', error)
+  }
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -190,7 +242,18 @@ export default function DashboardHeader({
     }
   }
 
-  const unreadCount = notifications.length
+  const unreadCount = useMemo(
+    () => notifications.filter(n => !readKeys.has(notifKey(n))).length,
+    [notifications, readKeys]
+  )
+  // Unread first, then read; newest first within each group
+  const sortedNotifications = useMemo(() => {
+    const byTime = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    const unread = notifications.filter(n => !readKeys.has(notifKey(n))).sort(byTime)
+    const read = notifications.filter(n => readKeys.has(notifKey(n))).sort(byTime)
+    return [...unread, ...read]
+  }, [notifications, readKeys])
+
   const rc = roleConfig[profile?.role] || roleConfig.resident
 
   // Shared row renderer keeps highlight styling consistent
@@ -287,7 +350,7 @@ export default function DashboardHeader({
           {/* Notifications */}
           <div className="relative" ref={notifRef}>
             <button onClick={() => setNotifOpen(!notifOpen)}
-              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} pending` : ''}`}
+              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
               aria-expanded={notifOpen}
               className="relative w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
               <Bell size={16} />
@@ -307,53 +370,68 @@ export default function DashboardHeader({
                   style={{ background: '#fafaff' }}>
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
-                    <p className="text-xs text-gray-400">{unreadCount} pending {unreadCount === 1 ? 'item' : 'items'}</p>
+                    <p className="text-xs text-gray-400">
+                      {unreadCount > 0
+                        ? `${unreadCount} unread ${unreadCount === 1 ? 'item' : 'items'}`
+                        : 'All caught up'}
+                    </p>
                   </div>
                   {unreadCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                      style={{ background: '#fef2f2', color: '#dc2626' }}>
-                      {unreadCount} new
-                    </span>
+                    <button onClick={markAllRead}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold hover:opacity-70 transition-opacity"
+                      style={{ background: '#f0effe', color: '#5B54E8' }}>
+                      <CheckCheck size={11} />
+                      Mark all read
+                    </button>
                   )}
                 </div>
 
                 <div className="max-h-80 overflow-y-auto">
-                  {unreadCount === 0 ? (
+                  {notifications.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"
                         style={{ background: '#f0fdf4' }}>
                         <Bell size={20} className="text-emerald-500" />
                       </div>
                       <p className="text-sm font-semibold text-gray-700">All caught up!</p>
-                      <p className="text-xs text-gray-400 mt-0.5">No pending notifications</p>
+                      <p className="text-xs text-gray-400 mt-0.5">No notifications right now</p>
                     </div>
                   ) : (
-                    notifications.slice(0, 10).map((notif, i) => (
-                      <button
-                        key={notif.id ?? `notif-${i}`}
-                        onClick={() => {
-                          onNotificationClick?.(notif)
-                          setNotifOpen(false)
-                        }}
-                        className="w-full px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 text-left">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                          style={{ background: notif.color || '#fff7ed' }}>
-                          {notif.icon || '⚠️'}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{notif.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.subtitle}</p>
-                          {notif.created_at && (
-                            <p className="text-[10px] text-gray-400 mt-1">{timeAgo(notif.created_at)}</p>
+                    sortedNotifications.slice(0, 10).map((notif, i) => {
+                      const read = isRead(notif)
+                      return (
+                        <button
+                          key={notif.id ?? `notif-${i}`}
+                          onClick={() => {
+                            markRead(notif)
+                            onNotificationClick?.(notif)
+                            setNotifOpen(false)
+                          }}
+                          className={`w-full px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 text-left ${read ? 'opacity-60' : ''}`}>
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
+                            style={{ background: notif.color || '#fff7ed' }}>
+                            {notif.icon || '⚠️'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm truncate ${read ? 'font-normal text-gray-500' : 'font-semibold text-gray-800'}`}>
+                              {notif.title}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.subtitle}</p>
+                            {notif.created_at && (
+                              <p className="text-[10px] text-gray-400 mt-1">{timeAgo(notif.created_at)}</p>
+                            )}
+                          </div>
+                          {!read && (
+                            <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
+                              style={{ background: '#5B54E8' }} aria-label="Unread" />
                           )}
-                        </div>
-                        <ArrowRight size={12} className="text-gray-300 flex-shrink-0 mt-1" />
-                      </button>
-                    ))
+                        </button>
+                      )
+                    })
                   )}
                 </div>
 
-                {unreadCount > 0 && (
+                {notifications.length > 0 && (
                   <div className="px-4 py-2 border-t border-gray-100" style={{ background: '#fafaff' }}>
                     <p className="text-[10px] text-gray-400 text-center">Click any notification to view details</p>
                   </div>

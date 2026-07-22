@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Eye, EyeOff, Mail, Lock, ArrowRight, CheckCircle, Shield, Users, Activity } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft, CheckCircle, Shield, Users, Activity, KeyRound } from 'lucide-react'
 import Image from 'next/image'
 import { dashboardPath } from '@/lib/roles'
 
@@ -12,7 +12,6 @@ const dots = [...Array(25)].map((_, i) => ({
   duration: ((i * 3) % 6) + 4,
   delay: (i * 0.7) % 4,
 }))
-
 
 // Friendlier wording for the most common auth errors
 function friendlyAuthError(message) {
@@ -36,6 +35,9 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // 'login' | 'forgot' | 'forgot-sent'
+  const [mode, setMode] = useState('login')
+
   // THE BACK-BUTTON FIX, part 1: if someone who is already signed in lands
   // on /login (e.g. by pressing back from their dashboard), bounce them
   // straight back to their dashboard instead of showing the login form.
@@ -55,6 +57,11 @@ export default function LoginPage() {
     checkExistingSession()
     return () => { cancelled = true }
   }, [supabase])
+
+  function switchMode(next) {
+    setMode(next)
+    setError('')
+  }
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -99,6 +106,27 @@ export default function LoginPage() {
     // of it. Previously `window.location.href = ...` pushed a new entry,
     // so pressing back on mobile returned users to the login form.
     window.location.replace(dashboardPath(profile))
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault()
+    if (loading) return
+    setLoading(true)
+    setError('')
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      { redirectTo: `${window.location.origin}/reset-password` }
+    )
+
+    setLoading(false)
+    if (resetError) {
+      setError(friendlyAuthError(resetError.message))
+      return
+    }
+    // Always show success — Supabase doesn't reveal whether the email
+    // exists, and neither should we (prevents account enumeration).
+    setMode('forgot-sent')
   }
 
   return (
@@ -171,7 +199,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — Login form */}
+      {/* Right panel — Login / Forgot password */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 relative z-10">
         <div className="w-full max-w-md">
 
@@ -184,7 +212,7 @@ export default function LoginPage() {
             <p className="text-purple-200 text-xs mt-1">Smart Community Management</p>
           </div>
 
-          {/* Login card */}
+          {/* Card */}
           <div className="rounded-3xl p-4 sm:p-6 md:p-8 fade-up-1"
             style={{
               background: 'rgba(255,255,255,0.95)',
@@ -193,79 +221,171 @@ export default function LoginPage() {
               border: '1px solid rgba(255,255,255,0.5)',
             }}>
 
-            <div className="mb-8">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
-                style={{ background: '#f0effe' }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Welcome back</span>
-              </div>
-              <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Sign in 👋</h2>
-              <p className="text-gray-400 text-sm mt-2">Continue to your barangay dashboard</p>
-            </div>
+            {/* ---------- LOGIN MODE ---------- */}
+            {mode === 'login' && (
+              <>
+                <div className="mb-8">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
+                    style={{ background: '#f0effe' }}>
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Welcome back</span>
+                  </div>
+                  <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Sign in 👋</h2>
+                  <p className="text-gray-400 text-sm mt-2">Continue to your barangay dashboard</p>
+                </div>
 
-            {error && (
-              <div className="mb-5 px-4 py-3 rounded-2xl text-sm flex items-start gap-2 fade-up"
-                role="alert"
-                style={{ background: '#fff1f1', border: '1px solid #fecaca' }}>
-                <span aria-hidden="true">⚠️</span>
-                <span className="text-red-700">{error}</span>
-              </div>
+                {error && (
+                  <div className="mb-5 px-4 py-3 rounded-2xl text-sm flex items-start gap-2 fade-up"
+                    role="alert"
+                    style={{ background: '#fff1f1', border: '1px solid #fecaca' }}>
+                    <span aria-hidden="true">⚠️</span>
+                    <span className="text-red-700">{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleLogin} className="space-y-4">
+
+                  <div className="fade-up-2">
+                    <label htmlFor="login-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email Address</label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                        autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
+                        className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
+                        placeholder="you@email.com" />
+                    </div>
+                  </div>
+
+                  <div className="fade-up-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="login-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Password</label>
+                      <button type="button" onClick={() => switchMode('forgot')}
+                        className="text-xs font-bold transition-colors hover:opacity-70"
+                        style={{ color: '#5B54E8' }}>
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
+                        autoComplete="current-password"
+                        className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
+                        placeholder="••••••••" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="fade-up-4 pt-2">
+                    <button type="submit" disabled={loading}
+                      className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                      {loading ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Signing in...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">Sign In <ArrowRight size={16} /></span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="mt-6 pt-6 border-t border-gray-100 text-center">
+                  <p className="text-sm text-gray-400">
+                    Don't have an account?{' '}
+                    <a href="/register" className="font-bold transition-colors" style={{ color: '#5B54E8' }}>Create one →</a>
+                  </p>
+                </div>
+              </>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-4">
-
-              <div className="fade-up-2">
-                <label htmlFor="login-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email Address</label>
-                <div className="relative">
-                  <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                    autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
-                    className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
-                    placeholder="you@email.com" />
+            {/* ---------- FORGOT PASSWORD MODE ---------- */}
+            {mode === 'forgot' && (
+              <>
+                <div className="mb-8">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
+                    style={{ background: '#f0effe' }}>
+                    <KeyRound size={11} style={{ color: '#5B54E8' }} />
+                    <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Password reset</span>
+                  </div>
+                  <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Forgot password?</h2>
+                  <p className="text-gray-400 text-sm mt-2">Enter your email and we'll send you a link to set a new one.</p>
                 </div>
-              </div>
 
-              <div className="fade-up-3">
-                <label htmlFor="login-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Password</label>
-                <div className="relative">
-                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
-                    autoComplete="current-password"
-                    className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
-                    placeholder="••••••••" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                {error && (
+                  <div className="mb-5 px-4 py-3 rounded-2xl text-sm flex items-start gap-2 fade-up"
+                    role="alert"
+                    style={{ background: '#fff1f1', border: '1px solid #fecaca' }}>
+                    <span aria-hidden="true">⚠️</span>
+                    <span className="text-red-700">{error}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div>
+                    <label htmlFor="forgot-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email Address</label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
+                        autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
+                        className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
+                        placeholder="you@email.com" />
+                    </div>
+                  </div>
+
+                  <button type="submit" disabled={loading}
+                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                    {loading ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Sending link...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">Send Reset Link <ArrowRight size={16} /></span>
+                    )}
                   </button>
-                </div>
-              </div>
+                </form>
 
-              <div className="fade-up-4 pt-2">
-                <button type="submit" disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                  {loading ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Signing in...
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">Sign In <ArrowRight size={16} /></span>
-                  )}
+                <button onClick={() => switchMode('login')}
+                  className="mt-6 w-full flex items-center justify-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                  <ArrowLeft size={14} /> Back to sign in
+                </button>
+              </>
+            )}
+
+            {/* ---------- RESET LINK SENT ---------- */}
+            {mode === 'forgot-sent' && (
+              <div className="text-center py-4 fade-up">
+                <div className="w-16 h-16 mx-auto rounded-3xl flex items-center justify-center mb-5"
+                  style={{ background: '#f0fdf4' }}>
+                  <Mail size={26} className="text-emerald-500" />
+                </div>
+                <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Check your email 📬</h2>
+                <p className="text-gray-400 text-sm mt-3 max-w-xs mx-auto">
+                  If an account exists for <span className="font-semibold text-gray-600">{email}</span>, a
+                  password reset link is on its way. It may take a minute — check your spam folder too.
+                </p>
+                <p className="text-xs text-gray-400 mt-4">The link expires after a short time, so use it soon.</p>
+
+                <button onClick={() => switchMode('login')}
+                  className="mt-8 w-full flex items-center justify-center gap-1.5 py-3.5 rounded-2xl text-sm font-bold transition-colors hover:bg-gray-50"
+                  style={{ color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                  <ArrowLeft size={14} /> Back to sign in
                 </button>
               </div>
-            </form>
-
-            <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-              <p className="text-sm text-gray-400">
-                Don't have an account?{' '}
-                <a href="/register" className="font-bold transition-colors" style={{ color: '#5B54E8' }}>Create one →</a>
-              </p>
-            </div>
+            )}
           </div>
 
           {/* Footer trust line */}

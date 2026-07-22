@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X } from 'lucide-react'
+import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X, ChevronDown, Shield } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 
@@ -34,11 +34,11 @@ const CATEGORY_CONFIG = {
 }
 
 const STATUS_FILTERS = [
-  { value: 'active', label: '🔴 Active Only', color: '#dc2626' },
-  { value: 'all', label: 'All Status', color: '#5B54E8' },
+  { value: 'active', label: '🔴 Active', color: '#dc2626' },
   { value: 'pending', label: 'Pending', color: '#f97316' },
   { value: 'assigned', label: 'Assigned', color: '#3b82f6' },
   { value: 'resolved', label: 'Resolved', color: '#22c55e' },
+  { value: 'all', label: 'All', color: '#5B54E8' },
 ]
 
 function matchesStatus(incident, statusFilter) {
@@ -84,8 +84,13 @@ export default function MapView() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('active') // 'active' = pending + assigned
   const [categoryFilter, setCategoryFilter] = useState('all')
+  const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [barangayId, setBarangayId] = useState(null)
   const [live, setLive] = useState(false)
+  const [tanodTrails, setTanodTrails] = useState({}) // { tanodId: { tanod, points: [] } }
+  // Tanods are a map LAYER, not an incident filter — independently
+  // toggleable so incident filters never surprise-zoom to a tanod.
+  const [showTanods, setShowTanods] = useState(true)
 
   useEffect(() => {
     let cancelled = false
@@ -120,6 +125,36 @@ export default function MapView() {
         if (cancelled) return
         if (error) throw error
         setIncidents(data || [])
+
+        // On-duty tanods + their trail points from the last 12 hours
+        const [{ data: tanodRows }, { data: locRows }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, full_name, phone, on_duty, last_seen_at, avatar_url')
+            .eq('barangay_id', prof.barangay_id)
+            .eq('role', 'tanod')
+            .eq('on_duty', true)
+            .is('deactivated_at', null),
+          supabase
+            .from('tanod_locations')
+            .select('tanod_id, latitude, longitude, accuracy, recorded_at')
+            .eq('barangay_id', prof.barangay_id)
+            .gte('recorded_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
+            .order('recorded_at', { ascending: true }),
+        ])
+        if (cancelled) return
+
+        // Points from off-duty tanods are dropped automatically because
+        // they were never added to the trails object — the map only ever
+        // shows people currently on shift.
+        const trails = {}
+        for (const t of tanodRows || []) {
+          trails[t.id] = { tanod: t, points: [] }
+        }
+        for (const p of locRows || []) {
+          if (trails[p.tanod_id]) trails[p.tanod_id].points.push(p)
+        }
+        setTanodTrails(trails)
       } catch (err) {
         console.error('Failed to load incidents:', err)
         if (!cancelled) toast.error('Failed to load incidents. Please refresh.')
@@ -133,7 +168,8 @@ export default function MapView() {
   }, [supabase, router])
 
   // Realtime: keep the map in sync while it's open (new reports, status
-  // changes, deletions). Subscribes once we know which barangay to watch.
+  // changes, deletions, tanod trail points, duty toggles). Subscribes
+  // once we know which barangay to watch.
   useEffect(() => {
     if (!barangayId) return
 
@@ -167,6 +203,42 @@ export default function MapView() {
         { event: 'DELETE', schema: 'public', table: 'incidents' },
         (payload) => {
           setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
+        })
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'tanod_locations', filter: `barangay_id=eq.${barangayId}` },
+        (payload) => {
+          // Trail grows live as on-duty tanods move
+          setTanodTrails(prev => {
+            const entry = prev[payload.new.tanod_id]
+            if (!entry) return prev // not on duty per our view — ignore
+            return {
+              ...prev,
+              [payload.new.tanod_id]: { ...entry, points: [...entry.points, payload.new] },
+            }
+          })
+        })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `barangay_id=eq.${barangayId}` },
+        (payload) => {
+          if (payload.new.role !== 'tanod') return
+          if (payload.new.on_duty === false) {
+            // Went off duty — remove them from the map immediately
+            setTanodTrails(prev => {
+              if (!prev[payload.new.id]) return prev
+              const next = { ...prev }
+              delete next[payload.new.id]
+              return next
+            })
+          } else {
+            // Came on duty (or heartbeat update) — ensure they exist and stay fresh
+            setTanodTrails(prev => ({
+              ...prev,
+              [payload.new.id]: {
+                tanod: { ...(prev[payload.new.id]?.tanod || {}), ...payload.new },
+                points: prev[payload.new.id]?.points || [],
+              },
+            }))
+          }
         })
       .subscribe((status) => {
         setLive(status === 'SUBSCRIBED')
@@ -220,6 +292,9 @@ export default function MapView() {
     [filteredIncidents]
   )
 
+  const onDutyTanodCount = Object.keys(tanodTrails).length
+  const visibleTanodCount = showTanods ? onDutyTanodCount : 0
+
   // If the selected category has no matches under the new status filter,
   // its chip would vanish while the filter silently stays applied — reset it
   useEffect(() => {
@@ -229,10 +304,12 @@ export default function MapView() {
   }, [categoryCounts, categoryFilter])
 
   const filtersActive = statusFilter !== 'active' || categoryFilter !== 'all'
+  const activeCategoryConf = categoryFilter !== 'all' ? CATEGORY_CONFIG[categoryFilter] : null
 
   function clearFilters() {
     setStatusFilter('active')
     setCategoryFilter('all')
+    setCategoriesOpen(false)
   }
 
   return (
@@ -269,7 +346,7 @@ export default function MapView() {
           </div>
           <div className="min-w-0">
             <h1 className="text-base font-bold text-gray-800 truncate">Incident Map</h1>
-            <p className="text-xs text-gray-400 truncate">Visualize incidents across your barangay</p>
+            <p className="text-xs text-gray-400 truncate">Incidents & on-duty tanods across your barangay</p>
           </div>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full flex-shrink-0" style={{ background: '#f0effe' }}>
@@ -279,83 +356,134 @@ export default function MapView() {
             title={live ? 'Live — updates automatically' : 'Connecting...'}
           />
           <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>
-            {incidentsWithCoords.length} showing{live ? ' · Live' : ''}
+            {incidentsWithCoords.length} incidents · {visibleTanodCount} tanod{visibleTanodCount !== 1 ? 's' : ''}{live ? ' · Live' : ''}
           </span>
         </div>
       </header>
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
 
-        {/* Filters */}
-        <div className="white-card p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Filter size={14} style={{ color: '#5B54E8' }} />
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>Filters</p>
+        {/* Controls: one compact card, two clearly separated concerns —
+            INCIDENT FILTERS (left) and the TANOD LAYER toggle (right). */}
+        <div className="white-card p-4 space-y-3">
+
+          {/* Row 1: incident status segmented control + tanod layer switch */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 mr-1">
+              <Filter size={13} style={{ color: '#5B54E8' }} />
+              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>Incidents</p>
+            </div>
+
+            <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter incidents by status">
+              {STATUS_FILTERS.map(f => (
+                <button
+                  key={f.value}
+                  onClick={() => setStatusFilter(f.value)}
+                  aria-pressed={statusFilter === f.value}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+                  style={{
+                    background: statusFilter === f.value ? f.color : '#fafaff',
+                    color: statusFilter === f.value ? 'white' : '#6b7280',
+                    border: statusFilter === f.value ? `1px solid ${f.color}` : '1px solid #f0effe',
+                  }}
+                >
+                  {f.label} <span style={{ opacity: 0.75 }}>{statusCounts[f.value]}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Category dropdown-style toggle: collapsed by default so the
+                card stays small; shows the active pick when one is set */}
+            <button
+              onClick={() => setCategoriesOpen(o => !o)}
+              aria-expanded={categoriesOpen}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
+              style={{
+                background: activeCategoryConf ? activeCategoryConf.color : '#fafaff',
+                color: activeCategoryConf ? 'white' : '#6b7280',
+                border: activeCategoryConf ? `1px solid ${activeCategoryConf.color}` : '1px solid #f0effe',
+              }}
+            >
+              {activeCategoryConf
+                ? <><span aria-hidden="true">{activeCategoryConf.emoji}</span> {categoryFilter}</>
+                : 'Category'}
+              <ChevronDown size={12} className={`transition-transform ${categoriesOpen ? 'rotate-180' : ''}`} />
+            </button>
+
             {filtersActive && (
               <button
                 onClick={clearFilters}
-                className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors hover:bg-gray-100"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-colors hover:bg-gray-100"
                 style={{ color: '#6b7280', border: '1px solid #e5e7eb' }}
               >
                 <X size={10} /> Reset
               </button>
             )}
-          </div>
 
-          {/* Status Filter */}
-          <div className="flex gap-2 flex-wrap mb-3" role="group" aria-label="Filter by status">
-            {STATUS_FILTERS.map(f => (
+            {/* Divider pushes the tanod layer control to the right edge —
+                visually its own concern, not part of the incident filters */}
+            <div className="flex items-center gap-2 ml-auto pl-3"
+              style={{ borderLeft: '1px solid #f0effe' }}>
+              <Shield size={13} className={showTanods && onDutyTanodCount > 0 ? 'text-emerald-500' : 'text-gray-300'} />
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 leading-tight">Tanods on map</p>
+                <p className="text-[10px] text-gray-400 leading-tight">{onDutyTanodCount} on duty</p>
+              </div>
               <button
-                key={f.value}
-                onClick={() => setStatusFilter(f.value)}
-                aria-pressed={statusFilter === f.value}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                onClick={() => setShowTanods(s => !s)}
+                role="switch"
+                aria-checked={showTanods}
+                aria-label="Show on-duty tanods on the map"
+                className="w-9 h-5 rounded-full flex items-center transition-all flex-shrink-0 px-0.5"
                 style={{
-                  background: statusFilter === f.value ? f.color : '#fafaff',
-                  color: statusFilter === f.value ? 'white' : '#6b7280',
-                  border: statusFilter === f.value ? `1px solid ${f.color}` : '1px solid #f0effe',
+                  background: showTanods ? '#22c55e' : '#d1d5db',
+                  justifyContent: showTanods ? 'flex-end' : 'flex-start',
                 }}
               >
-                {f.label} ({statusCounts[f.value]})
+                <span className="w-4 h-4 rounded-full bg-white block"
+                  style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
               </button>
-            ))}
+            </div>
           </div>
 
-          {/* Category Filter */}
-          <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by category">
-            <button
-              onClick={() => setCategoryFilter('all')}
-              aria-pressed={categoryFilter === 'all'}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-              style={{
-                background: categoryFilter === 'all' ? '#5B54E8' : '#fafaff',
-                color: categoryFilter === 'all' ? 'white' : '#6b7280',
-                border: categoryFilter === 'all' ? '1px solid #5B54E8' : '1px solid #f0effe',
-              }}
-            >
-              All Categories
-            </button>
-            {Object.entries(CATEGORY_CONFIG).map(([cat, conf]) => {
-              const count = categoryCounts[cat] || 0
-              // Hide zero-count chips, but never hide the currently selected one
-              if (count === 0 && categoryFilter !== cat) return null
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(prev => (prev === cat ? 'all' : cat))}
-                  aria-pressed={categoryFilter === cat}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                  style={{
-                    background: categoryFilter === cat ? conf.color : '#fafaff',
-                    color: categoryFilter === cat ? 'white' : conf.color,
-                    border: categoryFilter === cat ? `1px solid ${conf.color}` : `1px solid ${conf.color}20`,
-                  }}
-                >
-                  <span aria-hidden="true">{conf.emoji}</span> {cat} ({count})
-                </button>
-              )
-            })}
-          </div>
+          {/* Row 2 (collapsible): category chips */}
+          {categoriesOpen && (
+            <div className="flex gap-1.5 flex-wrap pt-3 fade-up" style={{ borderTop: '1px solid #f7f6ff' }}
+              role="group" aria-label="Filter incidents by category">
+              <button
+                onClick={() => { setCategoryFilter('all') }}
+                aria-pressed={categoryFilter === 'all'}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{
+                  background: categoryFilter === 'all' ? '#5B54E8' : '#fafaff',
+                  color: categoryFilter === 'all' ? 'white' : '#6b7280',
+                  border: categoryFilter === 'all' ? '1px solid #5B54E8' : '1px solid #f0effe',
+                }}
+              >
+                All Categories
+              </button>
+              {Object.entries(CATEGORY_CONFIG).map(([cat, conf]) => {
+                const count = categoryCounts[cat] || 0
+                // Hide zero-count chips, but never hide the currently selected one
+                if (count === 0 && categoryFilter !== cat) return null
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(prev => (prev === cat ? 'all' : cat))}
+                    aria-pressed={categoryFilter === cat}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                    style={{
+                      background: categoryFilter === cat ? conf.color : '#fafaff',
+                      color: categoryFilter === cat ? 'white' : conf.color,
+                      border: categoryFilter === cat ? `1px solid ${conf.color}` : `1px solid ${conf.color}20`,
+                    }}
+                  >
+                    <span aria-hidden="true">{conf.emoji}</span> {cat} ({count})
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Map */}
@@ -366,18 +494,19 @@ export default function MapView() {
               <p className="text-sm text-gray-500">Loading incidents...</p>
             </div>
           </div>
-        ) : incidentsWithCoords.length === 0 ? (
+        ) : incidentsWithCoords.length === 0 && visibleTanodCount === 0 ? (
           <div className="white-card p-12 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{ background: '#f0effe' }}>
               <MapIcon size={28} style={{ color: '#5B54E8', opacity: 0.5 }} />
             </div>
-            <h2 className="text-lg font-bold text-gray-800 mb-2">No incidents on map</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Nothing on the map</h2>
             <p className="text-gray-500 text-sm max-w-md mx-auto">
               {incidents.length === 0
                 ? 'No incidents reported yet.'
                 : filtersActive
                 ? 'No incidents with location coordinates match your filters.'
                 : 'No incidents with location coordinates. Encourage residents to pin their locations when reporting!'}
+              {!showTanods && onDutyTanodCount > 0 && ` ${onDutyTanodCount} tanod${onDutyTanodCount === 1 ? ' is' : 's are'} on duty — turn the tanod layer on to see them.`}
             </p>
             {filtersActive && incidents.length > 0 && (
               <button
@@ -390,7 +519,7 @@ export default function MapView() {
             )}
           </div>
         ) : (
-          <IncidentMap incidents={incidentsWithCoords} />
+          <IncidentMap incidents={incidentsWithCoords} tanodTrails={showTanods ? tanodTrails : {}} />
         )}
 
         {/* Incidents without coords */}

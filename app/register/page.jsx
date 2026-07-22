@@ -22,12 +22,21 @@ const roles = [
   { value: 'tanod', label: 'Tanod', desc: 'Requires an invite code', icon: '🛡️', public: false },
 ]
 
+// PH mobile numbers: exactly 11 digits, starting with 09
+const PHONE_REGEX = /^09\d{9}$/
+
 function friendlyAuthError(message) {
   if (/already registered|already been registered/i.test(message)) {
     return 'An account with this email already exists. Try signing in instead.'
   }
   if (/rate limit|too many/i.test(message)) {
     return 'Too many attempts. Please wait a moment and try again.'
+  }
+  // The signup trigger aborts with a database error when the invite code
+  // fails to claim (e.g. someone else used it between validation and
+  // submit). Supabase surfaces it generically, so translate it here.
+  if (/invalid_invite_code|database error saving new user/i.test(message)) {
+    return 'Your invite code could not be claimed — it may have just been used by someone else. Please request a new code and try again.'
   }
   return message
 }
@@ -82,6 +91,22 @@ export default function RegisterPage() {
   }, [selectedProvince, selectedCity])
 
   function handleChange(e) { setForm({ ...form, [e.target.name]: e.target.value }) }
+
+  // Phone input: digits only, hard-capped at 11, and pasted international
+  // formats (+639..., 639..., 0063...) are normalized to the local
+  // 09xxxxxxxxx form. Letters and symbols simply can't be typed.
+  function handlePhoneChange(e) {
+    let digits = e.target.value.replace(/\D/g, '')
+    if (digits.startsWith('00639')) digits = '09' + digits.slice(5)
+    else if (digits.startsWith('639')) digits = '09' + digits.slice(3)
+    digits = digits.slice(0, 11)
+    setForm(f => ({ ...f, phone: digits }))
+  }
+
+  const phoneValid = PHONE_REGEX.test(form.phone)
+  // Wrong prefix is worth calling out separately — "must start with 09" is
+  // a much more useful message than a generic "invalid phone number".
+  const phonePrefixWrong = form.phone.length >= 2 && !form.phone.startsWith('09')
 
   // Password strength checks
   const passwordChecks = {
@@ -157,8 +182,8 @@ export default function RegisterPage() {
       setError('Passwords do not match.')
       setLoading(false); return
     }
-    if (phone && !/^09\d{9}$/.test(phone)) {
-      setError('Phone must be in format 09xxxxxxxxx.')
+    if (phone && !PHONE_REGEX.test(phone)) {
+      setError('Phone number must be 11 digits starting with 09 (e.g. 09171234567).')
       setLoading(false); return
     }
     if (!selectedBarangayId) {
@@ -179,6 +204,8 @@ export default function RegisterPage() {
           barangay_id: selectedBarangayId,
           phone,
           address: form.address.trim(),
+          // The DB trigger claims this atomically during signup.
+          invite_code: selectedRole !== 'resident' ? inviteCode.trim() : null,
         },
       },
     })
@@ -198,41 +225,12 @@ export default function RegisterPage() {
       return
     }
 
-    // Claim the invite code BEFORE creating the role-bearing profile, and
-    // atomically via a SECURITY DEFINER function: it only flips used=false
-    // codes and returns true only if THIS call did the flip — two people
-    // racing on the same code can't both become officials, and no client
-    // ever needs UPDATE access to the invite_codes table.
-    if (selectedRole !== 'resident') {
-      const { data: claimed, error: claimError } = await supabase
-        .rpc('claim_invite_code', {
-          input_code: inviteCode,
-          input_role: selectedRole,
-          claimer: data.user.id,
-        })
-
-      if (claimError || !claimed) {
-        await supabase.auth.signOut()
-        setError('This invite code was just used or is no longer valid. Please request a new code.')
-        setLoading(false)
-        return
-      }
-    }
-
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: data.user.id,
-      full_name: form.full_name.trim(),
-      role: selectedRole,
-      address: form.address.trim(),
-      phone,
-      barangay_id: selectedBarangayId,
-    })
-    if (profileError) {
-      setError('Your account was created but the profile could not be saved: '
-        + profileError.message + ' — please contact support before retrying.')
-      setLoading(false)
-      return
-    }
+    // Profile creation and invite-code claiming now happen ATOMICALLY
+    // inside the database via the handle_new_user trigger (see
+    // signup-trigger.sql). If the code was already claimed, signUp itself
+    // fails and NO auth user is created — no orphaned accounts, no
+    // unclaimed codes, and this works identically whether or not email
+    // confirmation is enabled.
 
     toast.success('Account created successfully!')
     // replace, not push — Back from the login page shouldn't return to a
@@ -497,11 +495,33 @@ export default function RegisterPage() {
                     <label htmlFor="reg-phone" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Phone</label>
                     <div className="relative">
                       <Phone size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input id="reg-phone" name="phone" value={form.phone} onChange={handleChange} maxLength={11}
-                        autoComplete="tel-national" inputMode="numeric"
+                      <input id="reg-phone" name="phone" type="tel" value={form.phone} onChange={handlePhoneChange}
+                        maxLength={11} autoComplete="tel-national" inputMode="numeric" pattern="09[0-9]{9}"
+                        aria-invalid={form.phone ? !phoneValid : undefined}
+                        aria-describedby="phone-hint"
                         className="input-field w-full rounded-2xl pl-9 pr-3 py-3 text-sm text-gray-800"
                         placeholder="09xxxxxxxxx" />
+                      {form.phone && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {phoneValid
+                            ? <Check size={14} className="text-emerald-500" />
+                            : <X size={14} className="text-red-400" />}
+                        </span>
+                      )}
                     </div>
+                    {form.phone && !phoneValid && (
+                      <p id="phone-hint" className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                        <X size={11} />
+                        {phonePrefixWrong
+                          ? 'Must start with 09'
+                          : `${form.phone.length}/11 digits`}
+                      </p>
+                    )}
+                    {form.phone && phoneValid && (
+                      <p id="phone-hint" className="text-xs text-emerald-500 mt-1.5 flex items-center gap-1">
+                        <Check size={11} /> Valid number
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -640,7 +660,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <button type="submit" disabled={loading}
+                <button type="submit" disabled={loading || (form.phone.length > 0 && !phoneValid)}
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100 mt-2"
                   style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                   {loading ? (

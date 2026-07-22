@@ -9,9 +9,11 @@ import dynamic from 'next/dynamic'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ResolveModal from '@/components/ResolveModal'
+import DutyToggle from '@/components/DutyToggle'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAssignment } from '@/lib/notifications'
+
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -439,6 +441,12 @@ export default function TanodDashboard() {
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <NotificationBanner />
+
+          {!loading && profile && (
+            <div className="max-w-2xl mx-auto mb-4 fade-up">
+              <DutyToggle profile={profile} />
+            </div>
+          )}
 
           {loading && (
             <div className="space-y-3 fade-up max-w-2xl mx-auto">

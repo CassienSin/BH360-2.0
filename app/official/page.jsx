@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import TanodRoster from '@/components/TanodRoster'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { FileText as FileTextIcon } from 'lucide-react'
 import { exportToCSV, exportToPDF } from '@/lib/export'
@@ -262,10 +263,26 @@ export default function OfficialDashboard() {
       })
       .subscribe()
 
+      // Subscribe to tanod duty/profile changes so the dispatch dropdown stays live
+    const tanodChannel = supabase
+      .channel('official-tanod-status')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `barangay_id=eq.${bid}`,
+      }, (payload) => {
+        setTanods(prev => prev.map(t =>
+          t.id === payload.new.id ? { ...t, ...payload.new } : t
+        ))
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(incidentChannel)
       supabase.removeChannel(ticketChannel)
       supabase.removeChannel(announcementChannel)
+      supabase.removeChannel(tanodChannel)
     }
   }, [profile?.barangay_id])
 
@@ -311,11 +328,37 @@ export default function OfficialDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }
 
-  async function dispatchTanod(incidentId, tanodId) {
+  async function doDispatch(incidentId, tanod) {
+    const { error } = await supabase.from('incidents')
+      .update({ assigned_to: tanod.id, status: 'assigned' })
+      .eq('id', incidentId)
+    if (error) {
+      toast.error('Dispatch failed. Please try again.')
+      return
+    }
+    setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, assigned_to: tanod.id, status: 'assigned' } : i))
+    toast.success(`${tanod.full_name} dispatched successfully!`)
+  }
+
+  function dispatchTanod(incidentId, tanodId) {
     const tanod = tanods.find(t => t.id === tanodId)
-    await supabase.from('incidents').update({ assigned_to: tanodId, status: 'assigned' }).eq('id', incidentId)
-    setIncidents(prev => prev.map(i => i.id === incidentId ? { ...i, assigned_to: tanodId, status: 'assigned' } : i))
-    toast.success(`${tanod?.full_name} dispatched successfully!`)
+    if (!tanod) return
+
+    if (!tanod.on_duty) {
+      setConfirmDialog({
+        type: 'dispatch-offduty',
+        title: 'Dispatch off-duty tanod?',
+        message: `${tanod.full_name} is currently OFF DUTY and may not see this assignment right away. Consider calling them first${tanod.phone ? ` (${tanod.phone})` : ''}. Dispatch anyway?`,
+        confirmText: 'Dispatch Anyway',
+        variant: 'danger',
+        onConfirm: async () => {
+          await doDispatch(incidentId, tanod)
+          setConfirmDialog(null)
+        }
+      })
+      return
+    }
+    doDispatch(incidentId, tanod)
   }
 
   async function handleExportIncidents(format) {
@@ -494,7 +537,7 @@ export default function OfficialDashboard() {
         stats={[
           { label: 'Pending', value: incidents.filter(i => i.status === 'pending').length, color: '#f97316', key: 'incidents' },
           { label: 'Open Tickets', value: tickets.filter(t => t.status === 'open').length, color: '#3b82f6', key: 'tickets' },
-          { label: 'Tanods', value: tanods.length, color: '#22c55e', key: 'tanods' },
+          { label: 'On Duty', value: `${tanods.filter(t => t.on_duty).length}/${tanods.length}`, color: '#22c55e', key: 'tanods' },
           { label: 'Total', value: incidents.length, color: '#5B54E8', key: 'incidents' },
         ]}
         navItems={[
@@ -624,7 +667,7 @@ export default function OfficialDashboard() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {[
                     { label: 'Total Incidents', value: incidents.length, sub: `+${incidents.filter(i => i.status === 'pending').length} pending`, textColor: '#5B54E8' },
-                    { label: 'Active Tanods', value: tanods.length, sub: 'On duty', textColor: '#22c55e' },
+                    { label: 'On Duty Now', value: tanods.filter(t => t.on_duty).length, sub: `of ${tanods.length} tanods`, textColor: '#22c55e' },
                     { label: 'Open Tickets', value: tickets.filter(t => t.status === 'open').length, sub: `${tickets.filter(t => t.status === 'in_progress').length} in progress`, textColor: '#f97316' },
                     { label: 'Resolved', value: incidents.filter(i => i.status === 'resolved').length, sub: `${incidents.length > 0 ? Math.round(incidents.filter(i => i.status === 'resolved').length / incidents.length * 100) : 0}% rate`, textColor: '#f43f5e' },
                   ].map(({ label, value, sub, textColor }) => (
@@ -636,6 +679,8 @@ export default function OfficialDashboard() {
                   ))}
                 </div>
               </div>
+
+              <TanodRoster profile={profile} />
 
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -901,10 +946,18 @@ export default function OfficialDashboard() {
                         {inc.status !== 'resolved' && (
                           <div className="flex flex-row sm:flex-col gap-2 flex-shrink-0 w-full sm:w-auto mt-3 sm:mt-0">
                             {inc.status === 'pending' && (
-                              <select onChange={e => e.target.value && dispatchTanod(inc.id, e.target.value)}
+                              <select
+                                value=""
+                                onChange={e => e.target.value && dispatchTanod(inc.id, e.target.value)}
                                 className="flex-1 text-xs border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:border-purple-400 bg-white">
                                 <option value="">Dispatch Tanod...</option>
-                                {tanods.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                                {[...tanods]
+                                  .sort((a, b) => (b.on_duty === true) - (a.on_duty === true) || (a.full_name || '').localeCompare(b.full_name || ''))
+                                  .map(t => (
+                                    <option key={t.id} value={t.id}>
+                                      {t.on_duty ? '🟢' : '⚪'} {t.full_name}{t.on_duty ? '' : ' (off duty)'}
+                                    </option>
+                                  ))}
                               </select>
                             )}
                             <button onClick={() => resolveIncident(inc)}
@@ -1183,7 +1236,9 @@ export default function OfficialDashboard() {
                       <p className="font-semibold text-gray-800">{t.full_name}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{t.phone || 'No phone'} · {t.address || 'No address'}</p>
                     </div>
-                    <span className="text-xs px-2.5 py-1 rounded-full font-semibold bg-emerald-100 text-emerald-700">Active</span>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${t.on_duty ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {t.on_duty ? 'On Duty' : 'Off Duty'}
+                    </span>
                   </div>
                 </div>
               ))}

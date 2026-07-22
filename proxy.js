@@ -43,7 +43,24 @@ export async function proxy(request) {
   // This call is what actually refreshes an expired token. getUser()
   // validates against the Supabase Auth server; do not swap it for
   // getSession(), which trusts the cookie unverified.
-  await supabase.auth.getUser()
+  //
+  // A revoked/expired refresh token is a NORMAL outcome, not an
+  // exception — it happens after password resets, sign-out in another
+  // tab, or token rotation. Treat it as "signed out" and delete the
+  // dead sb-* cookies so the browser stops re-sending them on every
+  // request (that re-sending is what floods the terminal with
+  // AuthApiError: refresh_token_not_found).
+  try {
+    const { error } = await supabase.auth.getUser()
+    if (error) {
+      request.cookies.getAll().forEach(({ name }) => {
+        if (name.startsWith('sb-')) response.cookies.delete(name)
+      })
+    }
+  } catch {
+    // Couldn't reach the auth server (network hiccup) — let the request
+    // through; page-level auth checks will handle it.
+  }
 
   return response
 }
