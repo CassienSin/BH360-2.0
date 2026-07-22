@@ -2,7 +2,7 @@
 // NOTE: Leaflet touches `window` at import time — load this with SSR disabled:
 //   const IncidentMap = dynamic(() => import('@/components/IncidentMap'), { ssr: false })
 import { useEffect, useRef, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, LayersControl } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
@@ -27,8 +27,8 @@ const categoryConfig = {
 // phone locked or app backgrounded. Shown amber instead of green.
 const TANOD_STALE_MS = 5 * 60 * 1000
 
-// Inject the pulse keyframes ONCE per page. Previously every single marker
-// carried its own duplicate <style> tag inside its HTML.
+// Inject keyframes ONCE per page: marker pulse + the delivery-app style
+// flowing dashes on route lines.
 if (typeof document !== 'undefined' && !document.getElementById('incident-map-styles')) {
   const style = document.createElement('style')
   style.id = 'incident-map-styles'
@@ -38,14 +38,55 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
       70% { transform: scale(1.6); opacity: 0; }
       100% { transform: scale(0.7); opacity: 0; }
     }
+    @keyframes route-dash {
+      to { stroke-dashoffset: -22; }
+    }
+    .route-line {
+      animation: route-dash 1.1s linear infinite;
+    }
   `
   document.head.appendChild(style)
+}
+
+// ---- Route helpers ----
+// Gently curved path between two points (quadratic bezier sampled into
+// segments). Delivery-app aesthetic; NOT road routing.
+function curvedPath(from, to, curvature = 0.18, segments = 28) {
+  const midLat = (from[0] + to[0]) / 2
+  const midLng = (from[1] + to[1]) / 2
+  const dLat = to[0] - from[0]
+  const dLng = to[1] - from[1]
+  // control point offset perpendicular to the segment
+  const cLat = midLat - dLng * curvature
+  const cLng = midLng + dLat * curvature
+  const pts = []
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments
+    pts.push([
+      (1 - t) * (1 - t) * from[0] + 2 * (1 - t) * t * cLat + t * t * to[0],
+      (1 - t) * (1 - t) * from[1] + 2 * (1 - t) * t * cLng + t * t * to[1],
+    ])
+  }
+  return pts
+}
+
+function distanceMeters(a, b) {
+  const R = 6371000
+  const toRad = d => d * Math.PI / 180
+  const dLat = toRad(b[0] - a[0])
+  const dLng = toRad(b[1] - a[1])
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(s))
+}
+
+function fmtDist(m) {
+  return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`
 }
 
 // Icons are cached by category+status. createIcon used to run for every
 // marker on every render, building fresh L.divIcon objects each time —
 // which made react-leaflet tear down and rebuild every marker's DOM.
-// There are only ~36 possible combinations, so cache them forever.
 const iconCache = new Map()
 function getIcon(category, status) {
   const key = `${category}|${status}`
@@ -107,10 +148,7 @@ function getIcon(category, status) {
 }
 
 // Tanod markers — profile photo when available, initial or shield as
-// fallback. Cached per avatar+staleness so react-leaflet doesn't rebuild
-// marker DOM on every render. The colored ring doubles as the status
-// indicator: green = fresh, amber = stale. A small corner shield badge
-// keeps tanods visually distinct from incident markers.
+// fallback. Colored ring doubles as status: green = fresh, amber = stale.
 function getTanodIcon(stale, avatarUrl, initial) {
   const key = `tanod|${stale ? 'stale' : 'fresh'}|${avatarUrl || 'none'}|${initial || ''}`
   if (iconCache.has(key)) return iconCache.get(key)
@@ -178,9 +216,6 @@ function getTanodIcon(stale, avatarUrl, initial) {
 function FitBounds({ incidents, tanodPositions }) {
   const map = useMap()
   // Only refit when the SET of things on the map actually changes.
-  // Incidents key by id; tanods also key by id only — so a NEW tanod
-  // coming on duty refits the view, but their minute-by-minute movement
-  // does not fight the user's panning and zooming.
   const prevSignature = useRef('')
 
   useEffect(() => {
@@ -201,7 +236,6 @@ function FitBounds({ incidents, tanodPositions }) {
       map.setView(allPoints[0], 16)
     } else {
       const bounds = L.latLngBounds(allPoints)
-      // maxZoom stops a tight cluster from over-zooming to rooftop level
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 })
     }
   }, [incidents, tanodPositions, map])
@@ -215,16 +249,12 @@ const STATUS_STYLES = {
 }
 
 export default function IncidentMap({ incidents = [], tanodTrails = {}, height = '70vh', onIncidentClick }) {
-  // Number.isFinite catches NaN/strings/nulls; the old truthy check also
-  // wrongly discarded legitimate 0 coordinates.
   const validIncidents = useMemo(
     () => incidents.filter(i => Number.isFinite(i.latitude) && Number.isFinite(i.longitude)),
     [incidents]
   )
   const pendingCount = validIncidents.filter(i => i.status === 'pending').length
 
-  // Flatten trails into renderable structures: one entry per tanod that
-  // has at least one valid point, with their newest point as the marker.
   const tanodEntries = useMemo(() => {
     return Object.entries(tanodTrails)
       .map(([tanodId, { tanod, points }]) => {
@@ -239,7 +269,6 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
           tanod,
           latest,
           stale,
-          path: valid.map(p => [p.latitude, p.longitude]),
           firstAt: valid[0].recorded_at,
         }
       })
@@ -250,6 +279,38 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
     () => tanodEntries.map(e => ({ tanodId: e.tanodId, latitude: e.latest.latitude, longitude: e.latest.longitude })),
     [tanodEntries]
   )
+
+  // ---- Delivery-app routes: tanod → their assigned incident(s) ----
+  const routes = useMemo(() => {
+    const out = []
+    for (const entry of tanodEntries) {
+      const from = [entry.latest.latitude, entry.latest.longitude]
+      const targets = validIncidents.filter(
+        i => i.status === 'assigned' && i.assigned_to === entry.tanodId
+      )
+      for (const inc of targets) {
+        const to = [inc.latitude, inc.longitude]
+        out.push({
+          key: `route-${entry.tanodId}-${inc.id}`,
+          entry,
+          incident: inc,
+          path: curvedPath(from, to),
+          meters: distanceMeters(from, to),
+        })
+      }
+    }
+    return out
+  }, [tanodEntries, validIncidents])
+
+  // For the tanod popup: what is this tanod responding to?
+  const respondingByTanod = useMemo(() => {
+    const m = {}
+    for (const r of routes) {
+      if (!m[r.entry.tanodId]) m[r.entry.tanodId] = []
+      m[r.entry.tanodId].push(r)
+    }
+    return m
+  }, [routes])
 
   const defaultCenter = [14.5995, 120.9842]
   const mapIsEmpty = validIncidents.length === 0 && tanodEntries.length === 0
@@ -282,21 +343,32 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
 
         <FitBounds incidents={validIncidents} tanodPositions={tanodPositions} />
 
-        {/* Tanod patrol trails — drawn under the markers */}
-        {tanodEntries.map(entry => (
-          entry.path.length >= 2 && (
-            <Polyline
-              key={`trail-${entry.tanodId}`}
-              positions={entry.path}
-              pathOptions={{
-                color: entry.stale ? '#f59e0b' : '#22c55e',
-                weight: 3,
-                opacity: 0.55,
-                dashArray: '1 8',
-                lineCap: 'round',
-              }}
-            />
-          )
+        {/* Response routes: tanod → assigned incident (delivery-app style:
+            white casing underneath, animated orange dashes on top) */}
+        {routes.map(r => (
+          <Polyline
+            key={`${r.key}-casing`}
+            positions={r.path}
+            pathOptions={{ color: '#ffffff', weight: 7, opacity: 0.9, lineCap: 'round' }}
+          />
+        ))}
+        {routes.map(r => (
+          <Polyline
+            key={r.key}
+            positions={r.path}
+            pathOptions={{
+              color: '#f97316',
+              weight: 4,
+              opacity: 0.9,
+              dashArray: '10 12',
+              lineCap: 'round',
+              className: 'route-line',
+            }}
+          >
+            <Tooltip sticky>
+              🛡️ {r.entry.tanod?.full_name?.split(' ')[0] || 'Tanod'} → {r.incident.title} · {fmtDist(r.meters)} away
+            </Tooltip>
+          </Polyline>
         ))}
 
         {/* Tanod current positions */}
@@ -309,7 +381,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
             alt={`Tanod: ${entry.tanod?.full_name || 'Unknown'}`}
           >
             <Popup>
-              <div style={{ minWidth: '200px', padding: '4px', fontFamily: 'Sora, sans-serif' }}>
+              <div style={{ minWidth: '210px', padding: '4px', fontFamily: 'Sora, sans-serif' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <div style={{
                     width: '32px', height: '32px', borderRadius: '8px',
@@ -330,12 +402,25 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
                     <p style={{
                       fontSize: '10px', fontWeight: 700, margin: 0,
                       textTransform: 'uppercase', letterSpacing: '0.5px',
-                      color: entry.stale ? '#b45309' : '#059669',
+                      color: entry.stale ? '#b45309'
+                        : (respondingByTanod[entry.tanodId] ? '#c2410c' : '#059669'),
                     }}>
-                      {entry.stale ? 'On duty · signal lost' : 'On duty'}
+                      {entry.stale ? 'On duty · signal lost'
+                        : (respondingByTanod[entry.tanodId] ? 'Responding' : 'On duty · available')}
                     </p>
                   </div>
                 </div>
+
+                {/* What they're responding to, with live distance */}
+                {respondingByTanod[entry.tanodId]?.map(r => (
+                  <div key={r.key} style={{
+                    fontSize: '11px', color: '#9a3412', background: '#fff7ed',
+                    border: '1px solid #fed7aa', borderRadius: '8px',
+                    padding: '5px 8px', marginBottom: '6px',
+                  }}>
+                    ➜ {r.incident.title} · <b>{fmtDist(r.meters)}</b> away
+                  </div>
+                ))}
 
                 <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: 1.7 }}>
                   <div title={fullDate(entry.latest.recorded_at)}>
@@ -382,7 +467,6 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
               key={inc.id}
               position={[inc.latitude, inc.longitude]}
               icon={getIcon(inc.category, inc.status)}
-              // Active incidents stack above resolved ones where they overlap
               zIndexOffset={inc.status === 'pending' ? 1000 : inc.status === 'assigned' ? 500 : 0}
               alt={`${inc.category}: ${inc.title}`}
             >
@@ -469,6 +553,11 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
               🛡️ {tanodEntries.length} on duty
             </span>
           )}
+          {routes.length > 0 && (
+            <span style={{ color: '#c2410c', background: '#fff7ed', padding: '1px 6px', borderRadius: '10px' }}>
+              🚨 {routes.length} responding
+            </span>
+          )}
         </div>
       )}
 
@@ -493,7 +582,11 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         </span>
         <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
           <span className="text-[11px]" aria-hidden="true">🛡️</span>
-          Tanod on duty
+          Tanod
+        </span>
+        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
+          <span className="flex-shrink-0" style={{ width: '18px', borderTop: '3px dashed #f97316' }} />
+          En route
         </span>
       </div>
 
