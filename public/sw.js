@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bh360-v1'
-const STATIC_CACHE = 'bh360-static-v1'
+const CACHE_NAME = 'bh360-v2'
+const STATIC_CACHE = 'bh360-static-v2'
 
 // Files to cache for offline use
 const STATIC_FILES = [
@@ -8,6 +8,12 @@ const STATIC_FILES = [
   '/register',
   '/logo.png',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-192.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
+  '/favicon-32.png',
 ]
 
 // Install event - cache static files
