@@ -46,38 +46,46 @@ export default function ResetPasswordPage() {
     })
 
     async function verify() {
-      // 3) PKCE flow: modern recovery links arrive with ?code=... — exchange
-      //    it explicitly rather than racing the client's auto-detection
-      //    against a timeout. NOTE: this exchange only succeeds in the SAME
-      //    BROWSER that requested the reset (the code verifier lives in its
-      //    storage). Opening the link elsewhere fails here by design.
+      // 3) IMPORTANT ORDERING: the @supabase/ssr browser client AUTO-
+      //    exchanges ?code= on page load. Auth codes are single-use, so if
+      //    we also exchange immediately, one of the two calls always fails
+      //    and we'd wrongly show "Link expired" despite a valid session.
+      //    So: session first, manual exchange only as fallback, and never
+      //    declare the link dead without a final session re-check.
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (session) { setLinkState('ready'); return }
+
       const code = new URLSearchParams(window.location.search).get('code')
       if (code) {
         const { error: xError } = await supabase.auth.exchangeCodeForSession(code)
         if (cancelled) return
-        if (xError) {
-          console.error('Code exchange failed:', xError.message)
-          setLinkState('invalid')
-        } else {
-          setLinkState('ready')
-        }
+        if (!xError) { setLinkState('ready'); return }
+        console.error('Manual code exchange failed:', xError.message)
+
+        // The auto-exchange may have consumed the code just before us —
+        // in that case a session EXISTS even though our exchange errored.
+        const { data: { session: s2 } } = await supabase.auth.getSession()
+        if (cancelled) return
+        if (s2) { setLinkState('ready'); return }
+
+        // Final beat: let any in-flight auto-exchange land, then decide.
+        setTimeout(async () => {
+          if (cancelled) return
+          const { data: { session: s3 } } = await supabase.auth.getSession()
+          if (cancelled) return
+          setLinkState(prev => (prev === 'ready' ? prev : (s3 ? 'ready' : 'invalid')))
+        }, 2500)
         return
       }
 
-      // 4) Older-style links carry tokens in the hash, which the client
-      //    processes asynchronously — check for a session, then allow a
-      //    generous grace period before declaring the link dead.
-      const { data: { session } } = await supabase.auth.getSession()
-      if (cancelled) return
-      if (session) {
-        setLinkState('ready')
-      } else {
-        setTimeout(() => {
-          if (!cancelled) {
-            setLinkState(prev => (prev === 'checking' ? 'invalid' : prev))
-          }
-        }, 6000)
-      }
+      // 4) Older-style links carry tokens in the hash, processed
+      //    asynchronously — allow a generous grace period.
+      setTimeout(() => {
+        if (!cancelled) {
+          setLinkState(prev => (prev === 'checking' ? 'invalid' : prev))
+        }
+      }, 6000)
     }
     verify()
 
