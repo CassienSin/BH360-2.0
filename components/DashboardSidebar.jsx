@@ -6,10 +6,8 @@ import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity } from 'lucide-react
 import ConfirmDialog from './ConfirmDialog'
 import { createPortal } from 'react-dom'
 
-// localStorage is fine in your real Next.js app — the old "not allowed in
-// artifacts" comment was a leftover constraint from a code sandbox. Without
-// persistence, users' pinned shortcuts vanished on every page reload.
-// Wrapped in try/catch because storage throws in some private modes.
+// localStorage wrapped in try/catch because storage throws in some
+// private modes / locked-down webviews.
 function storageGet(key) {
   try { return localStorage.getItem(key) } catch { return null }
 }
@@ -38,6 +36,11 @@ export default function DashboardSidebar({
   const [pinned, setPinned] = useState([])
   const [hoveredItem, setHoveredItem] = useState(null)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const [avatarFailed, setAvatarFailed] = useState(false)
+  // The footer status dot used to be hardcoded green — it now reflects
+  // the real connection state so "online" actually means online.
+  const [online, setOnline] = useState(true)
 
   // Pins are stored per-user so accounts on a shared device don't
   // inherit each other's shortcuts.
@@ -52,12 +55,45 @@ export default function DashboardSidebar({
     } catch { /* corrupted value — start fresh */ }
   }, [pinKey])
 
+  useEffect(() => { setAvatarFailed(false) }, [profile?.avatar_url])
+
+  useEffect(() => {
+    setOnline(navigator.onLine)
+    const goOnline = () => setOnline(true)
+    const goOffline = () => setOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
+  // Escape closes the sidebar on mobile (matches the overlay tap)
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e) => {
+      if (e.key === 'Escape' && window.innerWidth < 768) setSidebarOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [sidebarOpen, setSidebarOpen])
+
   async function confirmLogout() {
+    if (signingOut) return
+    setSigningOut(true)
     // Close the dialog BEFORE navigating — mobile browsers snapshot the page
     // into the back-forward cache at unload, and an open dialog in that
     // snapshot is what made Back resurrect the confirm prompt.
     setLogoutConfirm(false)
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      // Network down mid-signout: still clear the local session so the
+      // device is signed out even if the server call never landed
+      console.error('Sign out failed, clearing local session:', err)
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+    }
     // replace, not href: removes the dashboard from history so Back
     // can't return to a signed-out session.
     window.location.replace('/login')
@@ -71,8 +107,12 @@ export default function DashboardSidebar({
   function togglePin(key, e) {
     e.stopPropagation()
     e.preventDefault()
+    const validKeys = new Set(navItems.flatMap(s => s.items.map(item => item.key)))
     setPinned(prev => {
-      const next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+      // Prune keys that no longer exist in the nav (role change, removed
+      // sections) so stale pins don't live in storage forever
+      const cleaned = prev.filter(k => validKeys.has(k))
+      const next = cleaned.includes(key) ? cleaned.filter(k => k !== key) : [...cleaned, key]
       storageSet(pinKey, JSON.stringify(next))
       return next
     })
@@ -98,14 +138,14 @@ export default function DashboardSidebar({
       aria-label="Dashboard navigation"
       style={{ boxShadow: '4px 0 24px rgba(91,84,232,0.1)', height: '100dvh', overflow: 'hidden' }}>
 
-      {/* Logo / Brand — when collapsed, tapping the logo expands the sidebar
-          (previously there was no way to expand from inside the sidebar) */}
+      {/* Logo / Brand — when collapsed, tapping the logo expands the sidebar */}
       <div className={`flex items-center gap-3 px-4 py-4 ${!sidebarOpen && 'justify-center'}`}
         style={{ borderBottom: '1px solid #f0effe' }}>
         <button
           onClick={() => !sidebarOpen && setSidebarOpen(true)}
           className={`w-9 h-9 relative flex-shrink-0 ${!sidebarOpen ? 'cursor-pointer transition-transform hover:scale-110' : 'cursor-default'}`}
           aria-label={sidebarOpen ? 'BH360' : 'Expand sidebar'}
+          aria-expanded={sidebarOpen}
           title={!sidebarOpen ? 'Expand sidebar' : undefined}
           tabIndex={sidebarOpen ? -1 : 0}>
           <Image src="/logo.png" alt="BH360" fill sizes="36px" loading="eager" className="object-contain" />
@@ -117,7 +157,7 @@ export default function DashboardSidebar({
           </div>
         )}
         {sidebarOpen && (
-          <button onClick={() => setSidebarOpen(false)} aria-label="Collapse sidebar"
+          <button onClick={() => setSidebarOpen(false)} aria-label="Collapse sidebar" aria-expanded={true}
             className="w-7 h-7 rounded-lg items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors hidden md:flex flex-shrink-0">
             <ChevronLeft size={14} />
           </button>
@@ -130,7 +170,7 @@ export default function DashboardSidebar({
           <div className="rounded-2xl p-3"
             style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
             <div className="flex items-center gap-1.5 mb-2">
-              <Activity size={11} style={{ color: '#5B54E8' }} />
+              <Activity size={11} style={{ color: '#5B54E8' }} aria-hidden="true" />
               <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>
                 Quick Stats
               </p>
@@ -140,6 +180,7 @@ export default function DashboardSidebar({
                 <button key={stat.label}
                   onClick={() => stat.key && navClick(stat.key)}
                   disabled={!stat.key}
+                  aria-label={`${stat.label}: ${stat.value}${stat.key ? ` — go to ${stat.label}` : ''}`}
                   className="text-left p-2 rounded-xl transition-all hover:scale-105 disabled:hover:scale-100"
                   style={{ background: 'white', border: `1px solid ${stat.color}20` }}>
                   <p className="text-lg font-black leading-none" style={{ color: stat.color }}>{stat.value}</p>
@@ -155,11 +196,19 @@ export default function DashboardSidebar({
       {sidebarOpen && (
         <div className="px-3 py-3 border-b border-gray-100">
           <div className="relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') setSearch('') }}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setSearch('')
+                // Enter jumps straight to the first match — filter, hit
+                // Enter, you're there, no mouse needed
+                if (e.key === 'Enter') {
+                  const first = filteredNavItems[0]?.items[0]
+                  if (first) { navClick(first.key); setSearch('') }
+                }
+              }}
               placeholder="Quick filter..."
               aria-label="Filter navigation items"
               className="w-full pl-8 pr-3 py-2 text-xs rounded-xl outline-none transition-all"
@@ -175,7 +224,7 @@ export default function DashboardSidebar({
       {sidebarOpen && pinnedItems.length > 0 && !search && (
         <div className="px-3 py-2 border-b border-gray-100">
           <p className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-400 flex items-center gap-1">
-            <Pin size={9} /> Pinned
+            <Pin size={9} aria-hidden="true" /> Pinned
           </p>
           <div className="space-y-0.5">
             {pinnedItems.map(({ key, label, icon: Icon, count, hasNew }) => (
@@ -189,12 +238,12 @@ export default function DashboardSidebar({
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
                     style={{ background: 'linear-gradient(180deg, #5B54E8, #7C75F0)', boxShadow: '0 0 12px rgba(91,84,232,0.5)' }} />
                 )}
-                <Icon size={15} style={{ color: activeSection === key ? '#5B54E8' : '#9ca3af', flexShrink: 0 }} />
+                <Icon size={15} style={{ color: activeSection === key ? '#5B54E8' : '#9ca3af', flexShrink: 0 }} aria-hidden="true" />
                 <span className="text-xs flex-1 text-left"
                   style={{ color: activeSection === key ? '#5B54E8' : '#6b7280', fontWeight: activeSection === key ? 700 : 500 }}>
                   {label}
                 </span>
-                {hasNew && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
+                {hasNew && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />}
                 {count > 0 && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
                     style={{
@@ -216,7 +265,7 @@ export default function DashboardSidebar({
           <div key={section}>
             {sidebarOpen && (
               <p className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-400 flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-gray-300" />
+                <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
                 {section}
               </p>
             )}
@@ -227,14 +276,20 @@ export default function DashboardSidebar({
                 const isHovered = hoveredItem === key
 
                 return (
-                  <div key={key} className="relative">
+                  <div key={key} className="relative"
+                    onMouseEnter={() => setHoveredItem(key)}
+                    onMouseLeave={() => setHoveredItem(null)}>
+                    {/* The pin control is a SIBLING button now, not a
+                        role="button" span nested inside the nav button —
+                        nested interactive controls are invalid for screen
+                        readers and confused focus order. */}
                     <button
                       onClick={() => navClick(key)}
-                      onMouseEnter={() => setHoveredItem(key)}
-                      onMouseLeave={() => setHoveredItem(null)}
+                      onFocus={() => setHoveredItem(key)}
+                      onBlur={() => setHoveredItem(null)}
                       aria-current={isActive ? 'page' : undefined}
                       aria-label={!sidebarOpen ? label : undefined}
-                      className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!sidebarOpen && 'justify-center'} ${isActive ? '' : 'hover:bg-gray-50'}`}
+                      className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!sidebarOpen && 'justify-center'} ${sidebarOpen ? 'pr-9' : ''} ${isActive ? '' : 'hover:bg-gray-50'}`}
                       style={isActive ? {
                         background: 'linear-gradient(135deg, rgba(91,84,232,0.12), rgba(124,117,240,0.06))',
                         boxShadow: '0 2px 8px rgba(91,84,232,0.08)',
@@ -250,9 +305,9 @@ export default function DashboardSidebar({
                       )}
 
                       <div className="relative flex-shrink-0">
-                        <Icon size={17} style={{ color: isActive ? '#5B54E8' : '#9ca3af' }} />
+                        <Icon size={17} style={{ color: isActive ? '#5B54E8' : '#9ca3af' }} aria-hidden="true" />
                         {hasNew && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                         )}
                       </div>
 
@@ -261,27 +316,6 @@ export default function DashboardSidebar({
                           <span className="text-sm flex-1 text-left"
                             style={{ color: isActive ? '#5B54E8' : '#6b7280', fontWeight: isActive ? 700 : 500 }}>
                             {label}
-                          </span>
-
-                          {/* Pin toggle — always rendered, revealed on hover,
-                              keyboard focus, or when already pinned. Previously
-                              it only existed while hovered, so keyboard users
-                              could never reach it, and it vanished entirely on
-                              the active item so you couldn't unpin it there. */}
-                          <span onClick={(e) => togglePin(key, e)}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={isPinned ? `Unpin ${label}` : `Pin ${label} to top`}
-                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') togglePin(key, e) }}
-                            className={`w-5 h-5 rounded-md flex items-center justify-center hover:bg-purple-100 transition-opacity cursor-pointer focus:opacity-100 ${
-                              isPinned || isHovered ? 'opacity-100' : 'opacity-0'
-                            }`}
-                            title={isPinned ? 'Unpin' : 'Pin to top'}>
-                            {isPinned ? (
-                              <PinOff size={10} style={{ color: '#5B54E8' }} />
-                            ) : (
-                              <Pin size={10} style={{ color: '#9ca3af' }} />
-                            )}
                           </span>
 
                           {badge && (
@@ -304,9 +338,29 @@ export default function DashboardSidebar({
                       )}
                     </button>
 
-                    {/* Tooltip when collapsed */}
+                    {/* Pin toggle — revealed on hover, keyboard focus, or when
+                        already pinned */}
+                    {sidebarOpen && (
+                      <button
+                        onClick={(e) => togglePin(key, e)}
+                        aria-label={isPinned ? `Unpin ${label}` : `Pin ${label} to top`}
+                        title={isPinned ? 'Unpin' : 'Pin to top'}
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center hover:bg-purple-100 transition-opacity focus:opacity-100 ${
+                          isPinned || isHovered ? 'opacity-100' : 'opacity-0'
+                        }`}>
+                        {isPinned ? (
+                          <PinOff size={10} style={{ color: '#5B54E8' }} />
+                        ) : (
+                          <Pin size={10} style={{ color: '#9ca3af' }} />
+                        )}
+                      </button>
+                    )}
+
+                    {/* Tooltip when collapsed — now also appears on keyboard
+                        focus, not just mouse hover */}
                     {!sidebarOpen && isHovered && (
                       <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-xl z-50 whitespace-nowrap fade-up pointer-events-none"
+                        role="tooltip"
                         style={{
                           background: '#1f2937',
                           boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
@@ -357,30 +411,33 @@ export default function DashboardSidebar({
               <div className="relative flex-shrink-0">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
                   style={{ background: rc.gradient, boxShadow: `0 4px 12px ${rc.color}40` }}>
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt={profile?.full_name || 'Avatar'} className="w-full h-full object-cover" />
+                  {profile?.avatar_url && !avatarFailed ? (
+                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover"
+                      onError={() => setAvatarFailed(true)} />
                   ) : (
                     profile?.full_name?.[0]?.toUpperCase()
                   )}
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-emerald-500" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+                  style={{ background: online ? '#22c55e' : '#9ca3af' }}
+                  title={online ? 'Online' : 'Offline — changes may not sync'} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-gray-800 truncate">{profile?.full_name}</p>
                 <p className="text-[10px] truncate" style={{ color: rc.color, fontWeight: 600 }}>
-                  {roleLabel}
+                  {roleLabel}{!online && ' · Offline'}
                 </p>
               </div>
-              <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0"
+              <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0 disabled:opacity-50"
                 title="Sign out">
                 <LogOut size={12} />
               </button>
             </div>
           </div>
         ) : (
-          <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out"
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+          <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
             title="Sign out">
             <LogOut size={14} />
           </button>
@@ -396,7 +453,7 @@ export default function DashboardSidebar({
           onConfirm={confirmLogout}
           title="Sign out?"
           message="Are you sure you want to sign out? You'll need to log in again to access your dashboard."
-          confirmText="Yes, Sign Out"
+          confirmText={signingOut ? 'Signing out...' : 'Yes, Sign Out'}
           cancelText="Stay Signed In"
           variant="logout"
         />,

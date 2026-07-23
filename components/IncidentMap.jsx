@@ -23,19 +23,26 @@ const categoryConfig = {
   Other: { color: '#6b7280', emoji: '📝' },
 }
 
+const PRIORITY_STYLES = {
+  Critical: { bg: '#fee2e2', color: '#b91c1c' },
+  High: { bg: '#ffedd5', color: '#c2410c' },
+  Medium: { bg: '#fef9c3', color: '#a16207' },
+  Low: { bg: '#f0fdf4', color: '#15803d' },
+}
+
 // A tanod is "stale" if their newest point is older than this — likely
 // phone locked or app backgrounded. Shown amber instead of green.
 const TANOD_STALE_MS = 5 * 60 * 1000
 
-// Inject keyframes ONCE per page: marker pulse + the delivery-app style
-// flowing dashes on route lines.
+// Inject keyframes ONCE per page: marker pulse, route dash flow, and a
+// subtle drop-in for pins.
 if (typeof document !== 'undefined' && !document.getElementById('incident-map-styles')) {
   const style = document.createElement('style')
   style.id = 'incident-map-styles'
   style.textContent = `
     @keyframes pulse-ring {
       0% { transform: scale(0.7); opacity: 0.7; }
-      70% { transform: scale(1.6); opacity: 0; }
+      70% { transform: scale(1.9); opacity: 0; }
       100% { transform: scale(0.7); opacity: 0; }
     }
     @keyframes route-dash {
@@ -44,19 +51,19 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
     .route-line {
       animation: route-dash 1.1s linear infinite;
     }
+    .leaflet-container {
+      font-family: Sora, sans-serif;
+    }
   `
   document.head.appendChild(style)
 }
 
 // ---- Route helpers ----
-// Gently curved path between two points (quadratic bezier sampled into
-// segments). Delivery-app aesthetic; NOT road routing.
 function curvedPath(from, to, curvature = 0.18, segments = 28) {
   const midLat = (from[0] + to[0]) / 2
   const midLng = (from[1] + to[1]) / 2
   const dLat = to[0] - from[0]
   const dLng = to[1] - from[1]
-  // control point offset perpendicular to the segment
   const cLat = midLat - dLng * curvature
   const cLng = midLng + dLat * curvature
   const pts = []
@@ -84,64 +91,69 @@ function fmtDist(m) {
   return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`
 }
 
-// Icons are cached by category+status. createIcon used to run for every
-// marker on every render, building fresh L.divIcon objects each time —
-// which made react-leaflet tear down and rebuild every marker's DOM.
+// ---- Incident pins ----
+// Proper map-pin (teardrop) markers: the TIP marks the exact coordinate,
+// which is far more precise than a floating circle. Category color fills
+// the pin, the emoji sits in a white well, pending pins pulse at ground
+// level, Critical pins get a red "!" badge, resolved pins fade with a ✓.
+// Cached by category|status|priority so react-leaflet never rebuilds DOM.
 const iconCache = new Map()
-function getIcon(category, status) {
-  const key = `${category}|${status}`
+function getIcon(category, status, priority) {
+  const key = `${category}|${status}|${priority || ''}`
   if (iconCache.has(key)) return iconCache.get(key)
 
   const cat = categoryConfig[category] || categoryConfig.Other
   const isPending = status === 'pending'
   const isResolved = status === 'resolved'
+  const isCritical = priority === 'Critical' && !isResolved
 
   const icon = L.divIcon({
-    className: 'incident-marker',
+    className: 'incident-pin',
     html: `
-      <div style="position: relative; display: flex; align-items: center; justify-content: center; ${isResolved ? 'opacity: 0.55;' : ''}">
+      <div style="position: relative; width: 40px; height: 52px; ${isResolved ? 'opacity: 0.55; filter: saturate(0.6);' : ''}">
         ${isPending ? `<div style="
           position: absolute;
-          width: 40px;
-          height: 40px;
+          left: 50%; bottom: 0;
+          width: 26px; height: 26px;
+          transform: translate(-50%, 40%);
           border-radius: 50%;
-          background: ${cat.color}40;
-          animation: pulse-ring 2s ease-out infinite;
+          background: ${cat.color}55;
+          animation: pulse-ring 1.8s ease-out infinite;
         "></div>` : ''}
+        <svg width="40" height="52" viewBox="0 0 40 52" style="position:absolute; left:0; top:0; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.35));">
+          <path d="M20 1C9.6 1 1.5 9.2 1.5 19.4 1.5 32 20 51 20 51s18.5-19 18.5-31.6C38.5 9.2 30.4 1 20 1z"
+            fill="${cat.color}" stroke="white" stroke-width="2.5"/>
+          <circle cx="20" cy="19" r="12" fill="white"/>
+        </svg>
         <div style="
-          width: 32px;
-          height: 32px;
-          background: ${cat.color};
+          position: absolute; left: 50%; top: 19px;
+          transform: translate(-50%, -50%);
+          font-size: 15px; line-height: 1;
+        ">${cat.emoji}</div>
+        ${isCritical ? `<div style="
+          position: absolute; top: -4px; right: -2px;
+          width: 16px; height: 16px;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px ${cat.color}80;
-          border: 3px solid white;
-          font-size: 14px;
-        ">
-          ${cat.emoji}
-        </div>
+          background: #dc2626;
+          border: 2px solid white;
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-size: 10px; font-weight: 900;
+          box-shadow: 0 2px 6px rgba(220,38,38,0.5);
+        ">!</div>` : ''}
         ${isResolved ? `<div style="
-          position: absolute;
-          top: -3px;
-          right: -3px;
-          width: 14px;
-          height: 14px;
+          position: absolute; top: -3px; right: 0;
+          width: 15px; height: 15px;
           border-radius: 50%;
           background: #22c55e;
           border: 2px solid white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 8px;
-          font-weight: 900;
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-size: 8px; font-weight: 900;
         ">✓</div>` : ''}
       </div>
     `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+    iconSize: [40, 52],
+    iconAnchor: [20, 51],     // the pin TIP marks the coordinate
+    popupAnchor: [0, -46],
   })
   iconCache.set(key, icon)
   return icon
@@ -215,7 +227,6 @@ function getTanodIcon(stale, avatarUrl, initial) {
 
 function FitBounds({ incidents, tanodPositions }) {
   const map = useMap()
-  // Only refit when the SET of things on the map actually changes.
   const prevSignature = useRef('')
 
   useEffect(() => {
@@ -264,13 +275,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         if (valid.length === 0) return null
         const latest = valid[valid.length - 1]
         const stale = Date.now() - new Date(latest.recorded_at).getTime() > TANOD_STALE_MS
-        return {
-          tanodId,
-          tanod,
-          latest,
-          stale,
-          firstAt: valid[0].recorded_at,
-        }
+        return { tanodId, tanod, latest, stale, firstAt: valid[0].recorded_at }
       })
       .filter(Boolean)
   }, [tanodTrails])
@@ -280,7 +285,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
     [tanodEntries]
   )
 
-  // ---- Delivery-app routes: tanod → their assigned incident(s) ----
+  // Delivery-app routes: tanod → their assigned incident(s)
   const routes = useMemo(() => {
     const out = []
     for (const entry of tanodEntries) {
@@ -288,7 +293,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
       const targets = validIncidents.filter(
         i => i.status === 'assigned' && i.assigned_to === entry.tanodId
       )
-      for (const inc of targets) {
+    for (const inc of targets) {
         const to = [inc.latitude, inc.longitude]
         out.push({
           key: `route-${entry.tanodId}-${inc.id}`,
@@ -302,7 +307,6 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
     return out
   }, [tanodEntries, validIncidents])
 
-  // For the tanod popup: what is this tanod responding to?
   const respondingByTanod = useMemo(() => {
     const m = {}
     for (const r of routes) {
@@ -311,6 +315,13 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
     }
     return m
   }, [routes])
+
+  // For incident popups: who is assigned, by name
+  const tanodNameById = useMemo(() => {
+    const m = {}
+    for (const e of tanodEntries) m[e.tanodId] = e.tanod?.full_name
+    return m
+  }, [tanodEntries])
 
   const defaultCenter = [14.5995, 120.9842]
   const mapIsEmpty = validIncidents.length === 0 && tanodEntries.length === 0
@@ -325,7 +336,18 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         scrollWheelZoom={true}
       >
         <LayersControl position="topright">
-          <LayersControl.BaseLayer checked name="Streets">
+          {/* OSM standard: the most DETAILED street-level view — building
+              footprints, POIs, sari-sari-store-level labels */}
+          <LayersControl.BaseLayer checked name="Detailed">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
+              detectRetina
+            />
+          </LayersControl.BaseLayer>
+          {/* CARTO Voyager: cleaner/muted when the pins need to pop */}
+          <LayersControl.BaseLayer name="Clean">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
               url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
@@ -339,12 +361,20 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
+          {/* Toggleable street/place labels — turns Satellite into a hybrid view */}
+          <LayersControl.Overlay name="Labels (for Satellite)">
+            <TileLayer
+              attribution='&copy; CARTO'
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png"
+              maxZoom={19}
+              pane="overlayPane"
+            />
+          </LayersControl.Overlay>
         </LayersControl>
 
         <FitBounds incidents={validIncidents} tanodPositions={tanodPositions} />
 
-        {/* Response routes: tanod → assigned incident (delivery-app style:
-            white casing underneath, animated orange dashes on top) */}
+        {/* Response routes: white casing + animated orange dashes */}
         {routes.map(r => (
           <Polyline
             key={`${r.key}-casing`}
@@ -381,7 +411,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
             alt={`Tanod: ${entry.tanod?.full_name || 'Unknown'}`}
           >
             <Popup>
-              <div style={{ minWidth: '210px', padding: '4px', fontFamily: 'Sora, sans-serif' }}>
+              <div style={{ minWidth: '210px', padding: '4px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <div style={{
                     width: '32px', height: '32px', borderRadius: '8px',
@@ -411,7 +441,6 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
                   </div>
                 </div>
 
-                {/* What they're responding to, with live distance */}
                 {respondingByTanod[entry.tanodId]?.map(r => (
                   <div key={r.key} style={{
                     fontSize: '11px', color: '#9a3412', background: '#fff7ed',
@@ -462,16 +491,18 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         {validIncidents.map(inc => {
           const cat = categoryConfig[inc.category] || categoryConfig.Other
           const status = STATUS_STYLES[inc.status] || STATUS_STYLES.pending
+          const prio = PRIORITY_STYLES[inc.priority]
+          const assignedName = inc.assigned_to ? tanodNameById[inc.assigned_to] : null
           return (
             <Marker
               key={inc.id}
               position={[inc.latitude, inc.longitude]}
-              icon={getIcon(inc.category, inc.status)}
+              icon={getIcon(inc.category, inc.status, inc.priority)}
               zIndexOffset={inc.status === 'pending' ? 1000 : inc.status === 'assigned' ? 500 : 0}
               alt={`${inc.category}: ${inc.title}`}
             >
               <Popup>
-                <div style={{ minWidth: '220px', padding: '4px', fontFamily: 'Sora, sans-serif' }}>
+                <div style={{ minWidth: '230px', padding: '4px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                     <div style={{
                       width: '32px', height: '32px', borderRadius: '8px',
@@ -482,10 +513,20 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
                     }}>
                       {cat.emoji}
                     </div>
-                    <div style={{ minWidth: 0 }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
                       <p style={{ fontWeight: 700, fontSize: '13px', color: '#1f2937', margin: 0 }}>{inc.title}</p>
                       <p style={{ fontSize: '10px', color: cat.color, fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{inc.category}</p>
                     </div>
+                    {prio && (
+                      <span style={{
+                        fontSize: '9px', fontWeight: 800,
+                        padding: '2px 7px', borderRadius: '20px',
+                        background: prio.bg, color: prio.color,
+                        textTransform: 'uppercase', flexShrink: 0,
+                      }}>
+                        {inc.priority}
+                      </span>
+                    )}
                   </div>
 
                   {inc.description && (
@@ -494,8 +535,10 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
                     </p>
                   )}
 
-                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
-                    📍 {inc.location}
+                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px', lineHeight: 1.7 }}>
+                    <div>📍 {inc.location}</div>
+                    {inc.profiles?.full_name && <div>🧑 Reported by {inc.profiles.full_name}</div>}
+                    {assignedName && <div>🛡️ Assigned to {assignedName}</div>}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f0effe' }}>

@@ -19,10 +19,27 @@ function LiveClock() {
   return (
     <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
       style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-      <Clock size={12} className="text-gray-400" />
+      <Clock size={12} className="text-gray-400" aria-hidden="true" />
       <span className="text-xs font-bold text-gray-600">
         {now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
       </span>
+    </div>
+  )
+}
+
+// Avatar with graceful fallback to the initial when the image URL is
+// missing or fails to load (deleted storage file, broken link).
+function HeaderAvatar({ src, name, className, style }) {
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { setFailed(false) }, [src])
+  return (
+    <div className={className} style={style}>
+      {src && !failed ? (
+        <img src={src} alt="" className="w-full h-full object-cover"
+          onError={() => setFailed(true)} />
+      ) : (
+        name?.[0]?.toUpperCase()
+      )}
     </div>
   )
 }
@@ -76,6 +93,7 @@ export default function DashboardHeader({
   const isRead = useCallback((n) => readKeys.has(notifKey(n)), [readKeys])
 
   async function markRead(n) {
+    if (!profile?.id) return
     const key = notifKey(n)
     if (readKeys.has(key)) return
     // Optimistic update — the dot reacts instantly, the DB write follows
@@ -84,19 +102,37 @@ export default function DashboardHeader({
       { user_id: profile.id, notif_key: key },
       { onConflict: 'user_id,notif_key' }
     )
-    if (error) console.error('Failed to mark notification read:', error)
+    if (error) {
+      console.error('Failed to mark notification read:', error)
+      // Roll back so the UI doesn't claim a read state that won't survive
+      // a reload
+      setReadKeys(prev => {
+        const next = new Set(prev)
+        next.delete(key)
+        return next
+      })
+    }
   }
 
   async function markAllRead() {
+    if (!profile?.id) return
     const rows = notifications
       .filter(n => !readKeys.has(notifKey(n)))
       .map(n => ({ user_id: profile.id, notif_key: notifKey(n) }))
     if (rows.length === 0) return
-    setReadKeys(prev => new Set([...prev, ...rows.map(r => r.notif_key)]))
+    const newKeys = rows.map(r => r.notif_key)
+    setReadKeys(prev => new Set([...prev, ...newKeys]))
     const { error } = await supabase
       .from('notification_reads')
       .upsert(rows, { onConflict: 'user_id,notif_key' })
-    if (error) console.error('Failed to mark all read:', error)
+    if (error) {
+      console.error('Failed to mark all read:', error)
+      setReadKeys(prev => {
+        const next = new Set(prev)
+        newKeys.forEach(k => next.delete(k))
+        return next
+      })
+    }
   }
 
   const [searchOpen, setSearchOpen] = useState(false)
@@ -105,6 +141,7 @@ export default function DashboardHeader({
   const [notifOpen, setNotifOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
   const [isMac, setIsMac] = useState(false)
 
   const searchRef = useRef(null)
@@ -112,6 +149,7 @@ export default function DashboardHeader({
   const userMenuRef = useRef(null)
   const searchInputRef = useRef(null)
   const resultsRef = useRef(null)
+  const searchTriggerRef = useRef(null) // element to restore focus to on close
 
   useEffect(() => {
     // Show ⌘K on Macs instead of Ctrl+K
@@ -119,6 +157,9 @@ export default function DashboardHeader({
   }, [])
 
   function openSearch() {
+    // Remember what was focused so Escape puts the keyboard user back
+    // where they were instead of dropping focus to <body>
+    searchTriggerRef.current = document.activeElement
     setSearchOpen(true)
     setTimeout(() => searchInputRef.current?.focus(), 50)
   }
@@ -127,6 +168,10 @@ export default function DashboardHeader({
     setSearchOpen(false)
     setSearchQuery('')
     setHighlighted(0)
+    if (searchTriggerRef.current?.focus) {
+      searchTriggerRef.current.focus()
+      searchTriggerRef.current = null
+    }
   }
 
   // Cmd/Ctrl+K shortcut + Escape
@@ -144,7 +189,7 @@ export default function DashboardHeader({
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Click outside to close
   useEffect(() => {
@@ -155,7 +200,7 @@ export default function DashboardHeader({
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock page scroll while the search modal is open
   useEffect(() => {
@@ -170,11 +215,20 @@ export default function DashboardHeader({
   }
 
   async function confirmLogout() {
+    if (signingOut) return
+    setSigningOut(true)
     // Close the dialog BEFORE navigating — the back-forward cache snapshots
     // the page at unload, and an open dialog in that snapshot is what made
     // Back resurrect the confirm prompt.
     setLogoutConfirm(false)
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch (err) {
+      // Network down mid-signout: still clear the local session so the
+      // device is signed out even if the server call never landed
+      console.error('Sign out failed, clearing local session:', err)
+      try { await supabase.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+    }
     // replace, not href: removes this page from history so Back can't
     // return to a signed-out dashboard.
     window.location.replace('/login')
@@ -202,8 +256,7 @@ export default function DashboardHeader({
   }, [searchQuery, searchData])
 
   // Flat list of results in render order — this is what the arrow keys
-  // walk through. The footer already ADVERTISED ↑↓/↵ navigation; now
-  // it actually exists.
+  // walk through.
   const flatResults = useMemo(() => ([
     ...filteredResults.incidents.map(item => ({ type: 'incidents', item })),
     ...filteredResults.tickets.map(item => ({ type: 'tickets', item })),
@@ -260,7 +313,7 @@ export default function DashboardHeader({
   function resultRow({ idx, icon, iconStyle, title, subtitle, onClick, key }) {
     const isHighlighted = idx === highlighted
     return (
-      <button key={key} data-idx={idx}
+      <button key={key} data-idx={idx} id={`search-result-${idx}`}
         onClick={onClick}
         onMouseEnter={() => setHighlighted(idx)}
         className="w-full px-5 py-3 flex items-center gap-3 transition-colors text-left"
@@ -272,7 +325,7 @@ export default function DashboardHeader({
           <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
           <p className="text-xs text-gray-400 truncate">{subtitle}</p>
         </div>
-        <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} />
+        <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} aria-hidden="true" />
       </button>
     )
   }
@@ -289,11 +342,11 @@ export default function DashboardHeader({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {!sidebarOpen && (
             <>
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar"
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar" aria-expanded={false}
                 className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
                 <Menu size={18} />
               </button>
-              <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} />
+              <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} aria-hidden="true" />
             </>
           )}
 
@@ -305,7 +358,7 @@ export default function DashboardHeader({
                 </h1>
                 <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
                   style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                   <span className="text-[10px] font-bold text-emerald-700">LIVE</span>
                 </div>
               </div>
@@ -328,7 +381,7 @@ export default function DashboardHeader({
         <button onClick={openSearch} aria-label="Open search"
           className="hidden md:flex items-center gap-3 px-4 py-2 rounded-2xl flex-1 max-w-md transition-all hover:bg-gray-50"
           style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-          <Search size={15} className="text-gray-400 flex-shrink-0" />
+          <Search size={15} className="text-gray-400 flex-shrink-0" aria-hidden="true" />
           <span className="text-sm text-gray-400 flex-1 text-left">Search anything...</span>
           <kbd className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5"
             style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
@@ -370,7 +423,7 @@ export default function DashboardHeader({
                   style={{ background: '#fafaff' }}>
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-400" aria-live="polite">
                       {unreadCount > 0
                         ? `${unreadCount} unread ${unreadCount === 1 ? 'item' : 'items'}`
                         : 'All caught up'}
@@ -380,7 +433,7 @@ export default function DashboardHeader({
                     <button onClick={markAllRead}
                       className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold hover:opacity-70 transition-opacity"
                       style={{ background: '#f0effe', color: '#5B54E8' }}>
-                      <CheckCheck size={11} />
+                      <CheckCheck size={11} aria-hidden="true" />
                       Mark all read
                     </button>
                   )}
@@ -397,11 +450,11 @@ export default function DashboardHeader({
                       <p className="text-xs text-gray-400 mt-0.5">No notifications right now</p>
                     </div>
                   ) : (
-                    sortedNotifications.slice(0, 10).map((notif, i) => {
+                    sortedNotifications.slice(0, 10).map((notif) => {
                       const read = isRead(notif)
                       return (
                         <button
-                          key={notif.id ?? `notif-${i}`}
+                          key={notifKey(notif)}
                           onClick={() => {
                             markRead(notif)
                             onNotificationClick?.(notif)
@@ -409,7 +462,7 @@ export default function DashboardHeader({
                           }}
                           className={`w-full px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0 text-left ${read ? 'opacity-60' : ''}`}>
                           <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                            style={{ background: notif.color || '#fff7ed' }}>
+                            style={{ background: notif.color || '#fff7ed' }} aria-hidden="true">
                             {notif.icon || '⚠️'}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -423,7 +476,9 @@ export default function DashboardHeader({
                           </div>
                           {!read && (
                             <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                              style={{ background: '#5B54E8' }} aria-label="Unread" />
+                              style={{ background: '#5B54E8' }}>
+                              <span className="sr-only">Unread</span>
+                            </span>
                           )}
                         </button>
                       )
@@ -433,7 +488,11 @@ export default function DashboardHeader({
 
                 {notifications.length > 0 && (
                   <div className="px-4 py-2 border-t border-gray-100" style={{ background: '#fafaff' }}>
-                    <p className="text-[10px] text-gray-400 text-center">Click any notification to view details</p>
+                    <p className="text-[10px] text-gray-400 text-center">
+                      {sortedNotifications.length > 10
+                        ? `Showing 10 of ${sortedNotifications.length} — resolve or close items to clear the list`
+                        : 'Click any notification to view details'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -445,32 +504,29 @@ export default function DashboardHeader({
             <button onClick={() => setUserMenuOpen(!userMenuOpen)}
               aria-label="Account menu" aria-expanded={userMenuOpen} aria-haspopup="menu"
               className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 2px 8px rgba(91,84,232,0.3)' }}>
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile?.full_name || 'Avatar'} className="w-full h-full object-cover" />
-                ) : (
-                  profile?.full_name?.[0]?.toUpperCase()
-                )}
-              </div>
-              <ChevronDown size={12} className={`text-gray-400 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+              <HeaderAvatar
+                src={profile?.avatar_url}
+                name={profile?.full_name}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
+                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 2px 8px rgba(91,84,232,0.3)' }}
+              />
+              <ChevronDown size={12} className={`text-gray-400 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
             {userMenuOpen && (
-              <div className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-64 rounded-2xl overflow-hidden fade-up z-50"
+              <div role="menu" aria-label="Account"
+                className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-64 rounded-2xl overflow-hidden fade-up z-50"
                 style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff' }}>
 
                 {/* User info */}
                 <div className="px-4 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(135deg, #fafaff, white)' }}>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}>
-                      {profile?.avatar_url ? (
-                        <img src={profile.avatar_url} alt={profile?.full_name || 'Avatar'} className="w-full h-full object-cover" />
-                      ) : (
-                        profile?.full_name?.[0]?.toUpperCase()
-                      )}
-                    </div>
+                    <HeaderAvatar
+                      src={profile?.avatar_url}
+                      name={profile?.full_name}
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden"
+                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{profile?.full_name}</p>
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold inline-block mt-0.5"
@@ -482,7 +538,7 @@ export default function DashboardHeader({
                   {profile?.barangays && (
                     <div className="flex items-center gap-1.5 mt-3 px-2 py-1.5 rounded-lg text-xs"
                       style={{ background: '#f0effe', color: '#5B54E8' }}>
-                      <span>📍</span>
+                      <span aria-hidden="true">📍</span>
                       <span className="font-semibold truncate">{profile.barangays.name}</span>
                     </div>
                   )}
@@ -490,27 +546,27 @@ export default function DashboardHeader({
 
                 {/* Menu items */}
                 <div className="py-2">
-                  <button onClick={() => { router.push('/profile'); setUserMenuOpen(false) }}
+                  <button role="menuitem" onClick={() => { router.push('/profile'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <User size={14} className="text-gray-400" />
+                    <User size={14} className="text-gray-400" aria-hidden="true" />
                     <span className="text-sm text-gray-700">My Profile</span>
                   </button>
-                  <button onClick={() => { router.push('/settings'); setUserMenuOpen(false) }}
+                  <button role="menuitem" onClick={() => { router.push('/settings'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <Settings size={14} className="text-gray-400" />
+                    <Settings size={14} className="text-gray-400" aria-hidden="true" />
                     <span className="text-sm text-gray-700">Settings</span>
                   </button>
-                  <button onClick={() => { router.push('/help'); setUserMenuOpen(false) }}
+                  <button role="menuitem" onClick={() => { router.push('/help'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <HelpCircle size={14} className="text-gray-400" />
+                    <HelpCircle size={14} className="text-gray-400" aria-hidden="true" />
                     <span className="text-sm text-gray-700">Help & Support</span>
                   </button>
                 </div>
 
                 <div className="py-2 border-t border-gray-100">
-                  <button onClick={handleLogout}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 transition-colors text-left group">
-                    <LogOut size={14} className="text-red-400 group-hover:text-red-500" />
+                  <button role="menuitem" onClick={handleLogout} disabled={signingOut}
+                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 transition-colors text-left group disabled:opacity-50">
+                    <LogOut size={14} className="text-red-400 group-hover:text-red-500" aria-hidden="true" />
                     <span className="text-sm font-semibold text-red-500">Sign Out</span>
                   </button>
                 </div>
@@ -529,7 +585,7 @@ export default function DashboardHeader({
             style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}>
 
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <Search size={18} className="text-gray-400 flex-shrink-0" />
+              <Search size={18} className="text-gray-400 flex-shrink-0" aria-hidden="true" />
               <input
                 ref={searchInputRef}
                 value={searchQuery}
@@ -537,6 +593,9 @@ export default function DashboardHeader({
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search incidents, tickets, announcements..."
                 aria-label="Search"
+                role="combobox"
+                aria-expanded={totalResults > 0}
+                aria-activedescendant={totalResults > 0 ? `search-result-${highlighted}` : undefined}
                 className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-400"
               />
               <kbd className="px-2 py-0.5 rounded-md text-[10px] font-bold"
@@ -630,7 +689,7 @@ export default function DashboardHeader({
 
             {searchQuery && totalResults > 0 && (
               <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between" style={{ background: '#fafaff' }}>
-                <p className="text-xs text-gray-400">{totalResults} {totalResults === 1 ? 'result' : 'results'} found</p>
+                <p className="text-xs text-gray-400" aria-live="polite">{totalResults} {totalResults === 1 ? 'result' : 'results'} found</p>
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span className="flex items-center gap-1">
                     <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↑↓</kbd>
@@ -653,7 +712,7 @@ export default function DashboardHeader({
         onConfirm={confirmLogout}
         title="Sign out?"
         message="Are you sure you want to sign out? You'll need to log in again to access your dashboard."
-        confirmText="Yes, Sign Out"
+        confirmText={signingOut ? 'Signing out...' : 'Yes, Sign Out'}
         cancelText="Stay Signed In"
         variant="logout"
       />

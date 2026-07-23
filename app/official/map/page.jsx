@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X, ChevronDown, Shield } from 'lucide-react'
@@ -41,10 +41,32 @@ const STATUS_FILTERS = [
   { value: 'all', label: 'All', color: '#5B54E8' },
 ]
 
+const TRAIL_WINDOW_MS = 12 * 60 * 60 * 1000 // trails show the last 12 hours
+const TRAIL_MAX_POINTS = 500                // hard cap per tanod so polylines stay light
+const STALE_REFETCH_MS = 3 * 60 * 1000      // hidden-tab age that triggers a refresh
+const PREFS_KEY = 'map-view-prefs'          // sessionStorage: filters survive navigation
+
 function matchesStatus(incident, statusFilter) {
   if (statusFilter === 'all') return true
   if (statusFilter === 'active') return incident.status === 'pending' || incident.status === 'assigned'
   return incident.status === statusFilter
+}
+
+// Drop points that fell out of the 12h window and cap the array length.
+// Returns the same object reference when nothing changed so React skips the re-render.
+function pruneTrails(trails) {
+  const cutoff = Date.now() - TRAIL_WINDOW_MS
+  let changed = false
+  const next = {}
+  for (const [id, entry] of Object.entries(trails)) {
+    let points = entry.points
+    const firstFresh = points.findIndex(p => new Date(p.recorded_at).getTime() >= cutoff)
+    if (firstFresh > 0) { points = points.slice(firstFresh); changed = true }
+    else if (firstFresh === -1 && points.length > 0) { points = []; changed = true }
+    if (points.length > TRAIL_MAX_POINTS) { points = points.slice(-TRAIL_MAX_POINTS); changed = true }
+    next[id] = points === entry.points ? entry : { ...entry, points }
+  }
+  return changed ? next : trails
 }
 
 const DOTS = Array.from({ length: 20 }, (_, i) => ({
@@ -55,27 +77,35 @@ const DOTS = Array.from({ length: 20 }, (_, i) => ({
   delay: (i * 0.7) % 4,
 }))
 
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
+// Ambient decoration only — skipped entirely for users who prefer reduced motion.
+const AnimatedDots = () => {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    setShow(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }, [])
+  if (!show) return null
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      {DOTS.map((dot, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            width: `${dot.size}px`,
+            height: `${dot.size}px`,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.4)',
+            left: `${dot.left}%`,
+            top: `${dot.top}%`,
+            animation: `float ${dot.duration}s ease-in-out infinite`,
+            animationDelay: `${dot.delay}s`,
+            filter: 'blur(0.5px)',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 export default function MapView() {
   const router = useRouter()
@@ -92,6 +122,87 @@ export default function MapView() {
   // toggleable so incident filters never surprise-zoom to a tanod.
   const [showTanods, setShowTanods] = useState(true)
 
+  // Refs used by the realtime channel + visibility handler so they can
+  // trigger refetches without re-subscribing on every render.
+  const hadDropRef = useRef(false)      // did the channel disconnect at some point?
+  const hiddenSinceRef = useRef(null)   // when the tab went to the background
+  const prefsLoadedRef = useRef(false)
+
+  // ---- Filter persistence (loaded after mount to avoid hydration mismatch) ----
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(PREFS_KEY)
+      if (raw) {
+        const prefs = JSON.parse(raw)
+        if (STATUS_FILTERS.some(f => f.value === prefs.statusFilter)) setStatusFilter(prefs.statusFilter)
+        if (prefs.categoryFilter === 'all' || CATEGORY_CONFIG[prefs.categoryFilter]) setCategoryFilter(prefs.categoryFilter)
+        if (typeof prefs.showTanods === 'boolean') setShowTanods(prefs.showTanods)
+      }
+    } catch { /* ignore corrupt prefs */ }
+    prefsLoadedRef.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!prefsLoadedRef.current) return
+    try {
+      sessionStorage.setItem(PREFS_KEY, JSON.stringify({ statusFilter, categoryFilter, showTanods }))
+    } catch { /* storage full/blocked — non-critical */ }
+  }, [statusFilter, categoryFilter, showTanods])
+
+  // ---- Data fetching (extracted so realtime reconnects can reuse it) ----
+  const fetchIncidents = useCallback(async (bid) => {
+    const { data, error } = await supabase
+      .from('incidents')
+      .select('*, profiles!incidents_reported_by_fkey(full_name)')
+      .eq('barangay_id', bid)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  }, [supabase])
+
+  const fetchTanodTrails = useCallback(async (bid) => {
+    // On-duty tanods + their trail points from the last 12 hours
+    const [{ data: tanodRows }, { data: locRows }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, phone, on_duty, last_seen_at, avatar_url')
+        .eq('barangay_id', bid)
+        .eq('role', 'tanod')
+        .eq('on_duty', true)
+        .is('deactivated_at', null),
+      supabase
+        .from('tanod_locations')
+        .select('tanod_id, latitude, longitude, accuracy, recorded_at')
+        .eq('barangay_id', bid)
+        .gte('recorded_at', new Date(Date.now() - TRAIL_WINDOW_MS).toISOString())
+        .order('recorded_at', { ascending: true }),
+    ])
+    // Points from off-duty tanods are dropped automatically because they
+    // were never added to the trails object — the map only ever shows
+    // people currently on shift.
+    const trails = {}
+    for (const t of tanodRows || []) {
+      trails[t.id] = { tanod: t, points: [] }
+    }
+    for (const p of locRows || []) {
+      if (trails[p.tanod_id]) trails[p.tanod_id].points.push(p)
+    }
+    return pruneTrails(trails)
+  }, [supabase])
+
+  // Full refresh used after realtime gaps — silent (no loading spinner, no
+  // toast on success) so the map just quietly catches up.
+  const refreshAll = useCallback(async (bid) => {
+    try {
+      const [incidentData, trails] = await Promise.all([fetchIncidents(bid), fetchTanodTrails(bid)])
+      setIncidents(incidentData)
+      setTanodTrails(trails)
+    } catch (err) {
+      console.error('Background refresh failed:', err)
+    }
+  }, [fetchIncidents, fetchTanodTrails])
+
+  // ---- Initial load ----
   useEffect(() => {
     let cancelled = false
 
@@ -116,44 +227,12 @@ export default function MapView() {
         }
         setBarangayId(prof.barangay_id)
 
-        const { data, error } = await supabase
-          .from('incidents')
-          .select('*, profiles!incidents_reported_by_fkey(full_name)')
-          .eq('barangay_id', prof.barangay_id)
-          .order('created_at', { ascending: false })
-
-        if (cancelled) return
-        if (error) throw error
-        setIncidents(data || [])
-
-        // On-duty tanods + their trail points from the last 12 hours
-        const [{ data: tanodRows }, { data: locRows }] = await Promise.all([
-          supabase
-            .from('profiles')
-            .select('id, full_name, phone, on_duty, last_seen_at, avatar_url')
-            .eq('barangay_id', prof.barangay_id)
-            .eq('role', 'tanod')
-            .eq('on_duty', true)
-            .is('deactivated_at', null),
-          supabase
-            .from('tanod_locations')
-            .select('tanod_id, latitude, longitude, accuracy, recorded_at')
-            .eq('barangay_id', prof.barangay_id)
-            .gte('recorded_at', new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString())
-            .order('recorded_at', { ascending: true }),
+        const [incidentData, trails] = await Promise.all([
+          fetchIncidents(prof.barangay_id),
+          fetchTanodTrails(prof.barangay_id),
         ])
         if (cancelled) return
-
-        // Points from off-duty tanods are dropped automatically because
-        // they were never added to the trails object — the map only ever
-        // shows people currently on shift.
-        const trails = {}
-        for (const t of tanodRows || []) {
-          trails[t.id] = { tanod: t, points: [] }
-        }
-        for (const p of locRows || []) {
-          if (trails[p.tanod_id]) trails[p.tanod_id].points.push(p)
-        }
+        setIncidents(incidentData)
         setTanodTrails(trails)
       } catch (err) {
         console.error('Failed to load incidents:', err)
@@ -165,11 +244,9 @@ export default function MapView() {
     loadData()
 
     return () => { cancelled = true }
-  }, [supabase, router])
+  }, [supabase, router, fetchIncidents, fetchTanodTrails])
 
-  // Realtime: keep the map in sync while it's open (new reports, status
-  // changes, deletions, tanod trail points, duty toggles). Subscribes
-  // once we know which barangay to watch.
+  // ---- Realtime: keep the map in sync while it's open ----
   useEffect(() => {
     if (!barangayId) return
 
@@ -211,9 +288,15 @@ export default function MapView() {
           setTanodTrails(prev => {
             const entry = prev[payload.new.tanod_id]
             if (!entry) return prev // not on duty per our view — ignore
+            const points = [...entry.points, payload.new]
             return {
               ...prev,
-              [payload.new.tanod_id]: { ...entry, points: [...entry.points, payload.new] },
+              [payload.new.tanod_id]: {
+                ...entry,
+                // Cap inline too — a 12h shift with 10s pings would otherwise
+                // build a 4000-point polyline between prune ticks
+                points: points.length > TRAIL_MAX_POINTS ? points.slice(-TRAIL_MAX_POINTS) : points,
+              },
             }
           })
         })
@@ -221,8 +304,8 @@ export default function MapView() {
         { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `barangay_id=eq.${barangayId}` },
         (payload) => {
           if (payload.new.role !== 'tanod') return
-          if (payload.new.on_duty === false) {
-            // Went off duty — remove them from the map immediately
+          // Off duty OR deactivated mid-shift — remove from the map immediately
+          if (payload.new.on_duty === false || payload.new.deactivated_at) {
             setTanodTrails(prev => {
               if (!prev[payload.new.id]) return prev
               const next = { ...prev }
@@ -241,14 +324,61 @@ export default function MapView() {
           }
         })
       .subscribe((status) => {
-        setLive(status === 'SUBSCRIBED')
+        if (status === 'SUBSCRIBED') {
+          // Reconnected after a drop → anything that happened during the gap
+          // never arrived. Refetch so the map catches up.
+          if (hadDropRef.current) {
+            hadDropRef.current = false
+            refreshAll(barangayId)
+          }
+          setLive(true)
+        } else {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            hadDropRef.current = true
+          }
+          setLive(false)
+        }
       })
 
     return () => {
       setLive(false)
       supabase.removeChannel(channel)
     }
-  }, [barangayId, supabase])
+  }, [barangayId, supabase, refreshAll])
+
+  // ---- Tab visibility: refresh after the page has been backgrounded a while.
+  // Mobile browsers freeze websockets in background tabs; the channel often
+  // *looks* subscribed but missed everything. ----
+  useEffect(() => {
+    if (!barangayId) return
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current = Date.now()
+      } else if (hiddenSinceRef.current && Date.now() - hiddenSinceRef.current > STALE_REFETCH_MS) {
+        hiddenSinceRef.current = null
+        refreshAll(barangayId)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [barangayId, refreshAll])
+
+  // ---- Trail pruning: every 5 minutes, drop points older than the 12h
+  // window so a map left open overnight doesn't accumulate stale trails ----
+  useEffect(() => {
+    const id = setInterval(() => setTanodTrails(pruneTrails), 5 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Escape closes the category panel
+  useEffect(() => {
+    if (!categoriesOpen) return
+    function onKey(e) {
+      if (e.key === 'Escape') setCategoriesOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [categoriesOpen])
 
   // Per-category counts under the current status filter (mappable incidents only),
   // computed once instead of re-filtering the whole array per category chip
@@ -353,7 +483,7 @@ export default function MapView() {
           <div
             className={`w-1.5 h-1.5 rounded-full ${live ? 'animate-pulse' : ''}`}
             style={{ background: live ? '#22c55e' : '#9ca3af' }}
-            title={live ? 'Live — updates automatically' : 'Connecting...'}
+            title={live ? 'Live — updates automatically' : 'Reconnecting...'}
           />
           <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>
             {incidentsWithCoords.length} incidents · {visibleTanodCount} tanod{visibleTanodCount !== 1 ? 's' : ''}{live ? ' · Live' : ''}
@@ -397,6 +527,7 @@ export default function MapView() {
             <button
               onClick={() => setCategoriesOpen(o => !o)}
               aria-expanded={categoriesOpen}
+              aria-controls="category-panel"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
               style={{
                 background: activeCategoryConf ? activeCategoryConf.color : '#fafaff',
@@ -448,7 +579,8 @@ export default function MapView() {
 
           {/* Row 2 (collapsible): category chips */}
           {categoriesOpen && (
-            <div className="flex gap-1.5 flex-wrap pt-3 fade-up" style={{ borderTop: '1px solid #f7f6ff' }}
+            <div id="category-panel" className="flex gap-1.5 flex-wrap pt-3 fade-up"
+              style={{ borderTop: '1px solid #f7f6ff' }}
               role="group" aria-label="Filter incidents by category">
               <button
                 onClick={() => { setCategoryFilter('all') }}
