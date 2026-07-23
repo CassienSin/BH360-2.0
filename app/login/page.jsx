@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft, CheckCircle, Shield, Users, Activity, KeyRound } from 'lucide-react'
 import Image from 'next/image'
 import { dashboardPath } from '@/lib/roles'
@@ -114,7 +115,18 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+    // Use an implicit-flow client JUST for the reset request: the PKCE
+    // client mints pkce_-prefixed tokens that must be redeemed in the
+    // same browser, which breaks cross-device email links. Implicit-flow
+    // tokens verify server-side from any device via verifyOtp. This
+    // client is throwaway — no persistence, no refresh loop — so it
+    // can't cause token-rotation conflicts with the main client.
+    const resetClient = createSupabaseJsClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      { auth: { flowType: 'implicit', autoRefreshToken: false, persistSession: false } }
+    )
+    const { error: resetError } = await resetClient.auth.resetPasswordForEmail(
       email.trim(),
       { redirectTo: `${window.location.origin}/reset-password` }
     )

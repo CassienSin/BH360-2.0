@@ -56,6 +56,26 @@ export default function ResetPasswordPage() {
       if (cancelled) return
       if (session) { setLinkState('ready'); return }
 
+      // token_hash flow (from our customized email template): verified
+      // directly with the auth server — no PKCE verifier needed, so the
+      // link works from ANY browser or device, including phones.
+      const search = new URLSearchParams(window.location.search)
+      const tokenHash = search.get('token_hash')
+      if (tokenHash) {
+        const { error: vError } = await supabase.auth.verifyOtp({
+          type: 'recovery',
+          token_hash: tokenHash,
+        })
+        if (cancelled) return
+        if (vError) {
+          console.error('Token verification failed:', vError.message)
+          setLinkState(prev => (prev === 'ready' ? prev : 'invalid'))
+        } else {
+          setLinkState('ready')
+        }
+        return
+      }
+
       const code = new URLSearchParams(window.location.search).get('code')
       if (code) {
         const { error: xError } = await supabase.auth.exchangeCodeForSession(code)
