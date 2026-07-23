@@ -25,9 +25,19 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let cancelled = false
 
-    // The recovery link may arrive as a hash fragment that the Supabase
-    // client processes asynchronously — so listen for the auth event AND
-    // check for an existing session, whichever confirms first.
+    // 1) If Supabase already rejected the link, it says so explicitly in
+    //    the URL hash (#error=...&error_code=otp_expired etc). Surface
+    //    that instead of guessing via timeouts.
+    const hashParams = new URLSearchParams(window.location.hash.slice(1))
+    if (hashParams.get('error')) {
+      console.error('Auth link error:',
+        hashParams.get('error_code'), '—', hashParams.get('error_description'))
+      setLinkState('invalid')
+      return
+    }
+
+    // 2) Whichever signal arrives first wins: the auth event fired by the
+    //    client's own URL processing, or our explicit verification below.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (cancelled) return
       if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
@@ -35,19 +45,41 @@ export default function ResetPasswordPage() {
       }
     })
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    async function verify() {
+      // 3) PKCE flow: modern recovery links arrive with ?code=... — exchange
+      //    it explicitly rather than racing the client's auto-detection
+      //    against a timeout. NOTE: this exchange only succeeds in the SAME
+      //    BROWSER that requested the reset (the code verifier lives in its
+      //    storage). Opening the link elsewhere fails here by design.
+      const code = new URLSearchParams(window.location.search).get('code')
+      if (code) {
+        const { error: xError } = await supabase.auth.exchangeCodeForSession(code)
+        if (cancelled) return
+        if (xError) {
+          console.error('Code exchange failed:', xError.message)
+          setLinkState('invalid')
+        } else {
+          setLinkState('ready')
+        }
+        return
+      }
+
+      // 4) Older-style links carry tokens in the hash, which the client
+      //    processes asynchronously — check for a session, then allow a
+      //    generous grace period before declaring the link dead.
+      const { data: { session } } = await supabase.auth.getSession()
       if (cancelled) return
       if (session) {
         setLinkState('ready')
       } else {
-        // Give the hash-processing a moment before declaring the link dead
         setTimeout(() => {
           if (!cancelled) {
             setLinkState(prev => (prev === 'checking' ? 'invalid' : prev))
           }
-        }, 3000)
+        }, 6000)
       }
-    })
+    }
+    verify()
 
     return () => {
       cancelled = true
@@ -137,7 +169,9 @@ export default function ResetPasswordPage() {
               </div>
               <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Link expired</h2>
               <p className="text-gray-400 text-sm mt-3 max-w-xs mx-auto">
-                This password reset link is invalid or has expired. Request a new one from the login page.
+                This password reset link is invalid, already used, or was opened in a
+                different browser than the one that requested it. Request a new link
+                from the login page — and open it on this same device and browser.
               </p>
               <a href="/login"
                 className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
