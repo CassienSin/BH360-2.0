@@ -160,16 +160,14 @@ export default function CriticalAlert({
 
   if (!current) return null
 
-  const basis = LEGAL_BASIS[current.category]
-  const waitingMs = Date.now() - new Date(current.created_at).getTime()
-  const waitingMin = Math.floor(waitingMs / 60000)
+  const multiple = queue.length > 1
 
-  async function acknowledge() {
-    setAckBusy(true)
+  async function acknowledgeOne(incident) {
+    setAckBusy(incident.id)
     try {
-      await onAcknowledge?.(current)
+      await onAcknowledge?.(incident)
     } finally {
-      setAckBusy(false)
+      setAckBusy(null)
     }
   }
 
@@ -200,107 +198,150 @@ export default function CriticalAlert({
       <div
         className="crit-overlay fixed inset-0 z-[100] flex items-center justify-center p-4"
         style={{ backdropFilter: 'blur(8px)' }}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="crit-title"
-        aria-describedby="crit-desc"
+        role="alertdialog" aria-modal="true" aria-labelledby="crit-title"
       >
-        <div className="crit-card w-full max-w-md rounded-3xl overflow-hidden"
-          style={{ background: 'white', boxShadow: '0 32px 90px rgba(0,0,0,0.5)' }}>
+        <div className="crit-card w-full max-w-md rounded-3xl overflow-hidden flex flex-col"
+          style={{ background: 'white', boxShadow: '0 32px 90px rgba(0,0,0,0.5)', maxHeight: '90vh' }}>
 
           {/* Header */}
-          <div className="px-6 py-5 text-center" style={{ background: 'linear-gradient(135deg, #dc2626, #991b1b)' }}>
+          <div className="px-6 py-5 text-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #dc2626, #991b1b)' }}>
             <div className="crit-badge w-16 h-16 mx-auto rounded-3xl flex items-center justify-center mb-3"
               style={{ background: 'rgba(255,255,255,0.2)' }}>
               <AlertTriangle size={30} className="text-white" />
             </div>
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-red-100">
-              Critical Incident
+              {multiple ? `${queue.length} Critical Incidents` : 'Critical Incident'}
             </p>
             <h2 id="crit-title" className="text-xl font-black text-white mt-1 leading-tight">
-              Immediate response required
+              {multiple ? 'Multiple emergencies active' : 'Immediate response required'}
             </h2>
-            {queue.length > 1 && (
-              <p className="text-xs text-red-100 mt-2 font-bold">
-                {queue.length - 1} more critical {queue.length === 2 ? 'incident' : 'incidents'} waiting
+            {multiple && (
+              <p className="text-xs text-red-100 mt-2 leading-relaxed">
+                Review all before dispatching — you may need to split your tanods.
               </p>
             )}
           </div>
 
-          {/* Incident detail */}
-          <div id="crit-desc" className="px-6 py-5 space-y-3">
-            <div>
-              <h3 className="text-base font-black text-gray-900 leading-snug">{current.title}</h3>
-              {current.description && (
-                <p className="text-sm text-gray-600 mt-1 leading-relaxed"
-                  style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {current.description}
-                </p>
-              )}
+          {/* MULTIPLE: triage list */}
+          {multiple ? (
+            <div className="overflow-y-auto flex-1 divide-y" style={{ borderColor: '#f7f6ff' }}>
+              {queue.map((inc, i) => {
+                const b = LEGAL_BASIS[inc.category]
+                const mins = Math.floor((Date.now() - new Date(inc.created_at).getTime()) / 60000)
+                return (
+                  <div key={inc.id} className="px-5 py-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-black text-white"
+                        style={{ background: '#dc2626' }}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-black text-gray-900 leading-snug">{inc.title}</h3>
+                        <p className="text-xs text-gray-600 mt-0.5 flex items-center gap-1">
+                          <MapPin size={11} className="text-red-500 flex-shrink-0" />
+                          <span className="truncate">{inc.location || 'No location'}</span>
+                        </p>
+                        <p className="text-[11px] mt-1 font-bold"
+                          style={{ color: mins >= 5 ? '#dc2626' : '#9ca3af' }}>
+                          {timeAgo(inc.created_at)}{mins >= 5 && ' — overdue'}
+                          {b?.agency && ` · ${b.agency.split('(')[0].trim()}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-2.5 pl-10">
+                      <button onClick={() => acknowledgeOne(inc)} disabled={ackBusy === inc.id}
+                        className="flex-1 h-9 rounded-xl text-[11px] font-black text-white transition-transform active:scale-95 disabled:opacity-50"
+                        style={{ background: '#dc2626' }}>
+                        {ackBusy === inc.id ? 'Saving…' : 'Acknowledge'}
+                      </button>
+                      <button onClick={() => { onView?.(inc); acknowledgeOne(inc) }} disabled={ackBusy === inc.id}
+                        className="flex-1 h-9 rounded-xl text-[11px] font-bold transition-transform active:scale-95 disabled:opacity-50"
+                        style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                        View & dispatch
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex items-start gap-2.5">
-                <MapPin size={15} className="flex-shrink-0 mt-0.5 text-red-500" aria-hidden="true" />
-                <span className="text-gray-700 font-semibold">{current.location || 'No location given'}</span>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <User size={15} className="flex-shrink-0 mt-0.5 text-gray-400" aria-hidden="true" />
-                <span className="text-gray-600">{current.profiles?.full_name || 'Unknown reporter'}</span>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <Clock size={15} className="flex-shrink-0 mt-0.5" style={{ color: waitingMin >= 5 ? '#dc2626' : '#9ca3af' }} aria-hidden="true" />
-                <span className="font-bold" style={{ color: waitingMin >= 5 ? '#dc2626' : '#6b7280' }}>
-                  Reported {timeAgo(current.created_at)}
-                  {waitingMin >= 5 && ' — response overdue'}
-                </span>
-              </div>
-            </div>
-
-            {/* Legal basis + who actually has authority */}
-            {basis?.law && (
-              <div className="p-3 rounded-2xl" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-                <div className="flex items-start gap-2">
-                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
-                  <p className="text-[11px] leading-relaxed" style={{ color: '#5B54E8' }}>
-                    Classified Critical under <strong>{basis.law}</strong>.
-                    {basis.responseMode === 'refer_to_agency' && basis.agency && (
-                      <> <strong className="block mt-1 text-orange-700">
-                        Contact {basis.agency} immediately — they have authority here.
-                      </strong></>
-                    )}
-                    {basis.specialAction === 'offer_bpo' && (
-                      <> <strong className="block mt-1">
-                        The Punong Barangay may issue a Barangay Protection Order today (RA 9262 §14).
-                      </strong></>
-                    )}
+          ) : (
+            /* SINGLE: full detail */
+            <div className="px-6 py-5 space-y-3 overflow-y-auto flex-1">
+              <div>
+                <h3 className="text-base font-black text-gray-900 leading-snug">{current.title}</h3>
+                {current.description && (
+                  <p className="text-sm text-gray-600 mt-1 leading-relaxed"
+                    style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {current.description}
                   </p>
+                )}
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-start gap-2.5">
+                  <MapPin size={15} className="flex-shrink-0 mt-0.5 text-red-500" aria-hidden="true" />
+                  <span className="text-gray-700 font-semibold">{current.location || 'No location given'}</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <User size={15} className="flex-shrink-0 mt-0.5 text-gray-400" aria-hidden="true" />
+                  <span className="text-gray-600">{current.profiles?.full_name || 'Unknown reporter'}</span>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <Clock size={15} className="flex-shrink-0 mt-0.5" style={{ color: waitingMin >= 5 ? '#dc2626' : '#9ca3af' }} aria-hidden="true" />
+                  <span className="font-bold" style={{ color: waitingMin >= 5 ? '#dc2626' : '#6b7280' }}>
+                    Reported {timeAgo(current.created_at)}
+                    {waitingMin >= 5 && ' — response overdue'}
+                  </span>
                 </div>
               </div>
-            )}
 
-            {/* Call the reporter — fastest way to get details the form missed */}
-            {current.profiles?.phone && (
-              <a href={`tel:${current.profiles.phone.replace(/[^0-9+]/g, '')}`}
-                className="flex items-center justify-center gap-2 w-full h-11 rounded-2xl text-sm font-bold transition-transform active:scale-95"
-                style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                <Phone size={14} /> Call reporter
-              </a>
-            )}
-          </div>
+              {basis?.law && (
+                <div className="p-3 rounded-2xl" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
+                  <div className="flex items-start gap-2">
+                    <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                    <p className="text-[11px] leading-relaxed" style={{ color: '#5B54E8' }}>
+                      Classified Critical under <strong>{basis.law}</strong>.
+                      {basis.responseMode === 'refer_to_agency' && basis.agency && (
+                        <strong className="block mt-1 text-orange-700">
+                          Contact {basis.agency} immediately — they have authority here.
+                        </strong>
+                      )}
+                      {basis.specialAction === 'offer_bpo' && (
+                        <strong className="block mt-1">
+                          The Punong Barangay may issue a Barangay Protection Order today (RA 9262 §14).
+                        </strong>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
 
-          {/* Actions */}
-          <div className="px-6 pb-5 space-y-2">
-            <button onClick={acknowledge} disabled={ackBusy}
-              className="w-full h-13 py-3.5 rounded-2xl text-sm font-black text-white transition-transform active:scale-95 disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg, #dc2626, #991b1b)', boxShadow: '0 8px 28px rgba(220,38,38,0.4)' }}>
-              {ackBusy ? 'Acknowledging…' : 'Acknowledge & respond'}
-            </button>
-            <button onClick={() => { onView?.(current); acknowledge() }} disabled={ackBusy}
-              className="w-full py-3 rounded-2xl text-sm font-bold transition-transform active:scale-95 disabled:opacity-60"
-              style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
-              View & dispatch a tanod
-            </button>
+              {current.profiles?.phone && (
+                <a href={`tel:${current.profiles.phone.replace(/[^0-9+]/g, '')}`}
+                  className="flex items-center justify-center gap-2 w-full h-11 rounded-2xl text-sm font-bold transition-transform active:scale-95"
+                  style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
+                  <Phone size={14} /> Call reporter
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: multiple ? '1px solid #f0effe' : 'none' }}>
+            {!multiple && (
+              <div className="space-y-2 mb-2">
+                <button onClick={() => acknowledgeOne(current)} disabled={ackBusy === current.id}
+                  className="w-full py-3.5 rounded-2xl text-sm font-black text-white transition-transform active:scale-95 disabled:opacity-60"
+                  style={{ background: 'linear-gradient(135deg, #dc2626, #991b1b)', boxShadow: '0 8px 28px rgba(220,38,38,0.4)' }}>
+                  {ackBusy === current.id ? 'Acknowledging…' : 'Acknowledge & respond'}
+                </button>
+                <button onClick={() => { onView?.(current); acknowledgeOne(current) }} disabled={ackBusy === current.id}
+                  className="w-full py-3 rounded-2xl text-sm font-bold transition-transform active:scale-95 disabled:opacity-60"
+                  style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                  View &amp; dispatch a tanod
+                </button>
+              </div>
+            )}
 
             <button onClick={() => setMuted(m => !m)}
               className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
@@ -308,7 +349,9 @@ export default function CriticalAlert({
               {muted ? 'Sound off' : 'Mute alert sound'}
             </button>
             <p className="text-[10px] text-center text-gray-400 leading-relaxed">
-              This alert stays until acknowledged. Your name and the time are recorded.
+              {multiple
+                ? 'Each incident must be acknowledged separately. Your name and the time are recorded.'
+                : 'This alert stays until acknowledged. Your name and the time are recorded.'}
             </p>
           </div>
         </div>
