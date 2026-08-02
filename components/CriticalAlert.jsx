@@ -161,6 +161,8 @@ export default function CriticalAlert({
   if (!current) return null
 
   const multiple = queue.length > 1
+  const basis = LEGAL_BASIS[current.category]
+  const waitingMin = Math.floor((Date.now() - new Date(current.created_at).getTime()) / 60000)
 
   async function acknowledgeOne(incident) {
     setAckBusy(incident.id)
