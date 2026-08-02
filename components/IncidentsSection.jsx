@@ -952,6 +952,17 @@ export default function IncidentsSection({
                         )}
                       </div>
                     )}
+
+                    {inc.assignment_method === 'auto_offduty' && !isResolved && (
+                      <div className="mt-2 px-2.5 py-2 rounded-xl flex items-start gap-2"
+                        style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
+                        <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-red-600" aria-hidden="true" />
+                        <p className="text-[11px] text-red-800 leading-relaxed">
+                          <strong>No tanod was on duty.</strong> This was assigned to the most
+                          recently active tanod — call them directly to confirm they can respond.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* DESKTOP actions — narrow column beside the content */}
