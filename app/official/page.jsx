@@ -14,6 +14,7 @@ import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
+import CriticalAlert from '@/components/CriticalAlert' 
 
 const DOTS = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -520,6 +521,40 @@ export default function OfficialDashboard() {
     })
   }
 
+  // Officials may adjust the law-assigned priority, but the original value,
+  // their name, and a written reason are all recorded.
+  async function handlePriorityChange(incident, newPriority, reason) {
+    const { error } = await supabase.from('incidents').update({
+      priority: newPriority,
+      original_priority: incident.original_priority || incident.priority,
+      priority_override_reason: reason,
+      priority_overridden_by: profile.id,
+      priority_overridden_at: new Date().toISOString(),
+    }).eq('id', incident.id)
+    if (error) { toast.error('Failed to update priority.'); return }
+    setIncidents(prev => prev.map(i => i.id === incident.id ? {
+      ...i,
+      priority: newPriority,
+      original_priority: incident.original_priority || incident.priority,
+      priority_override_reason: reason,
+      priority_overridden_by: profile.id,
+    } : i))
+    toast.success(`Priority changed to ${newPriority}`)
+  }
+
+  // acknowledged_at - created_at is the barangay's real time-to-awareness
+  async function acknowledgeCritical(incident) {
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('incidents').update({
+      acknowledged_at: now,
+      acknowledged_by: profile.id,
+    }).eq('id', incident.id)
+    if (error) { toast.error('Could not acknowledge. Try again.'); return }
+    setIncidents(prev => prev.map(i => i.id === incident.id
+      ? { ...i, acknowledged_at: now, acknowledged_by: profile.id }
+      : i))
+  }
+
   async function generateInviteCode(role) {
     if (generatingCode) return
     setGeneratingCode(true)
@@ -882,6 +917,7 @@ export default function OfficialDashboard() {
               onDispatch={dispatchTanod}
               onResolve={resolveIncident}
               onExport={(format, data) => handleExportIncidents(format, data)}
+              onPriorityChange={handlePriorityChange}     
             />
           )}
 
@@ -1446,6 +1482,11 @@ export default function OfficialDashboard() {
         message={confirmDialog?.message}
         confirmText={confirmDialog?.confirmText}
         variant={confirmDialog?.variant || 'danger'}
+      />
+       <CriticalAlert
+        incidents={incidents}
+        onAcknowledge={acknowledgeCritical}
+        onView={() => setActiveSection('incidents')}
       />
     </div>
   )

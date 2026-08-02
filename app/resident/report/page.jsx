@@ -2,10 +2,11 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Zap } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Scale, ShieldAlert } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
+import { getPriority, getBasis, citationLabel, PRIORITY_STYLE } from '@/lib/legalBasis'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -37,13 +38,6 @@ const CATEGORIES = [
   { value: 'Vandalism', label: 'Vandalism', icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
   { value: 'Drugs', label: 'Illegal Drugs', icon: '💊', color: '#be185d', bg: '#fdf2f8' },
   { value: 'Other', label: 'Other', icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-]
-
-const PRIORITIES = [
-  { value: 'Low', label: 'Low', desc: 'Non-urgent', color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-  { value: 'Medium', label: 'Medium', desc: 'Standard', color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  { value: 'High', label: 'High', desc: 'Urgent', color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  { value: 'Critical', label: 'Critical', desc: 'Emergency!', color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
 ]
 
 const DOTS = Array.from({ length: 20 }, (_, i) => ({
@@ -90,7 +84,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
 
 /** Returns an error message string, or null if the form is valid. */
 function validateForm(form) {
-  if (!form.category) return 'Please select a category.'
+  if (!form.category) return 'Please select what happened.'
   const title = form.title.trim()
   if (title.length < TITLE_MIN) return `Title must be at least ${TITLE_MIN} characters.`
   if (title.length > TITLE_MAX) return `Title must be under ${TITLE_MAX} characters.`
@@ -108,7 +102,12 @@ export default function ReportIncident() {
   // Memoize so we don't create a new client on every render
   const supabase = useMemo(() => createClient(), [])
 
-  const [form, setForm] = useState({ title: '', description: '', location: '', category: '', priority: 'Medium' })
+  // NOTE: there is no `priority` field in this form. Priority is derived
+  // from the category via lib/legalBasis.js — residents describe what
+  // happened, the system determines urgency. This prevents a noise
+  // complaint from being filed as "Critical" and displacing a real
+  // emergency in the officials' response queue.
+  const [form, setForm] = useState({ title: '', description: '', location: '', category: '' })
   const [loading, setLoading] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -130,6 +129,11 @@ export default function ReportIncident() {
     () => CATEGORIES.find(c => c.value === form.category) || null,
     [form.category]
   )
+
+  // ── Automated legal classification ────────────────────────────────────
+  const basis = form.category ? getBasis(form.category) : null
+  const assignedPriority = form.category ? getPriority(form.category) : null
+  const priorityStyle = assignedPriority ? PRIORITY_STYLE[assignedPriority] : null
 
   function handleChange(e) {
     const { name, value } = e.target
@@ -262,7 +266,7 @@ export default function ReportIncident() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
         toast.error('Your session has expired. Please log in again.')
-        router.push('/login')
+        router.replace('/login')
         return
       }
 
@@ -283,12 +287,22 @@ export default function ReportIncident() {
         if (!imageUrl) return // uploadImage already showed a toast
       }
 
+      // Priority comes from the category mapping, never from user input.
+      // auto_escalated is always true: every priority in this system is
+      // law-assigned rather than reporter-selected.
+      const finalPriority = getPriority(form.category)
+
       const { error } = await supabase.from('incidents').insert({
         title: form.title.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
         category: form.category,
-        priority: form.priority,
+        priority: finalPriority,
+        // Audit trail: the citation is frozen at report time, so later
+        // edits to lib/legalBasis.js never rewrite past classifications
+        legal_basis: citationLabel(form.category),
+        response_mode: basis?.responseMode ?? null,
+        auto_escalated: true,
         image_url: imageUrl,
         latitude: coords?.lat ?? null,
         longitude: coords?.lng ?? null,
@@ -302,8 +316,8 @@ export default function ReportIncident() {
         return
       }
 
-      toast.success('Incident reported successfully!')
-      router.push('/resident')
+      toast.success(`Reported as ${finalPriority} priority`)
+      router.replace('/resident')
     } catch (err) {
       console.error('Incident submit failed:', err)
       toast.error('Something went wrong. Please try again.')
@@ -353,17 +367,19 @@ export default function ReportIncident() {
           </div>
           <div>
             <p className="text-white text-sm font-semibold">Report an incident</p>
-            <p className="text-purple-200 text-xs mt-0.5">Add a photo and pin location for faster response.</p>
+            <p className="text-purple-200 text-xs mt-0.5">
+              Just describe what happened — urgency is assigned automatically based on Philippine law.
+            </p>
           </div>
         </div>
 
         <div className="white-card p-6">
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Category Selection */}
+            {/* Category Selection — this alone determines priority */}
             <fieldset>
               <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Tag size={11} /> Category <span className="text-red-500">*</span>
+                <Tag size={11} /> What happened? <span className="text-red-500">*</span>
               </legend>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {CATEGORIES.map(cat => {
@@ -389,60 +405,59 @@ export default function ReportIncident() {
                   )
                 })}
               </div>
-              {selectedCategory && (
-                <p className="text-xs mt-2 flex items-center gap-1.5 fade-up" style={{ color: selectedCategory.color }}>
-                  ✓ Selected: <strong>{selectedCategory.label}</strong>
-                </p>
-              )}
             </fieldset>
 
-            {/* Priority Selection */}
-            <fieldset>
-              <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Zap size={11} /> Priority Level <span className="text-red-500">*</span>
-              </legend>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {PRIORITIES.map(p => {
-                  const selected = form.priority === p.value
-                  return (
-                    <button
-                      key={p.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setForm(prev => ({ ...prev, priority: p.value }))}
-                      className="p-3 rounded-2xl flex flex-col items-center gap-1 text-center transition-all hover:scale-105 relative overflow-hidden"
-                      style={{
-                        background: selected ? p.bg : '#fafaff',
-                        border: `2px solid ${selected ? p.color : '#f0effe'}`,
-                        boxShadow: selected ? `0 4px 12px ${p.color}25` : 'none',
-                      }}
+            {/* ── Automated priority assignment ──────────────────────────
+                Replaces the old resident-selected priority picker.
+                Shows the assigned level, the governing law, the reasoning,
+                and (for referral categories) which agency handles it. */}
+            {basis && priorityStyle && (
+              <div
+                className="rounded-2xl overflow-hidden fade-up"
+                style={{ border: `2px solid ${priorityStyle.color}30` }}
+                role="status"
+                aria-live="polite"
+              >
+                <div className="px-4 py-3 flex items-center gap-3" style={{ background: priorityStyle.bg }}>
+                  <span className="text-2xl" aria-hidden="true">{priorityStyle.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: priorityStyle.color }}>
+                      Priority assigned automatically
+                    </p>
+                    <p className="text-base font-black leading-tight" style={{ color: priorityStyle.color }}>
+                      {priorityStyle.label}
+                      <span className="text-xs font-semibold opacity-70"> · {priorityStyle.desc}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="px-4 py-3" style={{ background: 'white' }}>
+                  {basis.law && (
+                    <div className="flex items-start gap-2 mb-2">
+                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                      <p className="text-xs leading-relaxed text-gray-700">
+                        <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
+                        {' — '}{basis.lawTitle}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-500 leading-relaxed">{basis.reason}</p>
+
+                  {basis.responseMode === 'refer_to_agency' && basis.agency && (
+                    <div
+                      className="mt-2.5 px-3 py-2 rounded-xl flex items-start gap-2"
+                      style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
                     >
-                      {selected && p.value === 'Critical' && (
-                        <div
-                          className="absolute inset-0 pointer-events-none"
-                          style={{
-                            background: `radial-gradient(circle at 50% 50%, ${p.color}10, transparent 70%)`,
-                            animation: 'pulse 2s ease-in-out infinite',
-                          }}
-                        />
-                      )}
-                      <span className="text-xl" aria-hidden="true">{p.icon}</span>
-                      <span className="text-xs font-bold leading-tight" style={{ color: selected ? p.color : '#6b7280' }}>
-                        {p.label}
-                      </span>
-                      <span className="text-[10px]" style={{ color: selected ? p.color : '#9ca3af' }}>
-                        {p.desc}
-                      </span>
-                    </button>
-                  )
-                })}
+                      <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
+                      <p className="text-[11px] text-orange-800 leading-relaxed">
+                        This will be referred to <strong>{basis.agency}</strong>. If it is happening
+                        right now and lives are at risk, please call them directly as well.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-              {form.priority === 'Critical' && (
-                <p className="text-xs mt-2 flex items-center gap-1.5 fade-up text-red-600 font-bold" role="alert">
-                  ⚠️ Critical incidents notify officials immediately and require urgent response!
-                </p>
-              )}
-            </fieldset>
+            )}
 
             {/* Title */}
             <div>

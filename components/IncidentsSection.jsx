@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send } from 'lucide-react'
+import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
+import { LEGAL_BASIS, getPriority } from '@/lib/legalBasis'
+import { computeStanding, STANDING_STYLE, responseWindowLabel } from '@/lib/triage'
 
 const CATEGORY_CONFIG = {
   Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
@@ -238,6 +240,20 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
         </button>
       </div>
 
+      {/* Referral warning — for categories where the barangay has no
+          enforcement authority, dispatching a tanod to intervene is a
+          jurisdiction and safety problem, not just a process one. */}
+      {incident && LEGAL_BASIS[incident.category]?.responseMode === 'refer_to_agency' && (
+        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl flex items-start gap-2 flex-shrink-0"
+          style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+          <ShieldAlert size={13} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
+          <p className="text-[11px] text-orange-800 leading-relaxed">
+            <strong>{LEGAL_BASIS[incident.category].agency}</strong> has authority here.
+            Dispatch a tanod to document and assist only — not to intervene.
+          </p>
+        </div>
+      )}
+
       {tanods.length > 6 && (
         <div className="px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #f7f6ff' }}>
           <div className="relative">
@@ -273,6 +289,131 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
             {offDuty.map(row)}
           </>
         )}
+      </div>
+    </Sheet>
+  )
+}
+
+/* --------------------------- Priority override ---------------------------
+   Priority is assigned automatically from the incident category (see
+   lib/legalBasis.js) — residents cannot set it, which stops a noise
+   complaint from being filed as "Critical" and displacing an emergency.
+
+   Officials CAN adjust it: they're trained, accountable public officers,
+   and some categories genuinely vary in severity. Every change requires a
+   written reason and is recorded against the original automated value, so
+   the audit trail shows both what the law assigned and what the official
+   decided.
+------------------------------------------------------------------------- */
+function PriorityOverride({ open, onClose, incident, onSubmit }) {
+  const [picked, setPicked] = useState(null)
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open && incident) { setPicked(incident.priority); setReason('') }
+  }, [open, incident])
+
+  if (!incident) return null
+
+  // The law-assigned value: whatever was originally stored, or (for older
+  // rows) recompute it from the category mapping.
+  const lawAssigned = incident.original_priority || getPriority(incident.category)
+  const basis = LEGAL_BASIS[incident.category]
+  const changed = picked !== incident.priority
+  const canSave = changed && reason.trim().length >= 10 && !saving
+
+  async function save() {
+    setSaving(true)
+    try {
+      await onSubmit?.(incident, picked, reason.trim())
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} labelledBy="override-title">
+      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid #f0effe' }}>
+        <div className="flex-1 min-w-0">
+          <h3 id="override-title" className="text-sm font-bold text-gray-800">Adjust priority</h3>
+          <p className="text-xs text-gray-400 truncate">{incident.title}</p>
+        </div>
+        <button onClick={onClose} aria-label="Close"
+          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 flex-shrink-0">
+          <X size={16} />
+        </button>
+      </div>
+
+      <div className="overflow-y-auto inc-sheet-scroll flex-1 px-4 py-3 space-y-3">
+        {basis?.law && (
+          <div className="p-2.5 rounded-xl flex items-start gap-2" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
+            <Scale size={12} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
+            <p className="text-[11px] leading-relaxed" style={{ color: '#5B54E8' }}>
+              System assigned <strong>{lawAssigned}</strong> under <strong>{basis.law}</strong>.
+              Overriding this records your name and reason on the incident.
+            </p>
+          </div>
+        )}
+
+        {incident.priority_override_reason && (
+          <div className="p-2.5 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">
+              Previously adjusted
+            </p>
+            <p className="text-[11px] text-amber-900 italic">"{incident.priority_override_reason}"</p>
+          </div>
+        )}
+
+        <div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">New priority</p>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(PRIORITY_CONFIG).sort((a, b) => b[1].order - a[1].order).map(([p, conf]) => (
+              <button key={p} onClick={() => setPicked(p)}
+                aria-pressed={picked === p}
+                className="inc-press inc-tint p-2.5 rounded-xl text-xs font-bold flex items-center gap-2"
+                style={{
+                  background: picked === p ? conf.bg : '#fafaff',
+                  color: picked === p ? conf.color : '#6b7280',
+                  border: `2px solid ${picked === p ? conf.color : '#f0effe'}`,
+                }}>
+                <span aria-hidden="true">{conf.icon}</span> {p}
+                {p === lawAssigned && (
+                  <span className="ml-auto text-[9px] font-bold opacity-60">auto</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor="override-reason" className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+            Reason for change {changed && <span className="text-red-500">*</span>}
+          </label>
+          <textarea id="override-reason" value={reason} onChange={e => setReason(e.target.value)}
+            rows={3} maxLength={300} disabled={!changed}
+            placeholder="e.g. Floodwater above waist level in Sitio 3, families evacuating"
+            className="input-field w-full rounded-xl px-3 py-2.5 text-sm text-gray-800 resize-none disabled:opacity-50" />
+          <p className="text-[10px] text-gray-400 text-right mt-1">
+            {changed && reason.trim().length < 10
+              ? `${10 - reason.trim().length} more characters needed`
+              : `${reason.length}/300`}
+          </p>
+        </div>
+      </div>
+
+      <div className="px-4 py-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid #f0effe' }}>
+        <button onClick={onClose}
+          className="inc-press flex-1 h-11 rounded-xl text-xs font-bold"
+          style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+          Cancel
+        </button>
+        <button onClick={save} disabled={!canSave}
+          className="inc-press flex-1 h-11 rounded-xl text-xs font-bold text-white disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+          {saving ? 'Saving…' : 'Save change'}
+        </button>
       </div>
     </Sheet>
   )
@@ -334,6 +475,7 @@ export default function IncidentsSection({
   onDispatch,          // (incidentId, tanodId) => void
   onResolve,           // (incident) => void
   onExport,            // (format, data, meta) => void
+  onPriorityChange,    // (incident, newPriority, reason) => Promise<void>
   loading = false,
 }) {
   const [search, setSearch] = useState('')
@@ -345,6 +487,7 @@ export default function IncidentsSection({
   const [expanded, setExpanded] = useState(() => new Set())
   const [lightbox, setLightbox] = useState(null)
   const [dispatchFor, setDispatchFor] = useState(null) // incident awaiting a tanod
+  const [overrideFor, setOverrideFor] = useState(null) // incident awaiting a priority change
   const searchRef = useRef(null)
 
   // "/" focuses search
@@ -412,18 +555,20 @@ export default function IncidentsSection({
     if (sort === 'priority') return list.sort((a, b) =>
       (PRIORITY_CONFIG[b.priority]?.order || 0) - (PRIORITY_CONFIG[a.priority]?.order || 0) || byNewest(a, b))
 
-    // triage: unresolved before resolved, critical first, longest-waiting first
+    // triage: unresolved first, then by standing (priority + how long it has
+    // been left unattended), then oldest first
     const statusOrder = { pending: 1, assigned: 2, resolved: 3 }
+    const now = Date.now()
     return list.sort((a, b) => {
       const s = (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4)
       if (s !== 0) return s
-      const p = (PRIORITY_CONFIG[b.priority]?.order || 2) - (PRIORITY_CONFIG[a.priority]?.order || 2)
-      if (p !== 0) return p
+      const standing = computeStanding(b, now).score - computeStanding(a, now).score
+      if (standing !== 0) return standing
       return a.status === 'resolved' ? byNewest(a, b) : new Date(a.created_at) - new Date(b.created_at)
     })
-  }, [incidents, search, status, category, priority, sort])
+  }, [incidents, search, status, category, priority, sort])          
 
-  const activeFilters = [
+  const activeFilters = [                                           
     search && { key: 'search', label: `"${search}"`, clear: () => setSearch('') },
     status !== 'all' && { key: 'status', label: STATUS_FILTERS.find(f => f.value === status)?.label, clear: () => setStatus('all') },
     category !== 'all' && { key: 'category', label: category, clear: () => setCategory('all') },
@@ -672,14 +817,17 @@ export default function IncidentsSection({
 
       {/* CARDS */}
       {filtered.map((inc, index) => {
-        const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
+       const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
         const pri = PRIORITY_CONFIG[inc.priority]
-        const wait = waitState(inc)
         const assignedTanod = inc.assigned_to ? tanods.find(t => t.id === inc.assigned_to) : null
         const isResolved = inc.status === 'resolved'
         const isPending = inc.status === 'pending'
         const hasResolutionDetail = isResolved && (inc.resolution_notes || inc.rating)
         const isOpen = expanded.has(inc.id)
+        const basis = LEGAL_BASIS[inc.category]
+        const wasOverridden = Boolean(inc.priority_overridden_by)
+        const standing = computeStanding(inc)
+        const mustRefer = basis?.responseMode === 'refer_to_agency'
         const images = [
           inc.image_url && { src: inc.image_url, label: 'reported photo' },
           inc.resolution_image_url && { src: inc.resolution_image_url, label: 'resolution photo' },
@@ -689,9 +837,9 @@ export default function IncidentsSection({
           <article key={inc.id} className="white-card p-4 inc-card inc-lift"
             style={{
               animationDelay: `${Math.min(index, 10) * 30}ms`,
-              ...(wait?.level === 'urgent'
-                ? { borderLeft: '3px solid #dc2626' }
-                : wait?.level === 'warn'
+              ...(standing.level === 3
+                ? { borderLeft: '3px solid #b91c1c' }
+                : standing.level >= 1
                 ? { borderLeft: '3px solid #f97316' }
                 : isResolved
                 ? { opacity: 0.9 }
@@ -715,13 +863,15 @@ export default function IncidentsSection({
                           <span aria-hidden="true">{pri.icon}</span> {inc.priority}
                         </span>
                       )}
-                      {wait && (
+                      {standing.aged && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
                           style={{
-                            background: wait.level === 'urgent' ? '#fef2f2' : '#fff7ed',
-                            color: wait.level === 'urgent' ? '#dc2626' : '#c2410c',
-                          }}>
-                          <Clock size={9} /> {wait.label}
+                            background: STANDING_STYLE[standing.level].bg,
+                            color: STANDING_STYLE[standing.level].color,
+                            border: `1px solid ${STANDING_STYLE[standing.level].border}`,
+                          }}
+                          title={`Response target for ${inc.priority}: ${responseWindowLabel(inc.priority)}. Waiting ${timeAgo(inc.created_at).replace(' ago', '')}. Still classified ${inc.priority} — only its place in the queue has risen.`}>
+                          <Clock size={9} /> {standing.label} · moved up
                         </span>
                       )}
                     </div>
@@ -746,6 +896,41 @@ export default function IncidentsSection({
                         </>
                       )}
                     </div>
+
+                    {/* Legal basis for the automated priority. Hovering shows
+                        the full reasoning from lib/legalBasis.js. */}
+                    {(basis?.law || wasOverridden) && (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                        {basis?.law && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
+                            style={{ background: '#f0effe', color: '#5B54E8' }}
+                            title={basis.reason}>
+                            <Scale size={9} /> {basis.law}
+                          </span>
+                        )}
+                        {wasOverridden && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                            style={{ background: '#fef3c7', color: '#92400e' }}
+                            title={`Changed from ${inc.original_priority}: ${inc.priority_override_reason}`}>
+                            priority adjusted from {inc.original_priority}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Referral guidance — the barangay has no enforcement
+                        authority for these categories. Tanods document and
+                        assist; they do not intervene. */}
+                    {mustRefer && !isResolved && basis?.agency && (
+                      <div className="mt-2 px-2.5 py-2 rounded-xl flex items-start gap-2"
+                        style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
+                        <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
+                        <p className="text-[11px] text-orange-800 leading-relaxed">
+                          <strong>Refer to {basis.agency}.</strong> Tanods should document and
+                          assist only — the barangay has no enforcement authority here.
+                        </p>
+                      </div>
+                    )}
 
                     {assignedTanod && !isResolved && (
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -784,6 +969,13 @@ export default function IncidentsSection({
                         style={{ background: '#22c55e' }}>
                         <Check size={11} /> Mark resolved
                       </button>
+                      {onPriorityChange && (
+                        <button onClick={() => setOverrideFor(inc)}
+                          className="inc-press inc-tint flex items-center justify-center gap-1.5 text-[11px] font-bold px-2 py-2 rounded-lg hover:brightness-95"
+                          style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                          <Pencil size={11} /> Adjust priority
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -835,6 +1027,14 @@ export default function IncidentsSection({
                               )}
                             </div>
                           )}
+                          {wasOverridden && (
+                            <div className="p-2.5 rounded-xl" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
+                              <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>
+                                Priority adjusted · {inc.original_priority} → {inc.priority}
+                              </p>
+                              <p className="text-xs italic" style={{ color: '#4c46c4' }}>"{inc.priority_override_reason}"</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -860,6 +1060,14 @@ export default function IncidentsSection({
                   style={{ background: '#22c55e', boxShadow: '0 4px 12px rgba(34,197,94,0.25)' }}>
                   <Check size={13} /> Mark resolved
                 </button>
+                {onPriorityChange && (
+                  <button onClick={() => setOverrideFor(inc)}
+                    aria-label="Adjust priority"
+                    className="inc-press w-11 h-11 flex items-center justify-center rounded-xl flex-shrink-0"
+                    style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                    <Pencil size={13} />
+                  </button>
+                )}
               </div>
             )}
           </article>
@@ -873,6 +1081,13 @@ export default function IncidentsSection({
         tanods={tanods}
         activeCounts={activeCounts}
         onPick={(tanodId) => onDispatch?.(dispatchFor.id, tanodId)}
+      />
+
+      <PriorityOverride
+        open={!!overrideFor}
+        onClose={() => setOverrideFor(null)}
+        incident={overrideFor}
+        onSubmit={onPriorityChange}
       />
 
       {lightbox && (
