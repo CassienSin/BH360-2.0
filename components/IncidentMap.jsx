@@ -7,6 +7,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
+import ClusteredIncidents from '@/components/ClusteredIncidents'   
 
 const categoryConfig = {
   Noise: { color: '#f97316', emoji: '🔊' },
@@ -488,7 +489,9 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
           </Marker>
         ))}
 
-        {validIncidents.map(inc => {
+        <ClusteredIncidents
+          incidents={validIncidents}
+          renderPin={(inc, latlngOverride) => {
           const cat = categoryConfig[inc.category] || categoryConfig.Other
           const status = STATUS_STYLES[inc.status] || STATUS_STYLES.pending
           const prio = PRIORITY_STYLES[inc.priority]
@@ -496,7 +499,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
           return (
             <Marker
               key={inc.id}
-              position={[inc.latitude, inc.longitude]}
+              position={latlngOverride || [inc.latitude, inc.longitude]}
               icon={getIcon(inc.category, inc.status, inc.priority)}
               zIndexOffset={inc.status === 'pending' ? 1000 : inc.status === 'assigned' ? 500 : 0}
               alt={`${inc.category}: ${inc.title}`}
@@ -572,7 +575,8 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
               </Popup>
             </Marker>
           )
-        })}
+        }}
+        />
       </MapContainer>
 
       {/* Count chip */}
