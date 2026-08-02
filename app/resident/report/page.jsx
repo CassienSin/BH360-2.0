@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
 import { getPriority, getBasis, citationLabel, PRIORITY_STYLE } from '@/lib/legalBasis'
+import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
+import { AvailabilityStrip, EmergencyContacts, ReportOutcome } from '@/components/ResponderAvailability'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -117,6 +119,31 @@ export default function ReportIncident() {
   const [coords, setCoords] = useState(null) // { lat, lng, accuracy }
   const [gettingLocation, setGettingLocation] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Barangay context, loaded up front so the availability strip can render
+  // while the resident is still filling in the form
+  const [barangayId, setBarangayId] = useState(null)
+  const [barangayPhone, setBarangayPhone] = useState(null)
+  const [outcome, setOutcome] = useState(null) // the created incident, post-submit
+  const availability = useBarangayAvailability(barangayId)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadBarangay() {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user || cancelled) return
+      const { data } = await supabase
+        .from('profiles')
+        .select('barangay_id, barangays(phone)')
+        .eq('id', user.id)
+        .single()
+      if (cancelled) return
+      setBarangayId(data?.barangay_id ?? null)
+      setBarangayPhone(data?.barangays?.phone ?? null)
+    }
+    loadBarangay()
+    return () => { cancelled = true }
+  }, [supabase])
 
   // Revoke the object URL when the preview changes or on unmount (avoids memory leaks)
   useEffect(() => {
@@ -292,7 +319,10 @@ export default function ReportIncident() {
       // law-assigned rather than reporter-selected.
       const finalPriority = getPriority(form.category)
 
-      const { error } = await supabase.from('incidents').insert({
+      // .select().single() returns the row AFTER the auto-assign trigger has
+      // run, so the outcome screen can tell the resident the truth about
+      // whether anyone actually picked it up.
+      const { data: created, error } = await supabase.from('incidents').insert({
         title: form.title.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
@@ -309,15 +339,17 @@ export default function ReportIncident() {
         reported_by: user.id,
         barangay_id: prof.barangay_id,
         status: 'pending',
-      })
+      }).select().single()
 
       if (error) {
         toast.error('Failed to report incident. Please try again.')
         return
       }
 
-      toast.success(`Reported as ${finalPriority} priority`)
-      router.replace('/resident')
+      // Show the outcome instead of redirecting — the resident needs to know
+      // whether a responder is actually coming
+      setOutcome(created)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err) {
       console.error('Incident submit failed:', err)
       toast.error('Something went wrong. Please try again.')
@@ -345,35 +377,59 @@ export default function ReportIncident() {
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
-          onClick={() => router.back()}
+          onClick={() => (outcome ? router.replace('/resident') : router.back())}
           aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
         >
           <ArrowLeft size={18} className="text-gray-600" />
         </button>
         <div>
-          <h1 className="text-base font-bold text-gray-800">Report an Incident</h1>
-          <p className="text-xs text-gray-400">Notify the barangay immediately</p>
+          <h1 className="text-base font-bold text-gray-800">
+            {outcome ? 'Report submitted' : 'Report an Incident'}
+          </h1>
+          <p className="text-xs text-gray-400">
+            {outcome ? 'What happens next' : 'Notify the barangay immediately'}
+          </p>
         </div>
       </header>
 
       <main className="relative z-10 max-w-2xl mx-auto px-4 py-8">
-        <div className="glass-card p-4 mb-6 flex items-start gap-3">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(255,255,255,0.2)' }}
-          >
-            <AlertTriangle size={18} className="text-white" />
-          </div>
-          <div>
-            <p className="text-white text-sm font-semibold">Report an incident</p>
-            <p className="text-purple-200 text-xs mt-0.5">
-              Just describe what happened — urgency is assigned automatically based on Philippine law.
-            </p>
-          </div>
-        </div>
+        {!outcome && (
+          <>
+            <div className="glass-card p-4 mb-4 flex items-start gap-3">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.2)' }}
+              >
+                <AlertTriangle size={18} className="text-white" />
+              </div>
+              <div>
+                <p className="text-white text-sm font-semibold">Report an incident</p>
+                <p className="text-purple-200 text-xs mt-0.5">
+                  Just describe what happened — urgency is assigned automatically based on Philippine law.
+                </p>
+              </div>
+            </div>
+
+            {/* Who is actually available to receive this, right now. Often
+                this says "nobody" — that is deliberate. A resident who
+                knows nobody is on duty calls 911 in seconds; one who
+                assumes a tanod is coming waits twenty minutes. */}
+            <div className="mb-6">
+              <AvailabilityStrip availability={availability} />
+            </div>
+          </>
+        )}
 
         <div className="white-card p-6">
+          {outcome ? (
+            <ReportOutcome
+              incident={outcome}
+              availability={availability}
+              barangayPhone={barangayPhone}
+              onDone={() => router.replace('/resident')}
+            />
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
 
             {/* Category Selection — this alone determines priority */}
@@ -450,14 +506,21 @@ export default function ReportIncident() {
                     >
                       <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
                       <p className="text-[11px] text-orange-800 leading-relaxed">
-                        This will be referred to <strong>{basis.agency}</strong>. If it is happening
-                        right now and lives are at risk, please call them directly as well.
+                        This will be referred to <strong>{basis.agency}</strong>.
                       </p>
                     </div>
                   )}
                 </div>
               </div>
             )}
+
+            {/* Emergency numbers — shown when the barangay legally cannot
+                handle this (fire, medical) or when nobody is on duty */}
+            <EmergencyContacts
+              category={form.category}
+              availability={availability}
+              barangayPhone={barangayPhone}
+            />
 
             {/* Title */}
             <div>
@@ -673,6 +736,7 @@ export default function ReportIncident() {
               ) : 'Submit Report'}
             </button>
           </form>
+          )}
         </div>
       </main>
     </div>
