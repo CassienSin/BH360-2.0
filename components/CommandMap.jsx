@@ -69,6 +69,7 @@ export default function CommandMap({
   const [timeOffset, setTimeOffset] = useState(0)  // minutes back from now
   const [playing, setPlaying] = useState(false)
   const [dispatching, setDispatching] = useState(null)
+  const [focusGroup, setFocusGroup] = useState(null)
 
   const t = THEME[theme]
 
@@ -173,14 +174,20 @@ export default function CommandMap({
   )
 
   const queue = useMemo(() => {
+    // Clicking an aggregate on the map filters this list rather than
+    // rearranging the map — a queue row carries far more than a pin can.
+    const base = focusGroup
+      ? shownIncidents.filter(i => focusGroup.some(f => f.id === i.id))
+      : shownIncidents
+
     const order = { pending: 1, assigned: 2, resolved: 3 }
     const rank = { Critical: 4, High: 3, Medium: 2, Low: 1 }
-    return [...shownIncidents].sort((a, b) =>
+    return [...base].sort((a, b) =>
       (order[a.status] || 4) - (order[b.status] || 4) ||
       (rank[b.priority] || 2) - (rank[a.priority] || 2) ||
       new Date(a.created_at) - new Date(b.created_at)
     )
-  }, [shownIncidents])
+  }, [shownIncidents, focusGroup])
 
   const handleDispatch = useCallback(async (tanodId) => {
     if (!selected) return
@@ -278,6 +285,16 @@ export default function CommandMap({
               Queue · {queue.length}
             </p>
           </div>
+          {focusGroup && (
+            <button onClick={() => setFocusGroup(null)}
+              className="w-full px-3 py-2 flex items-center justify-between flex-shrink-0"
+              style={{ background: theme === 'dark' ? '#232a3d' : '#f0effe', borderBottom: `1px solid ${t.border}` }}>
+              <span style={{ fontSize: 11, color: t.accent }} className="font-bold">
+                Showing {focusGroup.length} from one location
+              </span>
+              <span style={{ fontSize: 10, color: t.accent }}>clear ✕</span>
+            </button>
+          )}
           <div className="overflow-y-auto cmd-scroll flex-1">
             {queue.length === 0 && (
               <p style={{ fontSize: 12, color: t.dim }} className="px-3 py-8 text-center">
@@ -323,6 +340,7 @@ export default function CommandMap({
             theme={theme}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            onFocusGroup={setFocusGroup}
             onIncidentClick={onOpenIncident}
             overlays={{
               coverage: showCoverage ? { trailPoints: allTrailPoints, incidents: validIncidents } : null,

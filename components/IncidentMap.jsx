@@ -1,14 +1,14 @@
 'use client'
 // NOTE: Leaflet touches `window` at import time — load this with SSR disabled:
 //   const IncidentMap = dynamic(() => import('@/components/IncidentMap'), { ssr: false })
-import { useEffect, useRef, useMemo } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, LayersControl } from 'react-leaflet'
+import { useEffect, useRef, useMemo, useState } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, useMapEvents, LayersControl } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MapPin } from 'lucide-react'
+import { MapPin, Layers as LayersIcon } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import ClusteredIncidents from '@/components/ClusteredIncidents'
-import { CoverageLayer, HeatmapLayer, RadiusTool } from '@/components/MapLayers'
+import IncidentLayer, { zoomModeLabel } from '@/components/IncidentLayer'
+import { CoverageLayer, RadiusTool } from '@/components/MapLayers'
 
 const categoryConfig = {
   Noise: { color: '#f97316', emoji: '🔊' },
@@ -36,8 +36,7 @@ const PRIORITY_STYLES = {
 // phone locked or app backgrounded. Shown amber instead of green.
 const TANOD_STALE_MS = 5 * 60 * 1000
 
-// Inject keyframes ONCE per page: marker pulse, route dash flow, selection
-// ring, and a subtle drop-in for pins.
+// Inject keyframes ONCE per page: marker pulse and route dash flow.
 if (typeof document !== 'undefined' && !document.getElementById('incident-map-styles')) {
   const style = document.createElement('style')
   style.id = 'incident-map-styles'
@@ -50,16 +49,19 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
     @keyframes route-dash {
       to { stroke-dashoffset: -22; }
     }
-    @keyframes sel-ring {
-      0%, 100% { transform: scale(1); opacity: 0.55; }
-      50% { transform: scale(1.35); opacity: 0.15; }
-    }
     .route-line {
       animation: route-dash 1.1s linear infinite;
     }
     .leaflet-container {
       font-family: Sora, sans-serif;
     }
+    /* Leaflet's CONTROLS sit at z-index 1000, which outranks app modals and
+       lets them punch through a lightbox. Cap the controls only — never
+       .leaflet-pane, whose z-index ordering is what stacks the tile layers
+       and drives the zoom cross-fade. */
+    .leaflet-container { z-index: 1; }
+    .leaflet-top, .leaflet-bottom { z-index: 400 !important; }
+    
     /* Dark operations theme — for night shift. A white map in a dark
        barangay hall causes glare and kills night vision. */
     .imap-dark .leaflet-container { background: #0f1117; }
@@ -108,12 +110,15 @@ function fmtDist(m) {
 }
 
 // ---- Incident pins ----
-// Proper map-pin (teardrop) markers: the TIP marks the exact coordinate,
-// which is far more precise than a floating circle. Category color fills
-// the pin, the emoji sits in a white well, pending pins pulse at ground
-// level, Critical pins get a red "!" badge, resolved pins fade with a ✓.
-// Cached by category|status|priority|selected so react-leaflet never
-// rebuilds DOM unnecessarily.
+// Teardrop markers: the TIP marks the exact coordinate, which is far more
+// precise than a floating circle. Category colour fills the pin, the emoji
+// sits in a white well, pending pins pulse at ground level, Critical pins
+// get a red "!" badge, resolved pins fade with a ✓.
+//
+// Cached by category|status|priority — deliberately NOT by selection state.
+// Rebuilding an icon makes react-leaflet tear down and recreate the marker's
+// DOM, which closes any popup the user just opened. Selection is expressed
+// through zIndexOffset instead, which costs no re-render.
 const iconCache = new Map()
 function getIcon(category, status, priority) {
   const key = `${category}|${status}|${priority || ''}`
@@ -127,7 +132,7 @@ function getIcon(category, status, priority) {
   const icon = L.divIcon({
     className: 'incident-pin',
     html: `
-      <div style="position: relative; width: 40px; height: 52px; ${isResolved ? 'opacity: 0.55; filter: saturate(0.6);' : ''}">
+      <div style="position: relative; width: 40px; height: 52px; ${isResolved ? 'opacity: 0.6;' : ''}">
         ${isPending ? `<div style="
           position: absolute;
           left: 50%; bottom: 0;
@@ -195,42 +200,32 @@ function getTanodIcon(stale, avatarUrl, initial) {
       <div style="position: relative; display: flex; align-items: center; justify-content: center;">
         ${!stale ? `<div style="
           position: absolute;
-          width: 46px;
-          height: 46px;
+          width: 46px; height: 46px;
           border-radius: 50%;
           background: ${color}40;
           animation: pulse-ring 2s ease-out infinite;
         "></div>` : ''}
         <div style="
-          width: 36px;
-          height: 36px;
+          width: 36px; height: 36px;
           background: ${color};
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           box-shadow: 0 4px 12px ${color}80;
           border: 3px solid ${color};
           overflow: hidden;
           font-size: ${avatarUrl ? '13px' : '16px'};
-          color: white;
-          font-weight: 800;
+          color: white; font-weight: 800;
           font-family: Sora, sans-serif;
         ">
           ${inner}${avatarUrl ? '' : (initial ? initial : '🛡️')}
         </div>
         <div style="
-          position: absolute;
-          bottom: -2px;
-          right: -2px;
-          width: 13px;
-          height: 13px;
+          position: absolute; bottom: -2px; right: -2px;
+          width: 13px; height: 13px;
           border-radius: 50%;
           background: ${color};
           border: 2px solid white;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          display: flex; align-items: center; justify-content: center;
           font-size: 7px;
         ">🛡️</div>
       </div>
@@ -259,17 +254,17 @@ function FitBounds({ incidents, tanodPositions }) {
     done.current = true
 
     if (allPoints.length === 1) {
-      map.setView(allPoints[0], 16)
+      map.setView(allPoints[0], 17)
     } else {
-      map.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50], maxZoom: 16 })
+      map.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50], maxZoom: 17 })
     }
   }, [incidents, tanodPositions, map])
   return null
 }
 
-/** Flies to an incident selected from the queue. Pin clicks don't fly —
-    the user can already see that pin, and moving the map under them
-    collapses spiderfied groups and closes popups. */
+/** Flies to an incident selected from the QUEUE. Pin clicks don't fly —
+    the user can already see that pin, and moving the map under them is
+    disorienting. */
 function FlyToSelected({ incidents, selectedId, skipRef }) {
   const map = useMap()
   const prev = useRef(null)
@@ -280,7 +275,7 @@ function FlyToSelected({ incidents, selectedId, skipRef }) {
     if (skipRef.current) { skipRef.current = false; return }
     const inc = incidents.find(i => i.id === selectedId)
     if (!inc || !Number.isFinite(inc.latitude)) return
-    map.flyTo([inc.latitude, inc.longitude], Math.max(map.getZoom(), 17), { duration: 0.7 })
+    map.flyTo([inc.latitude, inc.longitude], Math.max(map.getZoom(), 18), { duration: 0.7 })
   }, [selectedId, incidents, map, skipRef])
 
   return null
@@ -295,6 +290,14 @@ function ResizeHandler() {
     window.addEventListener('resize', fix)
     return () => { clearTimeout(t); window.removeEventListener('resize', fix) }
   }, [map])
+  return null
+}
+
+/** Reports zoom upward so the shell can label the current view mode. */
+function ZoomReporter({ onZoom }) {
+  const map = useMap()
+  useEffect(() => { onZoom(map.getZoom()) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useMapEvents({ zoomend: () => onZoom(map.getZoom()) })
   return null
 }
 
@@ -313,7 +316,8 @@ export default function IncidentMap({
   theme = 'light',        // 'light' | 'dark'
   selectedId = null,      // highlight + fly to this incident
   onSelect,               // (id) => void, fired when a pin is clicked
-  overlays = null,        // { coverage, heatmap, radius } — see MapLayers
+  onFocusGroup,           // (incidents[]) => void, fired when an aggregate is clicked
+  overlays = null,        // { coverage, radius } — see MapLayers
 }) {
   const validIncidents = useMemo(
     () => incidents.filter(i => Number.isFinite(i.latitude) && Number.isFinite(i.longitude)),
@@ -322,6 +326,9 @@ export default function IncidentMap({
   const pendingCount = validIncidents.filter(i => i.status === 'pending').length
   const isDark = theme === 'dark'
   const skipFlyRef = useRef(false)
+  const [zoom, setZoom] = useState(12)
+
+  const viewMode = zoomModeLabel(zoom)
 
   const tanodEntries = useMemo(() => {
     return Object.entries(tanodTrails)
@@ -342,7 +349,7 @@ export default function IncidentMap({
     [tanodEntries]
   )
 
-  // Delivery-app routes: tanod → their assigned incident(s)
+  // Response routes: tanod → their assigned incident(s)
   const routes = useMemo(() => {
     const out = []
     for (const entry of tanodEntries) {
@@ -373,7 +380,6 @@ export default function IncidentMap({
     return m
   }, [routes])
 
-  // For incident popups: who is assigned, by name
   const tanodNameById = useMemo(() => {
     const m = {}
     for (const e of tanodEntries) m[e.tanodId] = e.tanod?.full_name
@@ -398,7 +404,7 @@ export default function IncidentMap({
         scrollWheelZoom={true}
       >
         <LayersControl position="topright">
-          {/* In dark mode the "Detailed" slot serves CARTO Dark Matter —
+          {/* In dark mode the first slot serves CARTO Dark Matter —
               same street detail, night-shift friendly. */}
           <LayersControl.BaseLayer checked name={isDark ? 'Operations' : 'Detailed'}>
             <TileLayer
@@ -413,7 +419,6 @@ export default function IncidentMap({
               detectRetina
             />
           </LayersControl.BaseLayer>
-          {/* CARTO Voyager: cleaner/muted when the pins need to pop */}
           <LayersControl.BaseLayer name="Clean">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
@@ -428,7 +433,6 @@ export default function IncidentMap({
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
-          {/* Toggleable street/place labels — turns Satellite into a hybrid view */}
           <LayersControl.Overlay name="Labels (for Satellite)">
             <TileLayer
               attribution='&copy; CARTO'
@@ -442,12 +446,11 @@ export default function IncidentMap({
         <FitBounds incidents={validIncidents} tanodPositions={tanodPositions} />
         <FlyToSelected incidents={validIncidents} selectedId={selectedId} skipRef={skipFlyRef} />
         <ResizeHandler />
+        <ZoomReporter onZoom={setZoom} />
 
-        {/* ---- Command overlays. Each renders only when switched on. ----
-            Order matters: heat and coverage sit UNDER the pins. */}
-        {overlays?.heatmap && (
-          <HeatmapLayer incidents={overlays.heatmap} />
-        )}
+        {/* Optional overlays. Note there is no heatmap toggle any more —
+            density is now what the map shows automatically when zoomed out,
+            rather than something the user has to know to switch on. */}
         {overlays?.coverage && (
           <CoverageLayer
             trailPoints={overlays.coverage.trailPoints}
@@ -508,9 +511,7 @@ export default function IncidentMap({
                     width: '32px', height: '32px', borderRadius: '8px',
                     background: entry.stale ? '#fef3c7' : '#d1fae5',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '16px',
-                    flexShrink: 0,
-                    overflow: 'hidden',
+                    fontSize: '16px', flexShrink: 0, overflow: 'hidden',
                   }}>
                     {entry.tanod?.avatar_url
                       ? <img src={entry.tanod.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -562,8 +563,7 @@ export default function IncidentMap({
                 )}
 
                 {entry.tanod?.phone && (
-                  <a
-                    href={`tel:${entry.tanod.phone}`}
+                  <a href={`tel:${entry.tanod.phone}`}
                     style={{
                       display: 'block', textAlign: 'center', textDecoration: 'none',
                       width: '100%', marginTop: '10px', padding: '8px',
@@ -579,11 +579,13 @@ export default function IncidentMap({
           </Marker>
         ))}
 
-        {/* Incident pins, clustered. Pins at or near the same coordinates
-            used to stack — whichever rendered last won, so a resolved noise
-            complaint could hide a critical fire underneath it. */}
-        <ClusteredIncidents
+        {/* Incidents. The layer picks its own representation from the zoom:
+            density surface → area bins → clusters → individual pins, so
+            markers never overlap at any scale, and no "expand this pile"
+            interaction state exists to be invalidated by panning. */}
+        <IncidentLayer
           incidents={validIncidents}
+          onFocusGroup={onFocusGroup}
           renderPin={(inc, latlngOverride) => {
             const cat = categoryConfig[inc.category] || categoryConfig.Other
             const status = STATUS_STYLES[inc.status] || STATUS_STYLES.pending
@@ -606,8 +608,7 @@ export default function IncidentMap({
                         width: '32px', height: '32px', borderRadius: '8px',
                         background: cat.color + '20',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '16px',
-                        flexShrink: 0,
+                        fontSize: '16px', flexShrink: 0,
                       }}>
                         {cat.emoji}
                       </div>
@@ -643,8 +644,7 @@ export default function IncidentMap({
                       <span style={{
                         fontSize: '10px', fontWeight: 700,
                         padding: '2px 8px', borderRadius: '20px',
-                        background: status.bg,
-                        color: status.color,
+                        background: status.bg, color: status.color,
                         textTransform: 'uppercase',
                       }}>
                         {inc.status}
@@ -655,8 +655,7 @@ export default function IncidentMap({
                     </div>
 
                     {onIncidentClick && (
-                      <button
-                        onClick={() => onIncidentClick(inc)}
+                      <button onClick={() => onIncidentClick(inc)}
                         style={{
                           width: '100%', marginTop: '10px', padding: '8px',
                           background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
@@ -698,6 +697,27 @@ export default function IncidentMap({
           {routes.length > 0 && (
             <span style={{ color: '#c2410c', background: '#fff7ed', padding: '1px 6px', borderRadius: '10px' }}>
               🚨 {routes.length} responding
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* View-mode chip. Without this the map silently changes what it draws
+          as you zoom, which reads as a glitch rather than a feature. */}
+      {!mapIsEmpty && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl z-[1000] flex items-center gap-1.5 whitespace-nowrap"
+          style={{
+            background: isDark ? 'rgba(28,32,48,0.95)' : 'rgba(255,255,255,0.95)',
+            backdropFilter: 'blur(6px)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          }}>
+          <LayersIcon size={11} style={{ color: isDark ? '#8b85ff' : '#5B54E8' }} />
+          <span className="text-[11px] font-bold" style={{ color: isDark ? '#e8eaf2' : '#374151' }}>
+            {viewMode.label}
+          </span>
+          {viewMode.hint && (
+            <span className="text-[10px] hidden sm:inline" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+              · {viewMode.hint}
             </span>
           )}
         </div>
