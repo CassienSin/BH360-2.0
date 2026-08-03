@@ -7,7 +7,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { MapPin } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import ClusteredIncidents from '@/components/ClusteredIncidents'   
+import ClusteredIncidents from '@/components/ClusteredIncidents'
+import { CoverageLayer, HeatmapLayer, RadiusTool } from '@/components/MapLayers'
 
 const categoryConfig = {
   Noise: { color: '#f97316', emoji: '🔊' },
@@ -35,8 +36,8 @@ const PRIORITY_STYLES = {
 // phone locked or app backgrounded. Shown amber instead of green.
 const TANOD_STALE_MS = 5 * 60 * 1000
 
-// Inject keyframes ONCE per page: marker pulse, route dash flow, and a
-// subtle drop-in for pins.
+// Inject keyframes ONCE per page: marker pulse, route dash flow, selection
+// ring, and a subtle drop-in for pins.
 if (typeof document !== 'undefined' && !document.getElementById('incident-map-styles')) {
   const style = document.createElement('style')
   style.id = 'incident-map-styles'
@@ -49,12 +50,26 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
     @keyframes route-dash {
       to { stroke-dashoffset: -22; }
     }
+    @keyframes sel-ring {
+      0%, 100% { transform: scale(1); opacity: 0.55; }
+      50% { transform: scale(1.35); opacity: 0.15; }
+    }
     .route-line {
       animation: route-dash 1.1s linear infinite;
     }
     .leaflet-container {
       font-family: Sora, sans-serif;
     }
+    /* Dark operations theme — for night shift. A white map in a dark
+       barangay hall causes glare and kills night vision. */
+    .imap-dark .leaflet-container { background: #0f1117; }
+    .imap-dark .leaflet-popup-content-wrapper,
+    .imap-dark .leaflet-popup-tip { background: #1c2030; color: #e8eaf2; }
+    .imap-dark .leaflet-control-layers,
+    .imap-dark .leaflet-bar a {
+      background: #1c2030; color: #e8eaf2; border-color: #242938;
+    }
+    .imap-dark .leaflet-bar a:hover { background: #242938; }
   `
   document.head.appendChild(style)
 }
@@ -97,7 +112,8 @@ function fmtDist(m) {
 // which is far more precise than a floating circle. Category color fills
 // the pin, the emoji sits in a white well, pending pins pulse at ground
 // level, Critical pins get a red "!" badge, resolved pins fade with a ✓.
-// Cached by category|status|priority so react-leaflet never rebuilds DOM.
+// Cached by category|status|priority|selected so react-leaflet never
+// rebuilds DOM unnecessarily.
 const iconCache = new Map()
 function getIcon(category, status, priority) {
   const key = `${category}|${status}|${priority || ''}`
@@ -228,29 +244,57 @@ function getTanodIcon(stale, avatarUrl, initial) {
 
 function FitBounds({ incidents, tanodPositions }) {
   const map = useMap()
-  const prevSignature = useRef('')
+  const done = useRef(false)
 
   useEffect(() => {
+    // Fit ONCE on first load, then never again. Re-fitting whenever the
+    // incident set changes fought with user panning and with FlyToSelected,
+    // producing a map that zoomed and re-centred on its own.
+    if (done.current) return
     const allPoints = [
       ...incidents.map(i => [i.latitude, i.longitude]),
       ...tanodPositions.map(t => [t.latitude, t.longitude]),
     ]
     if (allPoints.length === 0) return
-
-    const signature = [
-      ...incidents.map(i => `i${i.id}`),
-      ...tanodPositions.map(t => `t${t.tanodId}`),
-    ].sort().join(',')
-    if (signature === prevSignature.current) return
-    prevSignature.current = signature
+    done.current = true
 
     if (allPoints.length === 1) {
       map.setView(allPoints[0], 16)
     } else {
-      const bounds = L.latLngBounds(allPoints)
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 })
+      map.fitBounds(L.latLngBounds(allPoints), { padding: [50, 50], maxZoom: 16 })
     }
   }, [incidents, tanodPositions, map])
+  return null
+}
+
+/** Flies to an incident selected from the queue. Pin clicks don't fly —
+    the user can already see that pin, and moving the map under them
+    collapses spiderfied groups and closes popups. */
+function FlyToSelected({ incidents, selectedId, skipRef }) {
+  const map = useMap()
+  const prev = useRef(null)
+
+  useEffect(() => {
+    if (!selectedId || selectedId === prev.current) return
+    prev.current = selectedId
+    if (skipRef.current) { skipRef.current = false; return }
+    const inc = incidents.find(i => i.id === selectedId)
+    if (!inc || !Number.isFinite(inc.latitude)) return
+    map.flyTo([inc.latitude, inc.longitude], Math.max(map.getZoom(), 17), { duration: 0.7 })
+  }, [selectedId, incidents, map, skipRef])
+
+  return null
+}
+
+/** Keeps Leaflet's canvas correct when the surrounding panes resize. */
+function ResizeHandler() {
+  const map = useMap()
+  useEffect(() => {
+    const fix = () => map.invalidateSize()
+    const t = setTimeout(fix, 200)
+    window.addEventListener('resize', fix)
+    return () => { clearTimeout(t); window.removeEventListener('resize', fix) }
+  }, [map])
   return null
 }
 
@@ -260,12 +304,24 @@ const STATUS_STYLES = {
   resolved: { bg: '#d1fae5', color: '#065f46', label: 'Resolved' },
 }
 
-export default function IncidentMap({ incidents = [], tanodTrails = {}, height = '70vh', onIncidentClick }) {
+export default function IncidentMap({
+  incidents = [],
+  tanodTrails = {},
+  height = '70vh',
+  onIncidentClick,
+  // ---- command-console props ----
+  theme = 'light',        // 'light' | 'dark'
+  selectedId = null,      // highlight + fly to this incident
+  onSelect,               // (id) => void, fired when a pin is clicked
+  overlays = null,        // { coverage, heatmap, radius } — see MapLayers
+}) {
   const validIncidents = useMemo(
     () => incidents.filter(i => Number.isFinite(i.latitude) && Number.isFinite(i.longitude)),
     [incidents]
   )
   const pendingCount = validIncidents.filter(i => i.status === 'pending').length
+  const isDark = theme === 'dark'
+  const skipFlyRef = useRef(false)
 
   const tanodEntries = useMemo(() => {
     return Object.entries(tanodTrails)
@@ -294,7 +350,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
       const targets = validIncidents.filter(
         i => i.status === 'assigned' && i.assigned_to === entry.tanodId
       )
-    for (const inc of targets) {
+      for (const inc of targets) {
         const to = [inc.latitude, inc.longitude]
         out.push({
           key: `route-${entry.tanodId}-${inc.id}`,
@@ -328,21 +384,31 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
   const mapIsEmpty = validIncidents.length === 0 && tanodEntries.length === 0
 
   return (
-    <div className="relative rounded-3xl overflow-hidden"
-      style={{ border: '1px solid #f0effe', height, boxShadow: '0 8px 32px rgba(91,84,232,0.08)', background: '#eceafc' }}>
+    <div className={`relative overflow-hidden ${isDark ? 'imap-dark' : ''}`}
+      style={{
+        border: `1px solid ${isDark ? '#242938' : '#f0effe'}`,
+        height,
+        boxShadow: isDark ? 'none' : '0 8px 32px rgba(91,84,232,0.08)',
+        background: isDark ? '#0f1117' : '#eceafc',
+      }}>
       <MapContainer
         center={defaultCenter}
         zoom={12}
-        style={{ width: '100%', height: '100%', background: '#eceafc' }}
+        style={{ width: '100%', height: '100%', background: isDark ? '#0f1117' : '#eceafc' }}
         scrollWheelZoom={true}
       >
         <LayersControl position="topright">
-          {/* OSM standard: the most DETAILED street-level view — building
-              footprints, POIs, sari-sari-store-level labels */}
-          <LayersControl.BaseLayer checked name="Detailed">
+          {/* In dark mode the "Detailed" slot serves CARTO Dark Matter —
+              same street detail, night-shift friendly. */}
+          <LayersControl.BaseLayer checked name={isDark ? 'Operations' : 'Detailed'}>
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
-              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              key={isDark ? 'dark' : 'osm'}
+              attribution={isDark
+                ? '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer">CARTO</a>'
+                : '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'}
+              url={isDark
+                ? 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'}
               maxZoom={19}
               detectRetina
             />
@@ -374,13 +440,37 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         </LayersControl>
 
         <FitBounds incidents={validIncidents} tanodPositions={tanodPositions} />
+        <FlyToSelected incidents={validIncidents} selectedId={selectedId} skipRef={skipFlyRef} />
+        <ResizeHandler />
+
+        {/* ---- Command overlays. Each renders only when switched on. ----
+            Order matters: heat and coverage sit UNDER the pins. */}
+        {overlays?.heatmap && (
+          <HeatmapLayer incidents={overlays.heatmap} />
+        )}
+        {overlays?.coverage && (
+          <CoverageLayer
+            trailPoints={overlays.coverage.trailPoints}
+            incidents={overlays.coverage.incidents}
+            lookbackHours={overlays.coverage.lookbackHours ?? 6}
+          />
+        )}
+        {overlays?.radius && (
+          <RadiusTool
+            active
+            radius={overlays.radius.radius ?? 200}
+            incidents={overlays.radius.incidents}
+            tanodPositions={overlays.radius.tanodPositions}
+            onResult={overlays.radius.onResult}
+          />
+        )}
 
         {/* Response routes: white casing + animated orange dashes */}
         {routes.map(r => (
           <Polyline
             key={`${r.key}-casing`}
             positions={r.path}
-            pathOptions={{ color: '#ffffff', weight: 7, opacity: 0.9, lineCap: 'round' }}
+            pathOptions={{ color: isDark ? '#0f1117' : '#ffffff', weight: 7, opacity: 0.9, lineCap: 'round' }}
           />
         ))}
         {routes.map(r => (
@@ -427,7 +517,7 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
                       : '🛡️'}
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <p style={{ fontWeight: 700, fontSize: '13px', color: '#1f2937', margin: 0 }}>
+                    <p style={{ fontWeight: 700, fontSize: '13px', margin: 0 }}>
                       {entry.tanod?.full_name || 'Tanod'}
                     </p>
                     <p style={{
@@ -489,93 +579,98 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
           </Marker>
         ))}
 
+        {/* Incident pins, clustered. Pins at or near the same coordinates
+            used to stack — whichever rendered last won, so a resolved noise
+            complaint could hide a critical fire underneath it. */}
         <ClusteredIncidents
           incidents={validIncidents}
           renderPin={(inc, latlngOverride) => {
-          const cat = categoryConfig[inc.category] || categoryConfig.Other
-          const status = STATUS_STYLES[inc.status] || STATUS_STYLES.pending
-          const prio = PRIORITY_STYLES[inc.priority]
-          const assignedName = inc.assigned_to ? tanodNameById[inc.assigned_to] : null
-          return (
-            <Marker
-              key={inc.id}
-              position={latlngOverride || [inc.latitude, inc.longitude]}
-              icon={getIcon(inc.category, inc.status, inc.priority)}
-              zIndexOffset={inc.status === 'pending' ? 1000 : inc.status === 'assigned' ? 500 : 0}
-              alt={`${inc.category}: ${inc.title}`}
-            >
-              <Popup>
-                <div style={{ minWidth: '230px', padding: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <div style={{
-                      width: '32px', height: '32px', borderRadius: '8px',
-                      background: cat.color + '20',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '16px',
-                      flexShrink: 0,
-                    }}>
-                      {cat.emoji}
-                    </div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <p style={{ fontWeight: 700, fontSize: '13px', color: '#1f2937', margin: 0 }}>{inc.title}</p>
-                      <p style={{ fontSize: '10px', color: cat.color, fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{inc.category}</p>
-                    </div>
-                    {prio && (
-                      <span style={{
-                        fontSize: '9px', fontWeight: 800,
-                        padding: '2px 7px', borderRadius: '20px',
-                        background: prio.bg, color: prio.color,
-                        textTransform: 'uppercase', flexShrink: 0,
+            const cat = categoryConfig[inc.category] || categoryConfig.Other
+            const status = STATUS_STYLES[inc.status] || STATUS_STYLES.pending
+            const prio = PRIORITY_STYLES[inc.priority]
+            const assignedName = inc.assigned_to ? tanodNameById[inc.assigned_to] : null
+            const isSel = inc.id === selectedId
+            return (
+              <Marker
+                key={inc.id}
+                position={latlngOverride || [inc.latitude, inc.longitude]}
+                icon={getIcon(inc.category, inc.status, inc.priority)}
+                zIndexOffset={isSel ? 1500 : inc.status === 'pending' ? 1000 : inc.status === 'assigned' ? 500 : 0}
+                alt={`${inc.category}: ${inc.title}`}
+                eventHandlers={{ click: () => { skipFlyRef.current = true; onSelect?.(inc.id) } }}
+              >
+                <Popup>
+                  <div style={{ minWidth: '230px', padding: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <div style={{
+                        width: '32px', height: '32px', borderRadius: '8px',
+                        background: cat.color + '20',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px',
+                        flexShrink: 0,
                       }}>
-                        {inc.priority}
+                        {cat.emoji}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <p style={{ fontWeight: 700, fontSize: '13px', margin: 0 }}>{inc.title}</p>
+                        <p style={{ fontSize: '10px', color: cat.color, fontWeight: 700, margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{inc.category}</p>
+                      </div>
+                      {prio && (
+                        <span style={{
+                          fontSize: '9px', fontWeight: 800,
+                          padding: '2px 7px', borderRadius: '20px',
+                          background: prio.bg, color: prio.color,
+                          textTransform: 'uppercase', flexShrink: 0,
+                        }}>
+                          {inc.priority}
+                        </span>
+                      )}
+                    </div>
+
+                    {inc.description && (
+                      <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0', lineHeight: 1.5 }}>
+                        {inc.description.slice(0, 100)}{inc.description.length > 100 ? '…' : ''}
+                      </p>
+                    )}
+
+                    <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px', lineHeight: 1.7 }}>
+                      <div>📍 {inc.location}</div>
+                      {inc.profiles?.full_name && <div>🧑 Reported by {inc.profiles.full_name}</div>}
+                      {assignedName && <div>🛡️ Assigned to {assignedName}</div>}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f0effe' }}>
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700,
+                        padding: '2px 8px', borderRadius: '20px',
+                        background: status.bg,
+                        color: status.color,
+                        textTransform: 'uppercase',
+                      }}>
+                        {inc.status}
                       </span>
+                      <span style={{ fontSize: '10px', color: '#9ca3af' }} title={fullDate(inc.created_at)}>
+                        {timeAgo(inc.created_at)}
+                      </span>
+                    </div>
+
+                    {onIncidentClick && (
+                      <button
+                        onClick={() => onIncidentClick(inc)}
+                        style={{
+                          width: '100%', marginTop: '10px', padding: '8px',
+                          background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
+                          color: 'white', border: 'none', borderRadius: '8px',
+                          fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+                        }}>
+                        View Details →
+                      </button>
                     )}
                   </div>
-
-                  {inc.description && (
-                    <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0', lineHeight: 1.5 }}>
-                      {inc.description.slice(0, 100)}{inc.description.length > 100 ? '…' : ''}
-                    </p>
-                  )}
-
-                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px', lineHeight: 1.7 }}>
-                    <div>📍 {inc.location}</div>
-                    {inc.profiles?.full_name && <div>🧑 Reported by {inc.profiles.full_name}</div>}
-                    {assignedName && <div>🛡️ Assigned to {assignedName}</div>}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f0effe' }}>
-                    <span style={{
-                      fontSize: '10px', fontWeight: 700,
-                      padding: '2px 8px', borderRadius: '20px',
-                      background: status.bg,
-                      color: status.color,
-                      textTransform: 'uppercase',
-                    }}>
-                      {inc.status}
-                    </span>
-                    <span style={{ fontSize: '10px', color: '#9ca3af' }} title={fullDate(inc.created_at)}>
-                      {timeAgo(inc.created_at)}
-                    </span>
-                  </div>
-
-                  {onIncidentClick && (
-                    <button
-                      onClick={() => onIncidentClick(inc)}
-                      style={{
-                        width: '100%', marginTop: '10px', padding: '8px',
-                        background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
-                        color: 'white', border: 'none', borderRadius: '8px',
-                        fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-                      }}>
-                      View Details →
-                    </button>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          )
-        }}
+                </Popup>
+              </Marker>
+            )
+          }}
         />
       </MapContainer>
 
@@ -583,10 +678,10 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
       {!mapIsEmpty && (
         <div className="absolute top-3 left-3 px-3 py-1.5 rounded-xl text-[11px] font-bold z-[1000] flex items-center gap-1.5"
           style={{
-            background: 'rgba(255,255,255,0.95)',
+            background: isDark ? 'rgba(28,32,48,0.95)' : 'rgba(255,255,255,0.95)',
             backdropFilter: 'blur(6px)',
-            color: '#5B54E8',
-            boxShadow: '0 2px 12px rgba(91,84,232,0.2)',
+            color: isDark ? '#8b85ff' : '#5B54E8',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
           }}>
           <MapPin size={11} />
           {validIncidents.length} incident{validIncidents.length === 1 ? '' : 's'}
@@ -611,30 +706,34 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
       {/* Status legend */}
       <div className="absolute bottom-3 left-3 px-3 py-2 rounded-xl z-[1000] flex items-center gap-3 flex-wrap"
         style={{
-          background: 'rgba(255,255,255,0.92)',
+          background: isDark ? 'rgba(28,32,48,0.92)' : 'rgba(255,255,255,0.92)',
           backdropFilter: 'blur(6px)',
-          boxShadow: '0 2px 12px rgba(91,84,232,0.15)',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          maxWidth: 'calc(100% - 24px)',
         }}>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#f97316', boxShadow: '0 0 0 3px rgba(249,115,22,0.25)' }} />
-          Pending
+        {[
+          ['#f97316', 'Pending', true],
+          ['#3b82f6', 'Assigned', false],
+          ['#22c55e', 'Resolved', false],
+        ].map(([color, label, glow]) => (
+          <span key={label} className="flex items-center gap-1.5 text-[10px] font-bold"
+            style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style={{ background: color, boxShadow: glow ? `0 0 0 3px ${color}40` : 'none', opacity: label === 'Resolved' ? 0.6 : 1 }} />
+            {label}
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
+          <span className="text-[11px]" aria-hidden="true">🛡️</span> Tanod
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#3b82f6' }} />
-          Assigned
+        <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
+          <span className="flex-shrink-0" style={{ width: '18px', borderTop: '3px dashed #f97316' }} /> En route
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: '#22c55e', opacity: 0.6 }} />
-          Resolved
-        </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
-          <span className="text-[11px]" aria-hidden="true">🛡️</span>
-          Tanod
-        </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-600">
-          <span className="flex-shrink-0" style={{ width: '18px', borderTop: '3px dashed #f97316' }} />
-          En route
-        </span>
+        {overlays?.coverage && (
+          <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
+            <span className="w-2.5 h-2.5 flex-shrink-0" style={{ background: '#dc262633', border: '1px solid #dc262666' }} /> Unpatrolled
+          </span>
+        )}
       </div>
 
       {/* Empty state */}
@@ -642,13 +741,15 @@ export default function IncidentMap({ incidents = [], tanodTrails = {}, height =
         <div className="absolute inset-0 z-[1000] flex items-center justify-center pointer-events-none">
           <div className="px-5 py-4 rounded-2xl text-center pointer-events-auto"
             style={{
-              background: 'rgba(255,255,255,0.95)',
+              background: isDark ? 'rgba(28,32,48,0.95)' : 'rgba(255,255,255,0.95)',
               backdropFilter: 'blur(6px)',
-              boxShadow: '0 8px 32px rgba(91,84,232,0.2)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
             }}>
-            <MapPin size={22} className="mx-auto mb-1.5 text-gray-300" />
-            <p className="text-sm font-bold text-gray-700">Nothing to show yet</p>
-            <p className="text-xs text-gray-400 mt-0.5">Incidents and on-duty tanods will appear here</p>
+            <MapPin size={22} className="mx-auto mb-1.5" style={{ color: isDark ? '#4b5563' : '#d1d5db' }} />
+            <p className="text-sm font-bold" style={{ color: isDark ? '#e8eaf2' : '#374151' }}>Nothing to show yet</p>
+            <p className="text-xs mt-0.5" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
+              Incidents and on-duty tanods will appear here
+            </p>
           </div>
         </div>
       )}

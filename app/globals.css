@@ -524,3 +524,13 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Leaflet sets z-index up to 1000 on its own panes and controls, which
+   outranks app overlays and lets the map punch through modals. Cap the
+   whole map container so any dialog above z-1000 wins. */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 1 !important;
+}

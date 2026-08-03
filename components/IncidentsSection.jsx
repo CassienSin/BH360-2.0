@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation' 
 import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil, ArrowUpDown } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, getPriority } from '@/lib/legalBasis'
@@ -454,6 +455,7 @@ export default function IncidentsSection({
   onPriorityChange,
   loading = false,
 }) {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [category, setCategory] = useState('all')
@@ -849,7 +851,12 @@ export default function IncidentsSection({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="inc-t14 font-bold text-gray-800 break-words">{inc.title}</h3>
+                  <button
+                    onClick={() => router.push(`/official/incident/${inc.id}`)}
+                    className="inc-t14 font-bold text-gray-800 break-words text-left hover:underline"
+                    style={{ textDecorationColor: '#5B54E8' }}>
+                    {inc.title}
+                  </button>
 
                   {/* Badge row — priority and status ALWAYS shown, including
                       on resolved incidents, so the list stays readable at a

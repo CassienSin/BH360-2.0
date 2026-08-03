@@ -1486,7 +1486,7 @@ export default function OfficialDashboard() {
        <CriticalAlert
         incidents={incidents}
         onAcknowledge={acknowledgeCritical}
-        onView={() => setActiveSection('incidents')}
+        onView={(inc) => router.push(`/official/incident/${inc.id}`)}   
       />
     </div>
   )

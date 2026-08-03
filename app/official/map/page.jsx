@@ -5,18 +5,8 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X, ChevronDown, Shield } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
+import CommandMap from '@/components/CommandMap'
 
-const IncidentMap = dynamic(() => import('@/components/IncidentMap'), {
-  ssr: false,
-  loading: () => (
-    <div className="rounded-3xl flex items-center justify-center" style={{ height: '70vh', background: 'white' }}>
-      <div className="text-center">
-        <Loader2 size={32} className="animate-spin text-purple-500 mx-auto mb-3" />
-        <p className="text-sm text-gray-500">Loading map...</p>
-      </div>
-    </div>
-  ),
-})
 
 const CATEGORY_CONFIG = {
   Noise: { color: '#f97316', emoji: '🔊' },
@@ -436,6 +426,25 @@ export default function MapView() {
   const filtersActive = statusFilter !== 'active' || categoryFilter !== 'all'
   const activeCategoryConf = categoryFilter !== 'all' ? CATEGORY_CONFIG[categoryFilter] : null
 
+  // Dispatch straight from the map's responder panel. The .eq('status','pending')
+  // guard makes it atomic — two officials can't double-assign the same incident.
+  const handleDispatch = useCallback(async (incident, tanodId) => {
+    const { data, error } = await supabase.from('incidents')
+      .update({ assigned_to: tanodId, status: 'assigned', assignment_method: 'manual' })
+      .eq('id', incident.id)
+      .eq('status', 'pending')
+      .select()
+    if (error) { toast.error('Dispatch failed. Please try again.'); return }
+    if (!data || data.length === 0) {
+      toast.error('That incident was already assigned by someone else.')
+      return
+    }
+    setIncidents(prev => prev.map(i =>
+      i.id === incident.id ? { ...i, assigned_to: tanodId, status: 'assigned' } : i
+    ))
+    toast.success('Tanod dispatched')
+  }, [supabase])
+
   function clearFilters() {
     setStatusFilter('active')
     setCategoryFilter('all')
@@ -651,7 +660,12 @@ export default function MapView() {
             )}
           </div>
         ) : (
-          <IncidentMap incidents={incidentsWithCoords} tanodTrails={showTanods ? tanodTrails : {}} />
+          <CommandMap
+            incidents={incidentsWithCoords}
+            tanodTrails={tanodTrails}
+            onDispatch={handleDispatch}
+            onOpenIncident={(inc) => router.push(`/official/incident/${inc.id}`)}   
+          />
         )}
 
         {/* Incidents without coords */}
