@@ -368,10 +368,10 @@ export default function ResidentDashboard() {
           searchData={{ incidents, tickets, announcements }}
           onNotificationClick={(notif) => {
             if (notif.type === 'announcement') setActiveSection('announcements')
-            if (notif.type === 'incident') setActiveSection('incidents')
+            if (notif.type === 'incident') router.push(`/resident/incident/${notif.id}`)
           }}
           onSearchResultClick={(type, item) => {
-            if (type === 'incidents') setActiveSection('incidents')
+            if (type === 'incidents') router.push(`/resident/incident/${item.id}`)
             if (type === 'tickets') router.push(`/resident/ticket/${item.id}`)
             if (type === 'announcements') setActiveSection('announcements')
           }}
@@ -588,7 +588,20 @@ export default function ResidentDashboard() {
                 </div>
               )}
               {incidents.map(inc => (
-                <div key={inc.id} className="white-card p-5">
+                <div
+                  key={inc.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => router.push(`/resident/incident/${inc.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      router.push(`/resident/incident/${inc.id}`)
+                    }
+                  }}
+                  className="white-card p-5 cursor-pointer transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2"
+                  style={{ '--tw-ring-color': '#5B54E8' }}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff7ed' }}>
@@ -632,7 +645,8 @@ export default function ResidentDashboard() {
 
                         {/* Rate Service button for unrated resolved */}
                         {inc.status === 'resolved' && !inc.rating && (
-                          <button onClick={() => setRatingModal(inc)}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setRatingModal(inc) }}
                             className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105"
                             style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 4px 12px rgba(251,191,36,0.3)' }}>
                             <Star size={12} fill="white" /> Rate the Service
@@ -640,7 +654,10 @@ export default function ResidentDashboard() {
                         )}
                       </div>
                     </div>
-                    <span className={`text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusColor[inc.status]}`}>{inc.status}</span>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusColor[inc.status]}`}>{inc.status}</span>
+                      <ChevronRight size={14} className="text-gray-300" />
+                    </div>
                   </div>
                 </div>
               ))}
