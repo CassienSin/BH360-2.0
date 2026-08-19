@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { consumeAiQuota } from '@/lib/rateLimit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -56,6 +57,29 @@ export async function POST(req) {
         generated_at: new Date(cachedReport.generatedAt).toISOString(),
         cached: true,
       })
+    }
+
+    // ── 2b. Rate limit, counted only when we are about to spend ──────────
+    // Deliberately after the cache check: a cached report costs nothing, so
+    // reading one should not consume an official's allowance. Passing
+    // { refresh: true } is what bypasses the cache, and that is exactly the
+    // call this needs to bound.
+    const quota = await consumeAiQuota(user.id, 'ai-analytics')
+    if (!quota.allowed) {
+      // Rather than fail outright, hand back the stale report if we have
+      // one — an out-of-date insight beats an error page.
+      if (cachedReport) {
+        return Response.json({
+          analysis: cachedReport.analysis,
+          generated_at: new Date(cachedReport.generatedAt).toISOString(),
+          cached: true,
+          notice: quota.message,
+        })
+      }
+      return Response.json(
+        { error: quota.message },
+        { status: 429, headers: { 'Retry-After': String(quota.retryAfterSeconds) } }
+      )
     }
 
     // ── 3. Fetch the data SERVER-SIDE, scoped to the caller's barangay ──

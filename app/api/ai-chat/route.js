@@ -1,27 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { consumeAiQuota } from '@/lib/rateLimit'
 
 // ── Limits ────────────────────────────────────────────────────────────────
 const MAX_MESSAGES = 20          // conversation window sent upstream
 const MAX_MESSAGE_LENGTH = 4000  // chars per message
-const RATE_LIMIT = 20            // requests per user...
-const RATE_WINDOW_MS = 60_000    // ...per minute
 
-// Best-effort in-memory rate limiter. On serverless (Vercel etc.) each
-// warm instance has its own map, so this is a speed bump rather than a
-// wall — good enough to stop casual abuse. For a hard guarantee, back it
-// with Upstash Redis or a Postgres counter.
-const hits = new Map()
-function rateLimited(userId) {
-  const now = Date.now()
-  const entry = hits.get(userId)
-  if (!entry || now - entry.start > RATE_WINDOW_MS) {
-    hits.set(userId, { start: now, count: 1 })
-    return false
-  }
-  entry.count++
-  return entry.count > RATE_LIMIT
-}
+// Rate limiting lives in lib/rateLimit.js, backed by a Postgres counter.
+// It used to be a Map in this module — which on Vercel meant a per-instance
+// counter that reset on every cold start, so it enforced nothing.
 
 const SYSTEM_PROMPT = `You are a helpful AI assistant for BarangayHub 360, a barangay management system in the Philippines.
 You help residents with common barangay questions such as:
@@ -51,10 +38,11 @@ export async function POST(request) {
     }
 
     // ── 2. Rate limit per user ───────────────────────────────────────────
-    if (rateLimited(user.id)) {
+    const quota = await consumeAiQuota(user.id, 'ai-chat')
+    if (!quota.allowed) {
       return Response.json(
-        { reply: 'You are sending messages too quickly. Please wait a minute and try again.' },
-        { status: 429 }
+        { reply: quota.message },
+        { status: 429, headers: { 'Retry-After': String(quota.retryAfterSeconds) } }
       )
     }
 

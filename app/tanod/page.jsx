@@ -14,6 +14,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAssignment } from '@/lib/notifications'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
+import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
@@ -51,6 +52,19 @@ const AnimatedDots = () => (
   </div>
 )
 
+
+// Incident photos live in a private bucket, so the URL has to be signed
+// per viewer. Opening in a new tab still works — the signed URL carries its
+// own token and expires on its own.
+function IncidentPhoto({ stored, alt, className, imgClassName, style }) {
+  const signed = useSignedIncidentUrl(stored)
+  if (!signed) return null
+  return (
+    <a href={signed} target="_blank" rel="noopener noreferrer" className={className} style={style}>
+      <img src={signed} alt={alt} className={imgClassName} loading="lazy" />
+    </a>
+  )
+}
 
 const PRIORITY_CONFIG = {
   Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
@@ -580,13 +594,10 @@ export default function TanodDashboard() {
                       </div>
                     </div>
 
-                    {inc.image_url && (
-                      <a href={inc.image_url} target="_blank" rel="noopener noreferrer"
-                        className="block mb-3 rounded-2xl overflow-hidden"
-                        style={{ border: '1px solid #f0effe' }}>
-                        <img src={inc.image_url} alt="Incident evidence" className="w-full max-h-48 object-cover" loading="lazy" />
-                      </a>
-                    )}
+                    <IncidentPhoto stored={inc.image_url} alt="Incident evidence"
+                      className="block mb-3 rounded-2xl overflow-hidden"
+                      imgClassName="w-full max-h-48 object-cover"
+                      style={{ border: '1px solid #f0effe' }} />
 
                     {hasCoords && (
                       <div className="mb-3 relative">
@@ -698,13 +709,10 @@ export default function TanodDashboard() {
                           </div>
                         )}
 
-                        {inc.resolution_image_url && (
-                          <a href={inc.resolution_image_url} target="_blank" rel="noopener noreferrer"
-                            className="block mt-2 rounded-xl overflow-hidden"
-                            style={{ border: '1px solid #dcfce7', maxWidth: '200px' }}>
-                            <img src={inc.resolution_image_url} alt="Resolution proof" className="w-full max-h-32 object-cover" loading="lazy" />
-                          </a>
-                        )}
+                        <IncidentPhoto stored={inc.resolution_image_url} alt="Resolution proof"
+                          className="block mt-2 rounded-xl overflow-hidden"
+                          imgClassName="w-full max-h-32 object-cover"
+                          style={{ border: '1px solid #dcfce7', maxWidth: '200px' }} />
                       </div>
                     </div>
                   </div>

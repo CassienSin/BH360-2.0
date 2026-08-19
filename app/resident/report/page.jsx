@@ -267,8 +267,11 @@ export default function ReportIncident() {
         return null
       }
 
-      const { data } = supabase.storage.from('incident-images').getPublicUrl(fileName)
-      return data.publicUrl
+      // Store the OBJECT PATH, not a URL. The bucket is private, so there is
+      // no durable URL to keep — every viewer signs their own, briefly, via
+      // lib/storage.js. Rows written before this still hold a full public
+      // URL and keep working: incidentImagePath() accepts both.
+      return fileName
     } finally {
       setUploading(false)
     }
