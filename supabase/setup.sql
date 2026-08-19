@@ -1473,6 +1473,198 @@ grant execute on function public.record_ai_call(uuid, text, integer, integer) to
 
 
 -- ============================================================================
+-- SECTION 14 — KATARUNGANG PAMBARANGAY (the barangay blotter)
+--
+-- RA 7160 Secs. 399–422. This is the barangay's judicial function, and
+-- Sec. 412 makes it a PRECONDITION to court: without a Certificate to File
+-- Action the complaint is dismissible for prematurity. It runs on a clock —
+-- next working day to summon (Sec. 410(b)), 15 days to mediate, 15 more for
+-- the Pangkat extendible once (Sec. 410(e)), 10 days to repudiate a
+-- settlement (Sec. 418) before it becomes final (Sec. 416).
+--
+-- The Sec. 408 eligibility assessment and the citation are FROZEN onto the
+-- row at filing, for the same reason the incident and document tables freeze
+-- theirs: a case must be judged against the rules that applied when it was
+-- taken, not against a table someone edited afterwards.
+--
+-- One dispute the barangay must not touch: under RA 9262 Sec. 33 a Punong
+-- Barangay or Kagawad who mediates a VAWC case, or presses the victim to
+-- compromise, is administratively liable. lib/katarungan.js treats that as a
+-- prohibition rather than an ineligibility, and the check constraint below
+-- makes it structural — a case flagged prohibited can never be moved into
+-- mediation or pangkat, whatever the UI does.
+-- ============================================================================
+
+create table if not exists blotter_cases (
+  id uuid default gen_random_uuid() primary key,
+  case_number text not null,
+  barangay_id uuid not null references barangays(id),
+
+  -- Optional: this case came out of a reported incident.
+  incident_id uuid references incidents(id),
+
+  complainant_id uuid references profiles(id),   -- null when not a registered account
+  complainant_name text not null,
+  complainant_address text,
+  complainant_phone text,
+  respondent_name text not null,
+  respondent_address text,
+
+  nature text not null,
+  description text not null,
+
+  -- Sec. 408 assessment, frozen at filing
+  lupon_eligible boolean not null,
+  prohibited boolean not null default false,
+  exclusion_reasons text[] not null default '{}',
+  legal_basis text not null,
+
+  status text not null default 'filed'
+    check (status in ('filed', 'mediation', 'pangkat', 'settled',
+                      'repudiated', 'cfa_issued', 'referred', 'withdrawn')),
+
+  filed_at timestamptz not null default now(),
+  summon_due_at timestamptz,           -- Sec. 410(b), next working day
+  first_meeting_at timestamptz,
+  mediation_due_at timestamptz,        -- first meeting + 15 days
+  pangkat_convened_at timestamptz,
+  pangkat_due_at timestamptz,          -- convened + 15 (+15 if extended)
+  pangkat_extended boolean not null default false,
+
+  settled_at timestamptz,
+  settlement_terms text,
+  repudiated_at timestamptz,
+  repudiation_reason text,
+  cfa_issued_at timestamptz,
+  cfa_reason text,
+  referred_to text,
+  withdrawn_reason text,
+
+  recorded_by uuid references profiles(id),
+  created_at timestamptz default now(),
+
+  -- A case number is unique within its barangay, not globally: two barangays
+  -- both having a KP-2026-0001 is correct.
+  constraint blotter_cases_number_unique unique (barangay_id, case_number),
+
+  -- RA 9262 Sec. 33, enforced by the database rather than by the form.
+  constraint blotter_prohibited_never_conciliated
+    check (not (prohibited and status in ('mediation', 'pangkat', 'settled'))),
+
+  -- A dispute outside the Lupon's authority cannot be conciliated either.
+  constraint blotter_ineligible_never_conciliated
+    check (lupon_eligible or status not in ('mediation', 'pangkat', 'settled')),
+
+  -- Sec. 410(e) allows exactly one extension; there is no second.
+  constraint blotter_extension_needs_pangkat
+    check (not pangkat_extended or pangkat_convened_at is not null),
+
+  -- Sec. 412: a CFA records why conciliation failed.
+  constraint blotter_cfa_states_reason
+    check (cfa_issued_at is null or coalesce(btrim(cfa_reason), '') <> ''),
+
+  -- Sec. 418: a repudiation is on stated grounds, not a bare assertion.
+  constraint blotter_repudiation_states_ground
+    check (repudiated_at is null or coalesce(btrim(repudiation_reason), '') <> '')
+);
+
+create index if not exists idx_blotter_barangay_status on blotter_cases(barangay_id, status);
+create index if not exists idx_blotter_complainant on blotter_cases(complainant_id);
+create index if not exists idx_blotter_incident on blotter_cases(incident_id);
+
+comment on table blotter_cases is
+  'Katarungang Pambarangay cases (RA 7160 Secs. 399-422). Deadlines are '
+  'computed by lib/katarungan.js and frozen on the row.';
+comment on column blotter_cases.prohibited is
+  'True for disputes the barangay is FORBIDDEN to mediate — VAWC under RA 9262 '
+  'Sec. 33. Distinct from lupon_eligible: an ineligible case is referred, a '
+  'prohibited one must never be scheduled for conciliation at all.';
+
+-- Sequential per barangay, per year — how a blotter is actually numbered.
+-- The advisory lock is transaction-scoped, so two clerks filing at the same
+-- moment serialise here instead of racing to the same number and having one
+-- of them fail on the unique constraint.
+create or replace function public.next_blotter_number(p_barangay uuid)
+returns text language plpgsql security definer set search_path = public
+as $$
+declare
+  v_year integer := extract(year from (now() at time zone 'Asia/Manila'));
+  v_seq integer;
+begin
+  perform pg_advisory_xact_lock(hashtext(p_barangay::text || ':' || v_year::text));
+  select count(*) + 1 into v_seq
+  from blotter_cases
+  where barangay_id = p_barangay
+    and extract(year from (filed_at at time zone 'Asia/Manila')) = v_year;
+  return 'KP-' || v_year || '-' || lpad(v_seq::text, 4, '0');
+end;
+$$;
+revoke all on function public.next_blotter_number(uuid) from public;
+
+-- Assigned by the database, never supplied by the client.
+create or replace function public.set_blotter_number()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.case_number is null or btrim(new.case_number) = '' then
+    new.case_number := public.next_blotter_number(new.barangay_id);
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.set_blotter_number() from public;
+grant execute on function public.set_blotter_number() to anon, authenticated, service_role;
+
+create or replace trigger trg_set_blotter_number
+  before insert on blotter_cases
+  for each row execute function public.set_blotter_number();
+
+alter table blotter_cases enable row level security;
+
+-- A complainant may follow their own case; officials run the Lupon for their
+-- barangay. Respondents are recorded by name, not by account, so there is no
+-- respondent-side read — matching how a paper blotter works.
+drop policy if exists "blotter: read own or officials of the barangay" on blotter_cases;
+create policy "blotter: read own or officials of the barangay"
+  on blotter_cases for select
+  using (
+    complainant_id = auth.uid()
+    or (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  );
+
+-- Filing is an official act: the complaint is taken at the barangay hall and
+-- recorded by the secretary. Residents raise incidents and tickets, not
+-- blotter entries.
+drop policy if exists "blotter: officials record for their barangay" on blotter_cases;
+create policy "blotter: officials record for their barangay"
+  on blotter_cases for insert
+  with check (
+    barangay_id = public.my_barangay_id()
+    and public.my_role() = 'official'
+    and recorded_by = auth.uid()
+    and status in ('filed', 'referred')
+  );
+
+drop policy if exists "blotter: officials update own barangay" on blotter_cases;
+create policy "blotter: officials update own barangay"
+  on blotter_cases for update
+  using (
+    (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  )
+  with check (
+    (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  );
+
+alter table blotter_cases replica identity full;
+do $$ begin
+  alter publication supabase_realtime add table blotter_cases;
+exception when duplicate_object then null; end $$;
+
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:
