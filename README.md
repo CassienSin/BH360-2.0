@@ -35,6 +35,7 @@
 - **📄 Exports** — branded PDF reports and CSV exports (with formula-injection protection)
 - **✅ Resident Verification** — every account is confirmed by a named official before the barangay will issue documents in that person's name; approve or reject with a reason, all through a locked-down RPC
 - **📑 Document Queue** — requests sorted by RA 11032 deadline (soonest first), with the statutory one-time extension, written denials, and a standing flag for anything already deemed approved under Sec. 10
+- **⚖️ Katarungang Pambarangay** — the barangay blotter and Lupon docket (RA 7160 Secs. 408–418): a Sec. 408 eligibility checklist taken with the complaint, the next-working-day summons, the 15-day mediation and Pangkat clocks with the single statutory extension, settlements with their 10-day repudiation window, and Certificates to File Action. Cases the barangay is **forbidden** to mediate — VAWC under RA 9262 Sec. 33 — are blocked from conciliation by the database, not just the form
 
 ### For the Super Admin
 - **🌐 Platform-wide Incident Feed** — every barangay's incidents in one list, live, with barangay / status / priority filters and a flag for reports left pending past their response window
@@ -141,6 +142,7 @@ category-to-statute table — so that is what is covered:
 | `legalBasis.test.js` | every category carries a checkable citation; the corrections that prompted the table |
 | `storage.test.js` | incident photo paths, legacy public URLs and current bare paths alike |
 | `verification.test.js` | who may have a document issued in their name |
+| `katarungan.test.js` | the RA 7160 mediation and Pangkat periods, the Sec. 408 exceptions, and the RA 9262 Sec. 33 prohibition |
 
 ```bash
 npm test          # once
@@ -173,6 +175,7 @@ npm run test:watch
 │   ├── legalBasis.js       # Incident categories + the RA that governs each one (single source of truth)
 │   ├── documents.js        # Citizen's Charter + RA 11032 working-day deadline math
 │   ├── verification.js     # What manual verification gates (and what it deliberately doesn't)
+│   ├── katarungan.js       # Katarungang Pambarangay — Sec. 408 eligibility and the RA 7160 clocks
 │   ├── triage.js           # Queue aging — standing rises with neglect, priority does not
 │   ├── timeAgo.js          # Relative-time formatting
 │   ├── exports.js          # CSV / branded PDF export utilities
