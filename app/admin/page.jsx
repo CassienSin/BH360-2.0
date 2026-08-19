@@ -74,6 +74,10 @@ function generateSecureCode(prefix) {
 // every barangay's queue.
 const INCIDENT_FEED_LIMIT = 300
 
+// Applications were unbounded, which meant relying on Supabase's silent
+// 1,000-row cap to stop the query — a limit that truncates without saying so.
+const APPLICATION_LIMIT = 300
+
 const INCIDENT_STATUS_STYLE = {
   pending:  { label: 'Pending',  color: '#f97316', bg: '#fff7ed' },
   assigned: { label: 'Assigned', color: '#3b82f6', bg: '#eff6ff' },
@@ -121,7 +125,8 @@ export default function AdminPanel() {
     const [appsRes, usersRes, codesRes, incidentsRes] = await Promise.all([
       supabase.from('barangay_applications')
         .select('*, barangays(name, city, province)')
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(APPLICATION_LIMIT),
       supabase.from('profiles')
         .select('*, barangays(name)')
         .or('is_super_admin.is.null,is_super_admin.eq.false')

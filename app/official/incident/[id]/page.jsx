@@ -10,7 +10,8 @@ import {
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, getPriority } from '@/lib/legalBasis'
-import { computeStanding, responseWindowLabel } from '@/lib/triage'
+import { computeStanding, activeWindowLabel } from '@/lib/triage'
+import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -335,15 +336,16 @@ export default function IncidentDetail() {
           <div className="space-y-4">
 
             {/* Overdue banner */}
-            {standing?.aged && incident.status === 'pending' && (
+            {standing?.aged && incident.status !== 'resolved' && (
               <div className="rounded-2xl px-4 py-3 flex items-start gap-2.5"
                 style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
                 <Clock size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
                 <div>
                   <p className="text-xs font-black text-amber-800">{standing.label}</p>
                   <p className="text-[11px] text-amber-700 mt-0.5">
-                    {incident.priority} incidents target a response within {responseWindowLabel(incident.priority)}.
+                    {incident.priority} incidents target {activeWindowLabel(incident)}.
                     This one has been waiting {timeAgo(incident.created_at).replace(' ago', '')}.
+                    {standing.phase === 'response' && ' Nobody has acknowledged it or chosen the responder yet — an automatic assignment does not count.'}
                   </p>
                 </div>
               </div>
@@ -378,11 +380,11 @@ export default function IncidentDetail() {
                 <div className="grid grid-cols-2 gap-3">
                   {incident.image_url && (
                     <PhotoCard src={incident.image_url} label="Reported by resident"
-                      onOpen={() => setLightbox({ src: incident.image_url, alt: 'Reported photo' })} />
+                      onOpen={(url) => setLightbox({ src: url, alt: 'Reported photo' })} />
                   )}
                   {incident.resolution_image_url && (
                     <PhotoCard src={incident.resolution_image_url} label="Resolution proof"
-                      onOpen={() => setLightbox({ src: incident.resolution_image_url, alt: 'Resolution photo' })} />
+                      onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
                   )}
                 </div>
               </div>
@@ -529,11 +531,8 @@ export default function IncidentDetail() {
                           <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{e.note}</p>
                         )}
                         {e.photo && (
-                          <button onClick={() => setLightbox({ src: e.photo, alt: 'Resolution photo' })}
-                            className="idt-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
-                            style={{ border: '1px solid #f0effe' }}>
-                            <img src={e.photo} alt="" className="w-full h-full object-cover" />
-                          </button>
+                          <TimelinePhoto stored={e.photo}
+                            onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
                         )}
                       </div>
                     </div>
@@ -625,14 +624,31 @@ function Meta({ icon: Icon, label, value }) {
   )
 }
 
+// `src` is the stored path; the bucket is private, so sign it here and hand
+// the signed URL to the lightbox.
 function PhotoCard({ src, label, onOpen }) {
+  const signed = useSignedIncidentUrl(src)
+  if (!signed) return null
   return (
-    <button onClick={onOpen} className="idt-press text-left rounded-2xl overflow-hidden w-full"
+    <button onClick={() => onOpen(signed)} className="idt-press text-left rounded-2xl overflow-hidden w-full"
       style={{ border: '1px solid #f0effe' }}>
-      <img src={src} alt={label} className="w-full h-32 object-cover" loading="lazy" />
+      <img src={signed} alt={label} className="w-full h-32 object-cover" loading="lazy" />
       <p className="text-[10px] font-bold text-gray-500 px-2.5 py-1.5" style={{ background: '#fafaff' }}>
         {label}
       </p>
+    </button>
+  )
+}
+
+function TimelinePhoto({ stored, onOpen }) {
+  const signed = useSignedIncidentUrl(stored)
+  if (!signed) return null
+  return (
+    <button onClick={() => onOpen(signed)}
+      aria-label="View resolution photo"
+      className="idt-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
+      style={{ border: '1px solid #f0effe' }}>
+      <img src={signed} alt="" className="w-full h-full object-cover" />
     </button>
   )
 }
