@@ -122,12 +122,19 @@ export default function ReportIncident() {
     async function loadBarangay() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user || cancelled) return
-      const { data } = await supabase
+      // The embedded barangays(phone) column has to exist in the database
+      // for this whole select to succeed — when it did not, `data` came back
+      // null and took barangay_id down with it, silently disabling the
+      // responder-availability strip and the emergency-contacts card. Log
+      // the error rather than swallowing it, so the next schema drift is
+      // visible instead of just quietly turning a feature off.
+      const { data, error } = await supabase
         .from('profiles')
         .select('barangay_id, barangays(phone)')
         .eq('id', user.id)
         .single()
       if (cancelled) return
+      if (error) console.error('Could not load barangay context:', error)
       setBarangayId(data?.barangay_id ?? null)
       setBarangayPhone(data?.barangays?.phone ?? null)
     }

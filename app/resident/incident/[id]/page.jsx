@@ -158,8 +158,12 @@ export default function ResidentIncidentDetail() {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) { router.replace('/login'); return }
 
-    const { data: prof } = await supabase
+    // See the note in app/resident/report/page.jsx: if the embedded
+    // barangays(phone) column is missing, the whole select fails and
+    // barangay_id comes back null too.
+    const { data: prof, error: profError } = await supabase
       .from('profiles').select('barangay_id, barangays(phone)').eq('id', user.id).single()
+    if (profError) console.error('Could not load barangay context:', profError)
     setBarangayId(prof?.barangay_id ?? null)
     setBarangayPhone(prof?.barangays?.phone ?? null)
 

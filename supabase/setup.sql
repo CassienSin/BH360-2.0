@@ -32,6 +32,10 @@ create table if not exists barangays (
   province text not null,
   region text not null,
   full_address text generated always as (name || ', ' || city || ', ' || province) stored,
+  -- Barangay hall hotline, shown by components/ResponderAvailability.jsx when
+  -- nobody is on duty or the category must be referred elsewhere. Nullable:
+  -- PSGC import populates the ~42,000 reference rows with no phone number.
+  phone text,
   created_at timestamptz default now()
 );
 create index if not exists idx_barangays_province on barangays(province);
@@ -49,6 +53,10 @@ create table if not exists profiles (
   barangay_id uuid references barangays(id),
   is_super_admin boolean not null default false,
   deactivated_at timestamptz,
+  -- Duty state, maintained by the tanod's DutyToggle and by log_duty_change()
+  on_duty boolean not null default false,
+  duty_changed_at timestamptz,
+  last_seen_at timestamptz,
   created_at timestamptz default now()
 );
 create index if not exists idx_profiles_barangay on profiles(barangay_id);
@@ -93,6 +101,23 @@ create table if not exists incidents (
   legal_basis text,
   response_mode text,
   auto_escalated boolean not null default false,
+
+  -- Priority override audit trail. An official may raise or lower the
+  -- law-assigned priority, but the original and the written reason are kept
+  -- so the record shows both what the law said and what the official decided.
+  original_priority text,
+  priority_override_reason text,
+  priority_overridden_by uuid references profiles(id),
+  priority_overridden_at timestamptz,
+
+  -- Time-to-awareness for Critical alerts: acknowledged_at - created_at
+  acknowledged_at timestamptz,
+  acknowledged_by uuid references profiles(id),
+
+  -- How the current tanod got here (see auto_assign_tanod / mark_manual_assignment)
+  assignment_method text check (assignment_method in ('auto', 'auto_offduty', 'manual', 'reassigned')),
+  auto_assigned_at timestamptz,
+
   barangay_id uuid references barangays(id),
   created_at timestamptz default now()
 );
@@ -141,6 +166,7 @@ create table if not exists invite_codes (
   role text not null check (role in ('official', 'tanod')),
   used boolean not null default false,
   used_by uuid references auth.users(id),
+  used_at timestamptz,
   barangay_id uuid references barangays(id),
   created_at timestamptz default now()
 );
@@ -163,9 +189,6 @@ create table if not exists barangay_applications (
 );
 
 -- Support Messages (Help & Support contact form)
--- NOTE: reconstructed from usage across the codebase, not from an original
--- CREATE TABLE dump. Verify column names against actual form submissions
--- if support-message errors ever surface.
 create table if not exists support_messages (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references profiles(id),
@@ -174,6 +197,97 @@ create table if not exists support_messages (
   status text not null default 'open',
   created_at timestamptz default now()
 );
+
+-- Duty Logs (append-only history of tanods going on/off duty).
+-- Written only by the log_duty_change() trigger, never by a client.
+create table if not exists duty_logs (
+  id uuid default gen_random_uuid() primary key,
+  tanod_id uuid not null references profiles(id) on delete cascade,
+  barangay_id uuid references barangays(id),
+  went_on_duty boolean not null,
+  changed_at timestamptz not null default now()
+);
+
+-- Tanod Locations (breadcrumb trail while on duty, for the command map).
+-- prune_tanod_locations() trims anything older than 24 hours on every
+-- insert, so this table stays small without a scheduled job.
+create table if not exists tanod_locations (
+  id bigint generated always as identity primary key,
+  tanod_id uuid not null references profiles(id) on delete cascade,
+  barangay_id uuid not null,
+  latitude double precision not null,
+  longitude double precision not null,
+  accuracy double precision,
+  recorded_at timestamptz not null default now()
+);
+create index if not exists tanod_locations_brgy_time on tanod_locations(barangay_id, recorded_at desc);
+create index if not exists tanod_locations_tanod_time on tanod_locations(tanod_id, recorded_at desc);
+
+-- Notification Reads (which in-app notifications a user has dismissed).
+-- notif_key is a client-composed string, not a foreign key, because a
+-- notification can stand for a row in any of several tables.
+create table if not exists notification_reads (
+  user_id uuid not null references profiles(id) on delete cascade,
+  notif_key text not null,
+  read_at timestamptz default now(),
+  primary key (user_id, notif_key)
+);
+
+
+-- ----------------------------------------------------------------------------
+-- UPGRADE PATH
+--
+-- The CREATE TABLE statements above only run on a fresh project. A database
+-- created from an earlier version of this file already has those tables, so
+-- the columns added since then have to be applied separately. Every statement
+-- here is a no-op the second time it runs.
+-- ----------------------------------------------------------------------------
+
+alter table barangays    add column if not exists phone text;
+
+alter table profiles     add column if not exists on_duty boolean not null default false;
+alter table profiles     add column if not exists duty_changed_at timestamptz;
+alter table profiles     add column if not exists last_seen_at timestamptz;
+
+alter table invite_codes add column if not exists used_at timestamptz;
+
+alter table incidents    add column if not exists original_priority text;
+alter table incidents    add column if not exists priority_override_reason text;
+alter table incidents    add column if not exists priority_overridden_by uuid references profiles(id);
+alter table incidents    add column if not exists priority_overridden_at timestamptz;
+alter table incidents    add column if not exists acknowledged_at timestamptz;
+alter table incidents    add column if not exists acknowledged_by uuid references profiles(id);
+alter table incidents    add column if not exists assignment_method text;
+alter table incidents    add column if not exists auto_assigned_at timestamptz;
+
+do $$ begin
+  alter table incidents add constraint incidents_assignment_method_check
+    check (assignment_method in ('auto', 'auto_offduty', 'manual', 'reassigned'));
+exception when duplicate_object then null; end $$;
+
+-- duty_logs.barangay_id predates this constraint in databases created from
+-- an earlier version, so add it where it is missing.
+do $$ begin
+  alter table duty_logs add constraint duty_logs_barangay_id_fkey
+    foreign key (barangay_id) references barangays(id);
+exception when duplicate_object then null; end $$;
+
+-- Critical reports nobody has acknowledged yet — the query CriticalAlert
+-- runs on every dashboard load.
+create index if not exists idx_incidents_unacknowledged
+  on incidents(barangay_id, created_at)
+  where priority = 'Critical' and acknowledged_at is null;
+
+comment on column barangays.phone is
+  'Barangay hall hotline shown by components/ResponderAvailability.jsx.';
+comment on column incidents.original_priority is
+  'The law-assigned priority at report time. Set only when an official overrides it.';
+comment on column incidents.priority_override_reason is
+  'Required written justification for the override.';
+comment on column incidents.acknowledged_at is
+  'When an official first acknowledged the critical alert. Time-to-awareness = acknowledged_at - created_at.';
+comment on column incidents.assignment_method is
+  'How the current tanod was assigned: auto (trigger), auto_offduty (Critical fallback), manual (official), or reassigned.';
 
 
 -- ============================================================================
@@ -188,6 +302,9 @@ alter table ticket_messages       enable row level security;
 alter table invite_codes          enable row level security;
 alter table barangay_applications enable row level security;
 alter table support_messages      enable row level security;
+alter table duty_logs             enable row level security;
+alter table tanod_locations       enable row level security;
+alter table notification_reads    enable row level security;
 
 
 -- ============================================================================
@@ -203,19 +320,19 @@ create or replace function public.my_barangay_id()
 returns uuid language sql stable security definer set search_path = public
 as $$ select barangay_id from profiles where id = auth.uid() $$;
 revoke all on function public.my_barangay_id() from public;
-grant execute on function public.my_barangay_id() to authenticated;
+grant execute on function public.my_barangay_id() to authenticated, service_role;
 
 create or replace function public.my_role()
 returns text language sql stable security definer set search_path = public
 as $$ select role from profiles where id = auth.uid() $$;
 revoke all on function public.my_role() from public;
-grant execute on function public.my_role() to authenticated;
+grant execute on function public.my_role() to authenticated, service_role;
 
 create or replace function public.am_super_admin()
 returns boolean language sql stable security definer set search_path = public
 as $$ select coalesce(is_super_admin, false) from profiles where id = auth.uid() $$;
 revoke all on function public.am_super_admin() from public;
-grant execute on function public.am_super_admin() to authenticated;
+grant execute on function public.am_super_admin() to authenticated, service_role;
 
 -- Location dropdown helpers (register / request-access cascading selects).
 -- anon needs these — registration happens before the user is authenticated.
@@ -224,14 +341,14 @@ returns table (province text)
 language sql stable set search_path = public
 as $$ select distinct province from barangays order by province; $$;
 revoke all on function get_distinct_provinces() from public;
-grant execute on function get_distinct_provinces() to anon, authenticated;
+grant execute on function get_distinct_provinces() to anon, authenticated, service_role;
 
 create or replace function get_distinct_cities(p_province text)
 returns table (city text)
 language sql stable set search_path = public
 as $$ select distinct city from barangays where province = p_province order by city; $$;
 revoke all on function get_distinct_cities(text) from public;
-grant execute on function get_distinct_cities(text) to anon, authenticated;
+grant execute on function get_distinct_cities(text) to anon, authenticated, service_role;
 
 
 -- ============================================================================
@@ -423,6 +540,71 @@ drop policy if exists "support_messages: super admin updates" on support_message
 create policy "support_messages: super admin updates"
   on support_messages for update using (public.am_super_admin());
 
+-- Older databases named these policies differently. Postgres ORs permissive
+-- policies together, so leaving the originals in place would quietly keep a
+-- second, separately-maintained rule on each table — drop them by their old
+-- names before creating the current ones.
+drop policy if exists "read duty logs" on duty_logs;
+drop policy if exists "read own" on notification_reads;
+drop policy if exists "insert own" on notification_reads;
+drop policy if exists "read tanod locations" on tanod_locations;
+drop policy if exists "tanod inserts own location while on duty" on tanod_locations;
+
+-- DUTY LOGS — read-only to clients. The only writer is log_duty_change(),
+-- which is SECURITY DEFINER and so bypasses RLS; deliberately no INSERT
+-- policy, because a tanod must not be able to forge their own duty history.
+drop policy if exists "duty_logs: read own or official same barangay" on duty_logs;
+create policy "duty_logs: read own or official same barangay"
+  on duty_logs for select
+  using (
+    tanod_id = auth.uid()
+    or exists (
+      select 1 from profiles me
+      where me.id = auth.uid()
+        and me.role = 'official'
+        and me.barangay_id = duty_logs.barangay_id
+    )
+  );
+
+-- TANOD LOCATIONS — a tanod may only post their OWN position, only while
+-- on duty, and only into their own barangay. Officials of that barangay and
+-- the tanod themselves can read it. Off-duty location is nobody's business.
+drop policy if exists "tanod_locations: read own or official same barangay" on tanod_locations;
+create policy "tanod_locations: read own or official same barangay"
+  on tanod_locations for select
+  using (
+    tanod_id = auth.uid()
+    or exists (
+      select 1 from profiles me
+      where me.id = auth.uid()
+        and me.role = 'official'
+        and me.barangay_id = tanod_locations.barangay_id
+    )
+  );
+
+drop policy if exists "tanod_locations: on-duty tanod inserts own" on tanod_locations;
+create policy "tanod_locations: on-duty tanod inserts own"
+  on tanod_locations for insert
+  with check (
+    tanod_id = auth.uid()
+    and exists (
+      select 1 from profiles p
+      where p.id = auth.uid()
+        and p.role = 'tanod'
+        and p.on_duty = true
+        and p.barangay_id = tanod_locations.barangay_id
+    )
+  );
+
+-- NOTIFICATION READS — strictly per-user.
+drop policy if exists "notification_reads: read own" on notification_reads;
+create policy "notification_reads: read own"
+  on notification_reads for select using (user_id = auth.uid());
+
+drop policy if exists "notification_reads: insert own" on notification_reads;
+create policy "notification_reads: insert own"
+  on notification_reads for insert with check (user_id = auth.uid());
+
 
 -- ============================================================================
 -- SECTION 5 — INVITE-CODE RPCs
@@ -444,7 +626,7 @@ as $$
 $$;
 revoke all on function validate_invite_code(text, text) from public;
 -- anon is intentional: this runs during registration, before the account exists
-grant execute on function validate_invite_code(text, text) to anon, authenticated;
+grant execute on function validate_invite_code(text, text) to anon, authenticated, service_role;
 
 create or replace function claim_invite_code(input_code text, input_role text, claimer uuid)
 returns boolean
@@ -462,7 +644,7 @@ as $$
 $$;
 revoke all on function claim_invite_code(text, text, uuid) from public;
 -- authenticated only: claiming happens right after signUp, caller always has a session
-grant execute on function claim_invite_code(text, text, uuid) to authenticated;
+grant execute on function claim_invite_code(text, text, uuid) to authenticated, service_role;
 
 
 -- ============================================================================
@@ -493,6 +675,7 @@ end;
 $$;
 revoke all on function prevent_privilege_escalation() from public;
 -- No client role needs EXECUTE — only the trigger below invokes it.
+grant execute on function prevent_privilege_escalation() to service_role;
 
 drop trigger if exists protect_profile_privileges on profiles;
 create trigger protect_profile_privileges
@@ -502,7 +685,240 @@ create trigger protect_profile_privileges
 
 
 -- ============================================================================
--- SECTION 7 — REALTIME
+-- SECTION 7 — SIGNUP, AUTO-DISPATCH AND DUTY TRIGGERS
+--
+-- These are the pieces that make the app work without the client being
+-- trusted: the profile row is created by the database from auth metadata,
+-- invite codes are claimed inside that same transaction, and a new incident
+-- is assigned to a tanod before it is ever visible.
+-- ============================================================================
+
+-- Creates the profile row for every new auth user.
+--
+-- This is why app/register/page.jsx never inserts into profiles: signup is
+-- ONE atomic operation. Two things follow from that. A role string from the
+-- client is never trusted — anything unexpected collapses to 'resident'. And
+-- an official/tanod signup that cannot claim an unused code for that role
+-- raises, which aborts the whole signup: no auth user, no orphaned account,
+-- no burnt code. The barangay comes from the CODE, not the client, so a
+-- stolen code cannot be pointed at a different barangay.
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare
+  meta jsonb := new.raw_user_meta_data;
+  v_role text := coalesce(nullif(trim(meta->>'role'), ''), 'resident');
+  v_code text := upper(trim(coalesce(meta->>'invite_code', '')));
+  v_barangay uuid;
+  claimed_barangay uuid;
+begin
+  if v_role not in ('resident', 'official', 'tanod') then
+    v_role := 'resident';
+  end if;
+
+  -- Residents pick their own barangay client-side.
+  begin
+    v_barangay := (meta->>'barangay_id')::uuid;
+  exception when others then
+    v_barangay := null;
+  end;
+
+  -- The claim is atomic: `and used = false` means two signups racing on the
+  -- same code cannot both win — the second UPDATE matches zero rows.
+  if v_role <> 'resident' then
+    update public.invite_codes
+       set used = true,
+           used_by = new.id,
+           used_at = now()
+     where upper(trim(code)) = v_code
+       and role = v_role
+       and used = false
+    returning barangay_id into claimed_barangay;
+
+    if claimed_barangay is null then
+      raise exception 'invalid_invite_code';
+    end if;
+
+    v_barangay := claimed_barangay;
+  end if;
+
+  insert into public.profiles (id, full_name, role, barangay_id, phone, address)
+  values (
+    new.id,
+    coalesce(nullif(trim(meta->>'full_name'), ''), 'Resident'),
+    v_role,
+    v_barangay,
+    coalesce(meta->>'phone', ''),
+    coalesce(meta->>'address', '')
+  );
+
+  return new;
+end;
+$$;
+grant execute on function public.handle_new_user() to anon, authenticated, service_role;
+
+-- Attach it to auth.users, removing any earlier trigger bound to the same
+-- function first. Two triggers calling this would insert the profile twice
+-- and break every signup with a primary-key violation, so this loop matters
+-- more than it looks — the trigger may already exist under another name.
+do $$
+declare t record;
+begin
+  for t in
+    select tgname from pg_trigger
+    where tgrelid = 'auth.users'::regclass
+      and not tgisinternal
+      and tgfoid = 'public.handle_new_user()'::regprocedure
+  loop
+    execute format('drop trigger %I on auth.users', t.tgname);
+  end loop;
+end $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+
+-- Assigns a tanod at the moment an incident is created.
+--
+-- A report that lands in a queue nobody owns is a report nobody answers, so
+-- dispatch happens before the row is ever visible. On-duty tanods are picked
+-- lightest-load first, then longest-idle, so the work spreads instead of
+-- landing repeatedly on whoever sorts first.
+--
+-- The off-duty fallback is for CRITICAL ONLY, and is marked 'auto_offduty'
+-- rather than 'auto' precisely so the dashboard can tell the official to
+-- phone the person: a silent assignment to someone asleep would be worse
+-- than no assignment at all.
+create or replace function public.auto_assign_tanod()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare
+  chosen uuid;
+begin
+  if new.assigned_to is not null or new.status <> 'pending' then
+    return new;
+  end if;
+
+  select t.id into chosen
+  from profiles t
+  left join lateral (
+    select count(*) as active from incidents i
+    where i.assigned_to = t.id and i.status = 'assigned'
+  ) load on true
+  left join lateral (
+    select max(i2.created_at) as last_assigned from incidents i2
+    where i2.assigned_to = t.id
+  ) recent on true
+  where t.barangay_id = new.barangay_id
+    and t.role = 'tanod'
+    and t.on_duty = true
+    and t.deactivated_at is null
+  order by load.active asc, recent.last_assigned asc nulls first, t.id
+  limit 1;
+
+  if chosen is not null then
+    new.assigned_to := chosen;
+    new.status := 'assigned';
+    new.assignment_method := 'auto';
+    new.auto_assigned_at := now();
+    return new;
+  end if;
+
+  if new.priority = 'Critical' then
+    select t.id into chosen
+    from profiles t
+    where t.barangay_id = new.barangay_id
+      and t.role = 'tanod'
+      and t.deactivated_at is null
+    order by t.last_seen_at desc nulls last, t.id
+    limit 1;
+
+    if chosen is not null then
+      new.assigned_to := chosen;
+      new.status := 'assigned';
+      new.assignment_method := 'auto_offduty';
+      new.auto_assigned_at := now();
+      return new;
+    end if;
+  end if;
+
+  -- Nobody available at all — stays pending and visible.
+  return new;
+end;
+$$;
+revoke all on function public.auto_assign_tanod() from public;
+grant execute on function public.auto_assign_tanod() to anon, authenticated, service_role;
+
+create or replace trigger trg_auto_assign_tanod
+  before insert on incidents
+  for each row execute function public.auto_assign_tanod();
+
+
+-- Records that a human, not the trigger, made this assignment.
+create or replace function public.mark_manual_assignment()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.assigned_to is distinct from old.assigned_to and new.assigned_to is not null then
+    new.assignment_method := case
+      when old.assigned_to is null then 'manual'
+      else 'reassigned'
+    end;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.mark_manual_assignment() from public;
+grant execute on function public.mark_manual_assignment() to anon, authenticated, service_role;
+
+create or replace trigger trg_mark_manual_assignment
+  before update on incidents
+  for each row execute function public.mark_manual_assignment();
+
+
+-- Duty history. Writing the log here rather than from the client is what
+-- makes it evidence: a tanod cannot claim a shift they did not toggle.
+create or replace function public.log_duty_change()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  if new.on_duty is distinct from old.on_duty then
+    new.duty_changed_at := now();
+    insert into public.duty_logs (tanod_id, barangay_id, went_on_duty)
+    values (new.id, new.barangay_id, new.on_duty);
+  end if;
+  return new;
+end;
+$$;
+grant execute on function public.log_duty_change() to anon, authenticated, service_role;
+
+create or replace trigger on_duty_change
+  before update on profiles
+  for each row execute function public.log_duty_change();
+
+
+-- Keeps the location breadcrumb table to a 24-hour window without needing a
+-- scheduled job — every insert trims that tanod's older rows.
+create or replace function public.prune_tanod_locations()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  delete from public.tanod_locations
+  where tanod_id = new.tanod_id
+    and recorded_at < now() - interval '24 hours';
+  return new;
+end;
+$$;
+grant execute on function public.prune_tanod_locations() to anon, authenticated, service_role;
+
+create or replace trigger prune_old_locations
+  after insert on tanod_locations
+  for each row execute function public.prune_tanod_locations();
+
+
+-- ============================================================================
+-- SECTION 8 — REALTIME
 -- ============================================================================
 alter table incidents       replica identity full;
 alter table tickets         replica identity full;
@@ -514,16 +930,18 @@ alter table announcements   replica identity full;
 -- still applies the SELECT policies above, so a subscriber only receives
 -- rows it could already read.
 alter table profiles        replica identity full;
+alter table tanod_locations replica identity full;
 
 do $$ begin alter publication supabase_realtime add table incidents;       exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table tickets;         exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table ticket_messages; exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table announcements;   exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table profiles;        exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table tanod_locations; exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
--- SECTION 8 — STORAGE BUCKETS
+-- SECTION 9 — STORAGE BUCKETS
 -- No SELECT/listing policy on either bucket: public-bucket files are
 -- served by URL (getPublicUrl()) without RLS being consulted at all. A
 -- SELECT policy here would only enable directory-style enumeration of
@@ -571,7 +989,7 @@ using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1
 
 
 -- ============================================================================
--- SECTION 9 — MANUAL RESIDENT VERIFICATION
+-- SECTION 10 — MANUAL RESIDENT VERIFICATION
 --
 -- Registration proves someone owns an email address. It does not prove they
 -- live in the barangay. Under RA 7160 Sec. 394 the barangay secretary keeps
@@ -614,11 +1032,28 @@ comment on column profiles.verification_status is
   'Set only through public.set_verification_status() by a barangay official '
   'of the same barangay, or by a super admin. Never self-serve.';
 
+-- Whether the CALLING account may have documents issued in its name.
+--
+-- This must mirror canRequestDocuments() in lib/verification.js exactly. It
+-- previously checked verification_status alone, which was wrong: officials
+-- and tanods are created by handle_new_user() with the default 'pending'
+-- status (their vetting happened when the barangay issued their invite
+-- code), so a checking-status-only version enabled the request form for
+-- them in the UI and then rejected the insert at the policy. Same rule,
+-- both sides.
 create or replace function public.am_verified()
 returns boolean language sql stable security definer set search_path = public
-as $$ select coalesce(verification_status = 'verified', false) from profiles where id = auth.uid() $$;
+as $$
+  select coalesce(
+    is_super_admin
+    or role in ('official', 'tanod')
+    or verification_status = 'verified',
+    false)
+  from profiles where id = auth.uid()
+$$;
 revoke all on function public.am_verified() from public;
 grant execute on function public.am_verified() to authenticated;
+grant execute on function public.am_verified() to service_role;
 
 -- The ONLY way verification columns change.
 --
@@ -690,7 +1125,7 @@ grant execute on function public.set_verification_status(uuid, text, text) to au
 
 
 -- ============================================================================
--- SECTION 10 — DOCUMENT REQUESTS (RA 11032)
+-- SECTION 11 — DOCUMENT REQUESTS (RA 11032)
 --
 -- RA 11032 (Ease of Doing Business and Efficient Government Service Delivery
 -- Act of 2018), which amended RA 9485, binds the barangay to a clock:
