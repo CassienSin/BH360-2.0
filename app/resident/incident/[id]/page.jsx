@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import { LEGAL_BASIS } from '@/lib/legalBasis'
+import { LEGAL_BASIS, CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { EmergencyContacts } from '@/components/ResponderAvailability'
 
@@ -29,14 +29,9 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
  * response is the first thing on the page rather than a field inside it.
  */
 
-const CATEGORY = {
-  Noise: { icon: '🔊', color: '#f97316' }, Theft: { icon: '🚨', color: '#ef4444' },
-  Violence: { icon: '⚠️', color: '#dc2626' }, Fire: { icon: '🔥', color: '#ea580c' },
-  Flood: { icon: '🌊', color: '#3b82f6' }, Infrastructure: { icon: '🛠️', color: '#8b5cf6' },
-  Animals: { icon: '🐕', color: '#a16207' }, Medical: { icon: '🚑', color: '#dc2626' },
-  Traffic: { icon: '🚦', color: '#0891b2' }, Vandalism: { icon: '🎨', color: '#7c3aed' },
-  Drugs: { icon: '💊', color: '#be185d' }, Other: { icon: '📝', color: '#6b7280' },
-}
+// Icons and colours come from the same table that holds each
+// category's governing law — see lib/legalBasis.js.
+const CATEGORY = CATEGORY_CONFIG
 
 const PRIORITY = {
   Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', word: 'Emergency' },
@@ -362,9 +357,16 @@ export default function ResidentIncidentDetail() {
                   Why it was classified {pri.word.toLowerCase()}
                 </p>
                 <p className="text-xs text-gray-700 mt-1">
-                  <strong>{basis.law}</strong> — {basis.lawTitle}
+                  <strong>{basis.law}</strong>
+                  {basis.sections && <strong>{', '}{basis.sections}</strong>} — {basis.lawTitle}
                 </p>
                 <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">{basis.reason}</p>
+                {basis.source && (
+                  <a href={basis.source} target="_blank" rel="noopener noreferrer"
+                    className="inline-block text-[11px] font-semibold mt-1.5 underline" style={{ color: '#5B54E8' }}>
+                    Read the law
+                  </a>
+                )}
               </div>
             </div>
           </div>

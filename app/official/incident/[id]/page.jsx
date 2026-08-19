@@ -76,7 +76,7 @@ function buildTimeline(inc, people) {
       icon: Scale,
       tone: 'legal',
       title: `Classified ${inc.original_priority || inc.priority}`,
-      body: inc.legal_basis || `${basis?.law} — ${basis?.lawTitle}`,
+      body: inc.legal_basis || `${basis?.law}${basis?.sections ? `, ${basis.sections}` : ''} — ${basis?.lawTitle}`,
       note: basis?.reason,
     })
   }
@@ -426,9 +426,22 @@ export default function IncidentDetail() {
                     <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#5B54E8' }}>
                       Legal basis
                     </p>
-                    <p className="text-xs font-bold text-gray-800 mt-1">{basis.law}</p>
+                    <p className="text-xs font-bold text-gray-800 mt-1">
+                      {basis.law}{basis.sections ? `, ${basis.sections}` : ''}
+                    </p>
                     <p className="text-[11px] text-gray-500">{basis.lawTitle}</p>
+                    {/* The text of the cited provision, so an official can
+                        check the classification instead of trusting it. */}
+                    {basis.provision && (
+                      <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">{basis.provision}</p>
+                    )}
                     <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">{basis.reason}</p>
+                    {basis.source && (
+                      <a href={basis.source} target="_blank" rel="noopener noreferrer"
+                        className="inline-block text-[11px] font-semibold mt-2 underline" style={{ color: '#5B54E8' }}>
+                        Read the law
+                      </a>
+                    )}
                   </div>
                 </div>
 

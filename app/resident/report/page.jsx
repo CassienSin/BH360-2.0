@@ -6,7 +6,7 @@ import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as Im
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
-import { getPriority, getBasis, citationLabel, PRIORITY_STYLE } from '@/lib/legalBasis'
+import { CATEGORY_LIST, getPriority, getBasis, citationDetail, PRIORITY_STYLE } from '@/lib/legalBasis'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { AvailabilityStrip, EmergencyContacts, ReportOutcome } from '@/components/ResponderAvailability'
 
@@ -27,20 +27,10 @@ const COMPRESSION_OPTIONS = {
   initialQuality: 0.8,
 }
 
-const CATEGORIES = [
-  { value: 'Noise', label: 'Noise Complaint', icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  { value: 'Theft', label: 'Theft / Robbery', icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  { value: 'Violence', label: 'Violence / Fight', icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  { value: 'Fire', label: 'Fire', icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  { value: 'Flood', label: 'Flooding', icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  { value: 'Infrastructure', label: 'Infrastructure', icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  { value: 'Animals', label: 'Stray Animals', icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  { value: 'Medical', label: 'Medical Emergency', icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  { value: 'Traffic', label: 'Traffic Issue', icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  { value: 'Vandalism', label: 'Vandalism', icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  { value: 'Drugs', label: 'Illegal Drugs', icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  { value: 'Other', label: 'Other', icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-]
+// The category list — icons, labels and colours included — comes from
+// lib/legalBasis.js, where each one is defined alongside the law that
+// governs it. A category with no legal basis cannot appear here.
+const CATEGORIES = CATEGORY_LIST
 
 const DOTS = Array.from({ length: 20 }, (_, i) => ({
   size: ((i * 7) % 6) + 3,
@@ -330,7 +320,7 @@ export default function ReportIncident() {
         priority: finalPriority,
         // Audit trail: the citation is frozen at report time, so later
         // edits to lib/legalBasis.js never rewrite past classifications
-        legal_basis: citationLabel(form.category),
+        legal_basis: citationDetail(form.category),
         response_mode: basis?.responseMode ?? null,
         auto_escalated: true,
         image_url: imageUrl,
@@ -491,10 +481,32 @@ export default function ReportIncident() {
                   {basis.law && (
                     <div className="flex items-start gap-2 mb-2">
                       <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
-                      <p className="text-xs leading-relaxed text-gray-700">
-                        <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
-                        {' — '}{basis.lawTitle}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed text-gray-700">
+                          <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
+                          {basis.sections && (
+                            <span className="font-semibold" style={{ color: '#5B54E8' }}>{', '}{basis.sections}</span>
+                          )}
+                          {' — '}{basis.lawTitle}
+                        </p>
+                        {/* What the cited provision actually says. Without
+                            this the citation is decoration — residents (and
+                            officials on review) can check the claim. */}
+                        {basis.provision && (
+                          <p className="text-[11px] text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
+                        )}
+                        {basis.source && (
+                          <a
+                            href={basis.source}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-[11px] font-semibold mt-1 underline"
+                            style={{ color: '#5B54E8' }}
+                          >
+                            Read the law
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
                   <p className="text-[11px] text-gray-500 leading-relaxed">{basis.reason}</p>

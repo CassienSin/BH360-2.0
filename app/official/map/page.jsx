@@ -6,22 +6,9 @@ import { ArrowLeft, Map as MapIcon, AlertTriangle, Loader2, Filter, X, ChevronDo
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import CommandMap from '@/components/CommandMap'
+import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 
 
-const CATEGORY_CONFIG = {
-  Noise: { color: '#f97316', emoji: '🔊' },
-  Theft: { color: '#ef4444', emoji: '🚨' },
-  Violence: { color: '#dc2626', emoji: '⚠️' },
-  Fire: { color: '#ea580c', emoji: '🔥' },
-  Flood: { color: '#3b82f6', emoji: '🌊' },
-  Infrastructure: { color: '#8b5cf6', emoji: '🛠️' },
-  Animals: { color: '#a16207', emoji: '🐕' },
-  Medical: { color: '#dc2626', emoji: '🚑' },
-  Traffic: { color: '#0891b2', emoji: '🚦' },
-  Vandalism: { color: '#7c3aed', emoji: '🎨' },
-  Drugs: { color: '#be185d', emoji: '💊' },
-  Other: { color: '#6b7280', emoji: '📝' },
-}
 
 const STATUS_FILTERS = [
   { value: 'active', label: '🔴 Active', color: '#dc2626' },

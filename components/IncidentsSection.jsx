@@ -3,23 +3,9 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation' 
 import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil, ArrowUpDown } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import { LEGAL_BASIS, getPriority } from '@/lib/legalBasis'
+import { LEGAL_BASIS, CATEGORY_CONFIG, getPriority } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE, responseWindowLabel } from '@/lib/triage'
 
-const CATEGORY_CONFIG = {
-  Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  Theft: { icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  Violence: { icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  Fire: { icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  Flood: { icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  Animals: { icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  Medical: { icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  Traffic: { icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  Vandalism: { icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  Drugs: { icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-}
 
 const PRIORITY_CONFIG = {
   Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
