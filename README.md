@@ -120,11 +120,31 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Before pushing, catch type errors locally instead of on Vercel:
+Before pushing, catch problems locally instead of on Vercel:
 
 ```bash
+npm test          # unit tests for the pure legal/date logic
 npx tsc --noEmit
 npm run build
+```
+
+### Tests
+
+`lib/` holds the logic where a wrong answer is a legal claim the app makes on
+screen — the RA 11032 working-day deadline, the queue-aging clock, the
+category-to-statute table — so that is what is covered:
+
+| Suite | What it pins down |
+|---|---|
+| `documents.test.js` | 3/7/20-working-day ceilings, Philippine holidays (including the movable Holy Week dates), the deemed-approved rule |
+| `triage.test.js` | the two-phase response/resolution clock, and that an automatic assignment does not stop it |
+| `legalBasis.test.js` | every category carries a checkable citation; the corrections that prompted the table |
+| `storage.test.js` | incident photo paths, legacy public URLs and current bare paths alike |
+| `verification.test.js` | who may have a document issued in their name |
+
+```bash
+npm test          # once
+npm run test:watch
 ```
 
 ---
