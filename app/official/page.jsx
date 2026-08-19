@@ -90,6 +90,16 @@ const priorityConfig = {
   Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
 }
 
+// Supabase silently caps a select at 1,000 rows, so an unbounded query does
+// not error when a barangay outgrows it — it just quietly stops showing the
+// oldest records. Every list below is bounded explicitly, and says so when
+// it is showing a partial view.
+const INCIDENT_PAGE_SIZE = 100   // + "Load older" for the rest
+const TICKET_LIMIT = 200
+const ANNOUNCEMENT_LIMIT = 100
+const USER_LIMIT = 300
+const INVITE_CODE_LIMIT = 100
+
 const roleConfig = {
   resident: { color: '#5B54E8', bg: '#f0effe', label: 'Resident' },
   official: { color: '#f97316', bg: '#fff7ed', label: 'Official' },
@@ -107,6 +117,8 @@ export default function OfficialDashboard() {
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [documentRequests, setDocumentRequests] = useState([])
+  const [incidentsHasMore, setIncidentsHasMore] = useState(false)
+  const [loadingMoreIncidents, setLoadingMoreIncidents] = useState(false)
   const [activeSection, setActiveSection] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -162,15 +174,18 @@ export default function OfficialDashboard() {
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(INCIDENT_PAGE_SIZE),
       supabase.from('tickets')
         .select('*, profiles!tickets_created_by_fkey(full_name)')
         .eq('barangay_id', bid)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(TICKET_LIMIT),
       supabase.from('announcements')
         .select('*')
         .eq('barangay_id', bid)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(ANNOUNCEMENT_LIMIT),
       supabase.from('profiles')
         .select('*')
         .eq('role', 'tanod')
@@ -180,17 +195,21 @@ export default function OfficialDashboard() {
         .select('*')
         .eq('barangay_id', bid)
         .is('deactivated_at', null)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(USER_LIMIT),
       supabase.from('invite_codes')
         .select('*, profiles(full_name)')
         .eq('barangay_id', bid)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(INVITE_CODE_LIMIT),
       supabase.from('document_requests')
         .select('*, profiles!document_requests_requested_by_fkey(full_name, phone)')
         .eq('barangay_id', bid)
         .order('due_at', { ascending: true }),
     ])
     setIncidents(inc.data || [])
+    // A full page back means there is probably another one behind it.
+    setIncidentsHasMore((inc.data?.length || 0) === INCIDENT_PAGE_SIZE)
     setTickets(tix.data || [])
     setAnnouncements(ann.data || [])
     setTanods(tan.data || [])
@@ -614,6 +633,34 @@ export default function OfficialDashboard() {
   }
   const statusClass = (s) => statusColor[s] || 'bg-gray-100 text-gray-500'
 
+  // Older incidents, fetched by CURSOR rather than by offset: the realtime
+  // subscription prepends new rows as they arrive, which would shift every
+  // offset underneath us and skip records. Paging from the oldest row we
+  // already hold is immune to that.
+  const loadMoreIncidents = useCallback(async () => {
+    if (loadingMoreIncidents || !profile?.barangay_id || incidents.length === 0) return
+    setLoadingMoreIncidents(true)
+    const oldest = incidents[incidents.length - 1].created_at
+    const { data, error } = await supabase.from('incidents')
+      .select('*, profiles!incidents_reported_by_fkey(full_name)')
+      .eq('barangay_id', profile.barangay_id)
+      .lt('created_at', oldest)
+      .order('created_at', { ascending: false })
+      .limit(INCIDENT_PAGE_SIZE)
+    setLoadingMoreIncidents(false)
+
+    if (error) {
+      toast.error('Could not load older incidents: ' + error.message)
+      return
+    }
+    const rows = data || []
+    setIncidents(prev => {
+      const seen = new Set(prev.map(i => i.id))
+      return [...prev, ...rows.filter(r => !seen.has(r.id))]
+    })
+    setIncidentsHasMore(rows.length === INCIDENT_PAGE_SIZE)
+  }, [supabase, profile, incidents, loadingMoreIncidents])
+
   // Accounts still waiting on a human decision. `|| 'pending'` because a
   // row written before verification existed reads as null, and an unknown
   // status must never be treated as verified.
@@ -971,6 +1018,9 @@ export default function OfficialDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'incidents' && (
             <IncidentsSection
+              hasMore={incidentsHasMore}
+              loadingMore={loadingMoreIncidents}
+              onLoadMore={loadMoreIncidents}
               incidents={incidents}
               tanods={tanods}
               onDispatch={dispatchTanod}

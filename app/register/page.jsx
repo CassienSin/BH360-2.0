@@ -225,12 +225,12 @@ export default function RegisterPage() {
       return
     }
 
-    // Profile creation and invite-code claiming now happen ATOMICALLY
-    // inside the database via the handle_new_user trigger (see
-    // signup-trigger.sql). If the code was already claimed, signUp itself
-    // fails and NO auth user is created — no orphaned accounts, no
-    // unclaimed codes, and this works identically whether or not email
-    // confirmation is enabled.
+    // Nothing to do here. Profile creation and invite-code claiming both
+    // happen ATOMICALLY inside the database, in the handle_new_user trigger
+    // (supabase/setup.sql, Section 7). If the code was already claimed the
+    // trigger raises, which fails signUp itself and creates NO auth user —
+    // no orphaned accounts, no burnt codes, and it behaves the same whether
+    // or not email confirmation is switched on.
 
     toast.success('Account created successfully!')
     // replace, not push — Back from the login page shouldn't return to a

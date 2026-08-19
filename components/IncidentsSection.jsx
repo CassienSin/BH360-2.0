@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil, ArrowUpDown } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG, getPriority } from '@/lib/legalBasis'
-import { computeStanding, STANDING_STYLE, responseWindowLabel } from '@/lib/triage'
+import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
+import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 
 
 const PRIORITY_CONFIG = {
@@ -421,13 +422,19 @@ function Lightbox({ src, alt, onClose }) {
   )
 }
 
+// `src` here is what the incident row stores, not a URL you can render.
+// The bucket is private, so the thumbnail signs its own URL and passes the
+// signed one up when opened — nothing renders until access is confirmed,
+// which means a photo you may not see simply does not appear.
 function Thumb({ src, label, onOpen }) {
+  const signed = useSignedIncidentUrl(src)
+  if (!signed) return null
   return (
-    <button onClick={() => onOpen(src, label)}
+    <button onClick={() => onOpen(signed, label)}
       aria-label={`View ${label}`}
       className="inc-press relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0"
       style={{ border: '1px solid #f0effe' }}>
-      <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+      <img src={signed} alt="" loading="lazy" className="w-full h-full object-cover" />
     </button>
   )
 }
@@ -440,6 +447,12 @@ export default function IncidentsSection({
   onExport,
   onPriorityChange,
   loading = false,
+  // Paging. `incidents` holds only what has been fetched so far, so the
+  // filter counts and the CSV/PDF export cover the loaded window — the
+  // footer below says so rather than letting the numbers imply totals.
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
 }) {
   const router = useRouter()
   const [search, setSearch] = useState('')
@@ -862,7 +875,7 @@ export default function IncidentsSection({
                           background: STANDING_STYLE[standing.level].bg,
                           color: STANDING_STYLE[standing.level].color,
                         }}
-                        title={`Response target for ${inc.priority}: ${responseWindowLabel(inc.priority)}. Still classified ${inc.priority} — only its queue position rose.`}>
+                        title={`${inc.priority} incidents target ${activeWindowLabel(inc)}. Still classified ${inc.priority} — only its queue position rose.`}>
                         <Clock size={9} /> {standing.label}
                       </span>
                     )}
@@ -1048,6 +1061,19 @@ export default function IncidentsSection({
           </article>
         )
       })}
+
+      {hasMore && (
+        <div className="pt-1 pb-2 text-center">
+          <button onClick={onLoadMore} disabled={loadingMore}
+            className="inc-press px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
+            style={{ background: 'white', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+            {loadingMore ? 'Loading…' : 'Load older incidents'}
+          </button>
+          <p className="text-[11px] text-white/60 mt-2">
+            Showing the {incidents.length} most recent — filters and exports cover these.
+          </p>
+        </div>
+      )}
 
       <TanodPicker
         open={!!dispatchFor}

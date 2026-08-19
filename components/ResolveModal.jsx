@@ -115,10 +115,9 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
         }
 
         uploadedPath = fileName
-        const { data: { publicUrl } } = supabase.storage
-          .from('incident-images')
-          .getPublicUrl(fileName)
-        imageUrl = publicUrl
+        // The object path, not a URL — the bucket is private and viewers
+        // sign their own short-lived URL (see lib/storage.js).
+        imageUrl = fileName
       }
 
       await onResolve({
