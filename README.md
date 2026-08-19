@@ -9,9 +9,13 @@
 ## ✨ Features
 
 ### For Residents
-- **🚨 Incident Reporting** — report emergencies and community issues across 12 categories (fire, flood, theft, medical, noise, infrastructure, and more) with priority levels from Low to Critical
+- **🚨 Incident Reporting** — report emergencies and community issues across 13 categories (fire, flood, theft, medical, noise, garbage, infrastructure, and more). **Priority is not chosen by the reporter** — it is derived from the category via the Philippine law that governs it, so a noise complaint cannot be filed as "Critical" and displace a real emergency
+  - ⚖️ Every category shows its governing statute with the specific sections relied on, what those sections say, and a link to the text — and whether the barangay may act directly or must refer to another agency
   - 📍 Pin the exact location on an interactive map or use GPS ("Use My Location" with accuracy feedback)
   - 📷 Attach photo evidence — large photos are automatically compressed client-side (~500KB target) so reports upload fast even on mobile data
+- **📄 Document Requests** — request a barangay clearance, certificate of residency or indigency, barangay ID, first-time jobseeker certificate, business clearance or good-moral certificate, with the **RA 11032 deadline shown before you file** and a live countdown in working days afterwards
+  - ⏱️ 3 working days for a simple request, 7 for a complex one — weekends and Philippine holidays excluded. If the deadline passes with no decision, your request is **deemed approved** under RA 11032 Sec. 10 and the app says so
+  - ✅ Requires a barangay official to have verified your account first, because a barangay certification is an official statement about where you live
 - **🎫 Support Tickets** — file inquiries, requests, complaints, or feedback and chat with barangay officials in **real time**, with status tracking (Open → In Progress → Closed)
 - **🤖 AI Assistant** — a Claude-powered chatbot that answers common barangay questions (clearances, permits, office hours, how to file complaints)
 - **⭐ Service Ratings** — rate resolved incidents and leave feedback for the responding tanod
@@ -29,6 +33,11 @@
 - **🗺️ Live Incident Map** — all geotagged incidents on one map with status/category filters, updating in **real time** as new reports arrive
 - **📅 Calendar View** — incidents and announcements by date, with monthly stats
 - **📄 Exports** — branded PDF reports and CSV exports (with formula-injection protection)
+- **✅ Resident Verification** — every account is confirmed by a named official before the barangay will issue documents in that person's name; approve or reject with a reason, all through a locked-down RPC
+- **📑 Document Queue** — requests sorted by RA 11032 deadline (soonest first), with the statutory one-time extension, written denials, and a standing flag for anything already deemed approved under Sec. 10
+
+### For the Super Admin
+- **🌐 Platform-wide Incident Feed** — every barangay's incidents in one list, live, with barangay / status / priority filters and a flag for reports left pending past their response window
 
 ### Platform
 - Role-based access (Resident / Tanod / Official / Super Admin) enforced with Supabase **Row Level Security**
@@ -91,16 +100,17 @@ Add the same variables in **Vercel → Project → Settings → Environment Vari
 
 In the Supabase SQL editor:
 
-1. Run the schema migrations in `supabase/` (tables: `profiles`, `barangays`, `incidents`, `tickets`, `ticket_messages`, `announcements`) <!-- TODO: adjust to your actual migrations location -->
-2. Run `announcement-undo-migration.sql` (adds `published_at` for the undo window)
-3. **Enable Realtime** for the tables that need it:
-   ```sql
-   alter publication supabase_realtime add table incidents;
-   alter publication supabase_realtime add table tickets;
-   alter publication supabase_realtime add table ticket_messages;
-   ```
-4. Create a **Storage bucket** named `incident-images` (public read)
-5. Verify **RLS policies**: residents see only their own tickets/incidents; tanods see incidents assigned to them; officials are scoped to their `barangay_id`; residents only see announcements where `published_at <= now()`
+1. Paste **`supabase/setup.sql`** into the SQL editor and run it. It is the single source of truth
+   for every table, RLS policy, function, trigger, storage bucket and realtime setting, and it is
+   idempotent — safe to re-run on a project that already has an earlier version of the schema.
+2. Follow the **MANUAL STEPS** at the bottom of that file (PSGC import, first super admin, auth settings).
+3. Verify **RLS policies**: residents see only their own tickets/incidents/document requests; tanods
+   see incidents assigned to them; officials are scoped to their `barangay_id`; the super admin sees
+   incidents across every barangay; residents only see announcements where `published_at <= now()`.
+
+Re-running `setup.sql` on an existing project adds resident verification and document requests
+without disturbing existing data — accounts that pre-date verification are grandfathered in as
+verified rather than being locked out.
 
 ### 4. Run locally
 
@@ -140,6 +150,10 @@ npm run build
 │   ├── supabase.js         # Browser client (singleton)
 │   ├── supabase-server.js  # Server client + getAuthenticatedUser + admin client
 │   ├── roles.ts            # dashboardPath — one source of truth per role
+│   ├── legalBasis.js       # Incident categories + the RA that governs each one (single source of truth)
+│   ├── documents.js        # Citizen's Charter + RA 11032 working-day deadline math
+│   ├── verification.js     # What manual verification gates (and what it deliberately doesn't)
+│   ├── triage.js           # Queue aging — standing rises with neglect, priority does not
 │   ├── timeAgo.js          # Relative-time formatting
 │   ├── exports.js          # CSV / branded PDF export utilities
 │   └── notifications.js    # Assignment notifications
@@ -163,6 +177,9 @@ npm run build
 
 ## 🗺️ Roadmap
 
+- [ ] Server-side enforcement of the RA 11032 deadline (an Edge Function to stamp `deemed_approved_at` and notify, instead of computing it on read)
+- [ ] Annual Philippine holiday proclamation import (Eid'l Fitr / Eid'l Adha move each year — see `PROCLAIMED_NON_WORKING_DAYS` in `lib/documents.js`)
+- [ ] ID-document upload as part of resident verification
 - [ ] Push/SMS notifications for Critical incidents (Edge Function + scheduled publish check)
 - [ ] Explicit "Claim ticket" action for officials (replacing auto-claim on open)
 - [ ] Date-range filters (7/30/90 days) + cached AI reports on the analytics dashboard

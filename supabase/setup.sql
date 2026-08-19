@@ -508,11 +508,18 @@ alter table incidents       replica identity full;
 alter table tickets         replica identity full;
 alter table ticket_messages replica identity full;
 alter table announcements   replica identity full;
+-- profiles is in the publication because both dashboards depend on it: the
+-- official's user directory and dispatch list stay live, and a resident sees
+-- their verification decision the moment an official makes it. Realtime
+-- still applies the SELECT policies above, so a subscriber only receives
+-- rows it could already read.
+alter table profiles        replica identity full;
 
-alter publication supabase_realtime add table incidents;
-alter publication supabase_realtime add table tickets;
-alter publication supabase_realtime add table ticket_messages;
-alter publication supabase_realtime add table announcements;
+do $$ begin alter publication supabase_realtime add table incidents;       exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table tickets;         exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table ticket_messages; exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table announcements;   exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table profiles;        exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
@@ -564,6 +571,244 @@ using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1
 
 
 -- ============================================================================
+-- SECTION 9 — MANUAL RESIDENT VERIFICATION
+--
+-- Registration proves someone owns an email address. It does not prove they
+-- live in the barangay. Under RA 7160 Sec. 394 the barangay secretary keeps
+-- the record of the barangay's inhabitants and reports the actual number of
+-- residents — the barangay is the authority on who lives there, so a human
+-- barangay official decides, not the signup form.
+--
+-- Verification gates DOCUMENT REQUESTS (Section 10), because a barangay
+-- certification is an official attestation about a person's residency and
+-- cannot honestly be issued to an unchecked account. It deliberately does
+-- NOT gate incident reporting: refusing an emergency report because the
+-- paperwork is pending would be indefensible.
+-- ============================================================================
+
+alter table profiles add column if not exists verification_status text;
+alter table profiles add column if not exists verification_note text;
+alter table profiles add column if not exists verified_by uuid references profiles(id);
+alter table profiles add column if not exists verified_at timestamptz;
+
+-- Grandfather accounts that pre-date manual verification. Only rows with no
+-- status yet are touched, so re-running this file never resurrects an
+-- account an official has since rejected.
+update profiles
+set verification_status = 'verified',
+    verified_at = coalesce(verified_at, now())
+where verification_status is null;
+
+alter table profiles alter column verification_status set default 'pending';
+alter table profiles alter column verification_status set not null;
+
+do $$ begin
+  alter table profiles add constraint profiles_verification_status_check
+    check (verification_status in ('pending', 'verified', 'rejected'));
+exception when duplicate_object then null; end $$;
+
+create index if not exists idx_profiles_verification
+  on profiles(barangay_id, verification_status);
+
+comment on column profiles.verification_status is
+  'Set only through public.set_verification_status() by a barangay official '
+  'of the same barangay, or by a super admin. Never self-serve.';
+
+create or replace function public.am_verified()
+returns boolean language sql stable security definer set search_path = public
+as $$ select coalesce(verification_status = 'verified', false) from profiles where id = auth.uid() $$;
+revoke all on function public.am_verified() from public;
+grant execute on function public.am_verified() to authenticated;
+
+-- The ONLY way verification columns change.
+--
+-- Deliberately an RPC rather than a broader UPDATE policy on `profiles`: a
+-- policy permissive enough to let officials verify residents would also let
+-- them rewrite those residents' names, addresses and phone numbers. This
+-- function touches four columns and nothing else.
+create or replace function public.set_verification_status(
+  target_user uuid,
+  new_status text,
+  note text default null
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  caller_role text;
+  caller_barangay uuid;
+  caller_super boolean;
+  target_barangay uuid;
+begin
+  if new_status not in ('pending', 'verified', 'rejected') then
+    raise exception 'Invalid verification status: %', new_status;
+  end if;
+
+  select role, barangay_id, coalesce(is_super_admin, false)
+    into caller_role, caller_barangay, caller_super
+  from profiles where id = auth.uid();
+
+  if caller_role is null and not caller_super then
+    raise exception 'No profile for the calling account';
+  end if;
+
+  select barangay_id into target_barangay from profiles where id = target_user;
+  if not found then
+    raise exception 'No such account';
+  end if;
+
+  -- Nobody verifies themselves. An official who could self-verify would
+  -- make the whole check ceremonial.
+  if target_user = auth.uid() then
+    raise exception 'You cannot change your own verification status';
+  end if;
+
+  if not (
+    caller_super
+    or (caller_role = 'official'
+        and caller_barangay is not null
+        and caller_barangay = target_barangay)
+  ) then
+    raise exception 'Only a barangay official of this barangay may verify this account';
+  end if;
+
+  -- A rejection without a reason is not reviewable, so require one.
+  if new_status = 'rejected' and coalesce(btrim(note), '') = '' then
+    raise exception 'A rejection must state a reason';
+  end if;
+
+  update profiles
+  set verification_status = new_status,
+      verification_note   = nullif(btrim(coalesce(note, '')), ''),
+      verified_by         = auth.uid(),
+      verified_at         = now()
+  where id = target_user;
+end;
+$$;
+revoke all on function public.set_verification_status(uuid, text, text) from public;
+grant execute on function public.set_verification_status(uuid, text, text) to authenticated;
+
+
+-- ============================================================================
+-- SECTION 10 — DOCUMENT REQUESTS (RA 11032)
+--
+-- RA 11032 (Ease of Doing Business and Efficient Government Service Delivery
+-- Act of 2018), which amended RA 9485, binds the barangay to a clock:
+--
+--   Sec. 6         — the office must publish a Citizen's Charter listing, for
+--                    each service, its requirements and its processing time.
+--   Sec. 9(b)(1)   — that time may not exceed 3 WORKING DAYS for a simple
+--                    transaction, 7 for a complex one and 20 for a highly
+--                    technical one, counted from receipt of the complete
+--                    application. It may be extended ONCE, for the same
+--                    number of days.
+--   Sec. 10        — if the office neither approves nor denies within the
+--                    prescribed time, the request is DEEMED APPROVED, provided
+--                    the requirements were complete and the fees paid.
+--   RA 7160 152(c) — separately, a barangay clearance for a business must be
+--                    acted on within 7 working days, after which the city or
+--                    municipality may issue the permit without it.
+--
+-- The deadline is computed in lib/documents.js (working days, skipping
+-- weekends and Philippine holidays) and FROZEN onto the row at request time,
+-- along with the classification and citation. Freezing matters: the deadline
+-- a request was subject to must not shift because the holiday table or the
+-- service classification was edited months later.
+-- ============================================================================
+
+create table if not exists document_requests (
+  id uuid default gen_random_uuid() primary key,
+  reference_code text not null unique
+    default 'DOC-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)),
+  document_type text not null,
+  purpose text not null,
+  notes text,
+  requested_by uuid references profiles(id),
+  barangay_id uuid references barangays(id),
+  status text not null default 'pending'
+    check (status in ('pending', 'processing', 'ready', 'released', 'denied')),
+
+  -- RA 11032 classification, frozen at request time
+  ra_classification text not null
+    check (ra_classification in ('simple', 'complex', 'highly_technical')),
+  processing_days integer not null check (processing_days > 0),
+  legal_basis text not null,
+  due_at timestamptz not null,
+
+  -- Sec. 9(b)(1): the processing time may be extended once, for the same
+  -- number of days. Once `extended` is true there is no second extension.
+  extended boolean not null default false,
+  extension_reason text,
+
+  -- Sec. 10: recorded when the office let the deadline lapse.
+  deemed_approved_at timestamptz,
+
+  handled_by uuid references profiles(id),
+  released_at timestamptz,
+  denial_reason text,
+  created_at timestamptz default now()
+);
+create index if not exists idx_document_requests_barangay on document_requests(barangay_id, status);
+create index if not exists idx_document_requests_requester on document_requests(requested_by);
+create index if not exists idx_document_requests_due on document_requests(due_at);
+
+comment on table document_requests is
+  'Barangay document requests under RA 11032. due_at is the working-day '
+  'deadline computed by lib/documents.js and frozen at request time.';
+comment on column document_requests.due_at is
+  'End of the last working day allowed by RA 11032 Sec. 9(b)(1). Past this '
+  'with no decision, Sec. 10 deems the request approved.';
+
+alter table document_requests enable row level security;
+
+drop policy if exists "document_requests: read own or staff" on document_requests;
+create policy "document_requests: read own or staff"
+  on document_requests for select
+  using (
+    requested_by = auth.uid()
+    or (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  );
+
+-- A resident may only file a clean pending request, in their own barangay,
+-- for themselves — never one pre-marked released, or with a decision
+-- already filled in. Verification is required here and only here: a
+-- barangay certification attests to residency the barangay has checked.
+drop policy if exists "document_requests: verified residents insert own" on document_requests;
+create policy "document_requests: verified residents insert own"
+  on document_requests for insert
+  with check (
+    requested_by = auth.uid()
+    and barangay_id = public.my_barangay_id()
+    and public.am_verified()
+    and status = 'pending'
+    and handled_by is null
+    and released_at is null
+    and denial_reason is null
+    and deemed_approved_at is null
+    and extended = false
+  );
+
+drop policy if exists "document_requests: officials update own barangay" on document_requests;
+create policy "document_requests: officials update own barangay"
+  on document_requests for update
+  using (
+    (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  )
+  with check (
+    (barangay_id = public.my_barangay_id() and public.my_role() = 'official')
+    or public.am_super_admin()
+  );
+
+alter table document_requests replica identity full;
+
+do $$ begin
+  alter publication supabase_realtime add table document_requests;
+exception when duplicate_object then null; end $$;
+
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:
@@ -597,10 +842,24 @@ using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1
 --        Security Advisor finding that has no SQL fix.
 --    Set Site URL / redirect URLs to your Vercel domain.
 --
--- 5. VERIFY — Database → Advisors → Security Lints should show only:
+-- 5. RESIDENT VERIFICATION — accounts that existed before Section 9 was
+--    added are grandfathered in as 'verified' so nobody is locked out by an
+--    upgrade. New registrations start as 'pending' and a barangay official
+--    verifies them from Official Dashboard → Verifications. Only document
+--    requests are gated on this; incident reporting never is.
+--
+--    To verify an account from the SQL editor (e.g. bootstrapping a demo):
+--
+--      update profiles
+--      set verification_status = 'verified', verified_at = now()
+--      where id = '<profile id>';
+--
+-- 6. VERIFY — Database → Advisors → Security Lints should show only:
 --      - validate_invite_code executable by anon/authenticated (by design)
 --      - claim_invite_code executable by authenticated (by design)
 --      - my_role/my_barangay_id/am_super_admin executable by authenticated
 --        (required — RLS evaluates them as the querying user)
+--      - am_verified/set_verification_status executable by authenticated
+--        (by design — set_verification_status does its own authorization)
 --    Any other warning means something in this file didn't apply cleanly.
 -- ============================================================================
