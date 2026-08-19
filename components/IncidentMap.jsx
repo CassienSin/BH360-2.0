@@ -9,21 +9,8 @@ import { MapPin, Layers as LayersIcon } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import IncidentLayer, { zoomModeLabel } from '@/components/IncidentLayer'
 import { CoverageLayer, RadiusTool } from '@/components/MapLayers'
+import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 
-const categoryConfig = {
-  Noise: { color: '#f97316', emoji: '🔊' },
-  Theft: { color: '#ef4444', emoji: '🚨' },
-  Violence: { color: '#dc2626', emoji: '⚠️' },
-  Fire: { color: '#ea580c', emoji: '🔥' },
-  Flood: { color: '#3b82f6', emoji: '🌊' },
-  Infrastructure: { color: '#8b5cf6', emoji: '🛠️' },
-  Animals: { color: '#a16207', emoji: '🐕' },
-  Medical: { color: '#dc2626', emoji: '🚑' },
-  Traffic: { color: '#0891b2', emoji: '🚦' },
-  Vandalism: { color: '#7c3aed', emoji: '🎨' },
-  Drugs: { color: '#be185d', emoji: '💊' },
-  Other: { color: '#6b7280', emoji: '📝' },
-}
 
 const PRIORITY_STYLES = {
   Critical: { bg: '#fee2e2', color: '#b91c1c' },

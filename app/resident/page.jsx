@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star } from 'lucide-react'
+import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -11,6 +11,8 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
+import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
+import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -63,7 +65,8 @@ const priorityConfig = {
 
 const sectionTitle = {
   home: 'Home', announcements: 'Announcements',
-  incidents: 'My Incidents', tickets: 'My Tickets', ai: 'AI Assistant',
+  incidents: 'My Incidents', tickets: 'My Tickets',
+  documents: 'My Documents', ai: 'AI Assistant',
 }
 
 const Skeleton = ({ className, style }) => <div className={`skeleton-shimmer ${className}`} style={style} />
@@ -104,6 +107,7 @@ export default function ResidentDashboard() {
   const [announcements, setAnnouncements] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
+  const [documentRequests, setDocumentRequests] = useState([])
   const [activeSection, setActiveSection] = useState('home')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -169,7 +173,7 @@ export default function ResidentDashboard() {
       }
 
       // Parallel instead of one-after-another — noticeably faster first paint
-      const [annRes, incRes, tixRes] = await Promise.all([
+      const [annRes, incRes, tixRes, docRes] = await Promise.all([
         supabase.from('announcements').select('*')
           .eq('barangay_id', prof.barangay_id)
           .order('created_at', { ascending: false })
@@ -182,15 +186,20 @@ export default function ResidentDashboard() {
           .eq('created_by', user.id)
           .order('created_at', { ascending: false })
           .limit(100),
+        supabase.from('document_requests').select('*')
+          .eq('requested_by', user.id)
+          .order('created_at', { ascending: false })
+          .limit(100),
       ])
 
       if (cancelled) return
-      const firstError = annRes.error || incRes.error || tixRes.error
+      const firstError = annRes.error || incRes.error || tixRes.error || docRes.error
       if (firstError) toast.error('Some data failed to load: ' + firstError.message)
 
       setAnnouncements(annRes.data || [])
       setIncidents(incRes.data || [])
       setTickets(tixRes.data || [])
+      setDocumentRequests(docRes.data || [])
       setLoading(false)
     }
     loadData()
@@ -258,6 +267,42 @@ export default function ResidentDashboard() {
           t.id === payload.new.id ? { ...t, ...payload.new } : t
         ))
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'document_requests',
+        filter: `requested_by=eq.${profile.id}`,
+      }, (payload) => {
+        setDocumentRequests(prev => prev.map(d =>
+          d.id === payload.new.id ? { ...d, ...payload.new } : d
+        ))
+        if (payload.old.status !== payload.new.status) {
+          const message = {
+            processing: '🕐 The barangay started processing your document',
+            ready: '📄 Your document is ready for pickup',
+            released: '✅ Your document has been released',
+            denied: '⛔ Your document request was denied — see the reason',
+          }[payload.new.status]
+          if (message) toast.success(message, { id: `doc-${payload.new.id}-${payload.new.status}` })
+        }
+      })
+      // A resident's own verification decision, so the account stops saying
+      // "pending" the moment an official acts on it.
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${profile.id}`,
+      }, (payload) => {
+        setProfile(prev => (prev ? { ...prev, ...payload.new } : prev))
+        if (payload.old.verification_status !== payload.new.verification_status) {
+          if (payload.new.verification_status === 'verified') {
+            toast.success('✅ A barangay official verified your account')
+          } else if (payload.new.verification_status === 'rejected') {
+            toast.error('Your account could not be verified — see your dashboard')
+          }
+        }
+      })
       .subscribe()
 
     return () => {
@@ -291,6 +336,10 @@ export default function ResidentDashboard() {
     setRatingModal(null)
   }
 
+  const openDocumentCount = documentRequests.filter(
+    d => !['released', 'denied'].includes(d.status)
+  ).length
+
   const newAnnouncementCount = announcements.filter(a =>
     (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24) <= 1
   ).length
@@ -318,8 +367,8 @@ export default function ResidentDashboard() {
         stats={[
           { label: 'Announcements', value: announcements.length, color: '#5B54E8', key: 'announcements' },
           { label: 'My Incidents', value: incidents.length, color: '#f97316', key: 'incidents' },
-          { label: 'Pending', value: incidents.filter(i => i.status === 'pending').length, color: '#f97316', key: 'incidents' },
           { label: 'My Tickets', value: tickets.length, color: '#3b82f6', key: 'tickets' },
+          { label: 'My Documents', value: documentRequests.length, color: '#16a34a', key: 'documents' },
         ]}
         navItems={[
           { section: 'MAIN', items: [
@@ -329,6 +378,7 @@ export default function ResidentDashboard() {
           { section: 'MY ACTIVITY', items: [
             { key: 'incidents', label: 'My Incidents', icon: AlertTriangle, count: incidents.filter(i => i.status === 'pending').length },
             { key: 'tickets', label: 'My Tickets', icon: FileText, count: tickets.filter(t => t.status === 'open').length },
+            { key: 'documents', label: 'My Documents', icon: FileCheck2, count: openDocumentCount },
           ]},
           { section: 'SUPPORT', items: [
             { key: 'ai', label: 'AI Assistant', icon: MessageCircle, badge: 'AI' },
@@ -414,6 +464,41 @@ export default function ResidentDashboard() {
                 </div>
               </div>
 
+              {/* Account verification. Shown on Home rather than as a blocking
+                  interstitial: an unverified resident can still do everything
+                  urgent — report an incident, open a ticket — and only document
+                  issuance waits on a barangay official. */}
+              {!isVerified(profile) && (() => {
+                const vs = verificationStyle(profile?.verification_status)
+                return (
+                  <div className="white-card p-5 fade-up-1"
+                    style={{ borderLeft: `4px solid ${vs.color}` }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
+                        style={{ background: vs.bg }}>
+                        <span aria-hidden="true">{vs.icon}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-gray-800 text-sm">{vs.label}</h3>
+                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                          {documentBlockReason(profile)}
+                        </p>
+                        {profile?.verification_note && (
+                          <p className="text-[11px] mt-2 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                            style={{ background: vs.bg, color: vs.color }}>
+                            {profile.verification_note}
+                          </p>
+                        )}
+                        <button onClick={() => router.push('/profile')}
+                          className="mt-2.5 text-xs font-bold" style={{ color: '#5B54E8' }}>
+                          Check your profile details →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className="fade-up-1">
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Your Activity</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -433,9 +518,10 @@ export default function ResidentDashboard() {
 
               <div className="fade-up-2">
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Quick Actions</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
                     { label: 'Report Incident', desc: 'Notify the barangay', icon: AlertTriangle, action: () => router.push('/resident/report') },
+                    { label: 'Request Document', desc: 'Clearance, indigency, ID', icon: FileCheck2, action: () => router.push('/resident/documents/new') },
                     { label: 'New Ticket', desc: 'Request assistance', icon: FileText, action: () => router.push('/resident/ticket/new') },
                     { label: 'AI Assistant', desc: 'Ask anything', icon: MessageCircle, action: () => navClick('ai') },
                     { label: 'Announcements', desc: 'View latest news', icon: Bell, action: () => navClick('announcements') },
@@ -702,6 +788,128 @@ export default function ResidentDashboard() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+
+          {/* MY DOCUMENTS — barangay certifications, and the clock RA 11032
+              puts the barangay on for each one. */}
+          {!loading && profile?.barangay_id && activeSection === 'documents' && (
+            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+
+              <div className="flex items-center justify-between mb-2 gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">
+                  {documentRequests.length} request{documentRequests.length === 1 ? '' : 's'}
+                </p>
+                <button onClick={() => router.push('/resident/documents/new')}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white flex-shrink-0"
+                  style={{ color: '#5B54E8', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
+                  <Plus size={14} /> Request Document
+                </button>
+              </div>
+
+              {/* The promise, stated up front. */}
+              <div className="white-card p-4">
+                <div className="flex items-start gap-2">
+                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong style={{ color: '#5B54E8' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — the
+                    barangay has <strong>3 working days</strong> to act on a simple request (7 for a
+                    complex one, 20 for a highly technical one), extendable once. Past that with no
+                    decision, your request is <strong>deemed approved</strong> and your
+                    acknowledgement carries the same force as the document.
+                  </p>
+                </div>
+              </div>
+
+              {!canRequestDocuments(profile) && (
+                <div className="white-card p-4">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldCheck size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
+                    <p className="text-xs text-gray-600 leading-relaxed">{documentBlockReason(profile)}</p>
+                  </div>
+                </div>
+              )}
+
+              {documentRequests.length === 0 && (
+                <div className="white-card p-10 text-center">
+                  <FileCheck2 size={36} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
+                  <p className="text-gray-400 text-sm">You haven’t requested any documents yet.</p>
+                  <button onClick={() => router.push('/resident/documents/new')}
+                    className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>
+                    See what the barangay issues →
+                  </button>
+                </div>
+              )}
+
+              {documentRequests.map(req => {
+                const doc = DOCUMENT_TYPES[req.document_type]
+                const st = DOC_STATUS_STYLE[req.status] || DOC_STATUS_STYLE.pending
+                const state = deadlineState(req)
+                const dl = DEADLINE_STYLE[state.level]
+                return (
+                  <div key={req.id} className="white-card p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
+                        style={{ background: doc?.bg || '#f9fafb' }}>
+                        <span aria-hidden="true">{doc?.icon || '📄'}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold text-gray-800 text-sm">
+                            {doc?.label || req.document_type}
+                          </h3>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                            style={{ background: st.bg, color: st.color }}>
+                            {st.label}
+                          </span>
+                          {state.label && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                              style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}>
+                              {state.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-mono text-[11px] mt-1" style={{ color: '#5B54E8' }}>
+                          {req.reference_code}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">{req.purpose}</p>
+
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} />
+                          <p className="text-[11px]" style={{ color: dl.color }}>
+                            {state.decided
+                              ? `${st.desc} · ${timeAgo(req.released_at || req.created_at)}`
+                              : `Due ${formatDeadline(req.due_at)}`}
+                          </p>
+                        </div>
+
+                        {state.deemedApproved && (
+                          <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+                            style={{ background: '#fef2f2', color: '#b91c1c' }}>
+                            The deadline passed without a decision. Under <strong>RA 11032 Sec. 10</strong> this
+                            request is deemed approved — show this reference at the barangay hall.
+                          </p>
+                        )}
+                        {req.extension_reason && (
+                          <p className="text-[11px] text-gray-500 mt-1.5">
+                            <strong>Extended once (Sec. 9(b)(1)):</strong> {req.extension_reason}
+                          </p>
+                        )}
+                        {req.denial_reason && (
+                          <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                            style={{ background: '#fef2f2', color: '#b91c1c' }}>
+                            <strong>Denied:</strong> {req.denial_reason}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(req.created_at)}>
+                          Filed {timeAgo(req.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 

@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone, BadgeCheck, FileCheck2 } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -14,7 +14,12 @@ import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
-import CriticalAlert from '@/components/CriticalAlert' 
+import CriticalAlert from '@/components/CriticalAlert'
+import VerificationQueue from '@/components/VerificationQueue'
+import DocumentQueue from '@/components/DocumentQueue'
+import { deadlineState } from '@/lib/documents'
+import { verificationStyle } from '@/lib/verification'
+import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 
 const DOTS = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -77,20 +82,6 @@ function Avatar({ src, name, gradient, className = 'w-9 h-9', textClass = 'text-
   )
 }
 
-const categoryConfig = {
-  Noise: { icon: '🔊', color: '#f97316', bg: '#fff7ed' },
-  Theft: { icon: '🚨', color: '#ef4444', bg: '#fef2f2' },
-  Violence: { icon: '⚠️', color: '#dc2626', bg: '#fef2f2' },
-  Fire: { icon: '🔥', color: '#ea580c', bg: '#fff7ed' },
-  Flood: { icon: '🌊', color: '#3b82f6', bg: '#eff6ff' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6', bg: '#f5f3ff' },
-  Animals: { icon: '🐕', color: '#a16207', bg: '#fefce8' },
-  Medical: { icon: '🚑', color: '#dc2626', bg: '#fef2f2' },
-  Traffic: { icon: '🚦', color: '#0891b2', bg: '#ecfeff' },
-  Vandalism: { icon: '🎨', color: '#7c3aed', bg: '#f5f3ff' },
-  Drugs: { icon: '💊', color: '#be185d', bg: '#fdf2f8' },
-  Other: { icon: '📝', color: '#6b7280', bg: '#f9fafb' },
-}
 
 const priorityConfig = {
   Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
@@ -115,6 +106,7 @@ export default function OfficialDashboard() {
   const [tanods, setTanods] = useState([])
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
+  const [documentRequests, setDocumentRequests] = useState([])
   const [activeSection, setActiveSection] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mounted, setMounted] = useState(false)
@@ -166,7 +158,7 @@ export default function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes] = await Promise.all([
+    const [inc, tix, ann, tan, allUsers, codes, docs] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -193,6 +185,10 @@ export default function OfficialDashboard() {
         .select('*, profiles(full_name)')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false }),
+      supabase.from('document_requests')
+        .select('*, profiles!document_requests_requested_by_fkey(full_name, phone)')
+        .eq('barangay_id', bid)
+        .order('due_at', { ascending: true }),
     ])
     setIncidents(inc.data || [])
     setTickets(tix.data || [])
@@ -200,6 +196,7 @@ export default function OfficialDashboard() {
     setTanods(tan.data || [])
     setUsers(allUsers.data || [])
     setInviteCodes(codes.data || [])
+    setDocumentRequests(docs.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -379,11 +376,42 @@ export default function OfficialDashboard() {
       })
       .subscribe()
 
+    // Document requests. A request the office never sees is a request the
+    // office will let run past its RA 11032 deadline, so new ones land in
+    // the queue without a reload.
+    const documentChannel = supabase
+      .channel('official-documents')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'document_requests',
+        filter: `barangay_id=eq.${bid}`,
+      }, async (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const { data } = await supabase
+            .from('document_requests')
+            .select('*, profiles!document_requests_requested_by_fkey(full_name, phone)')
+            .eq('id', payload.new.id)
+            .single()
+          if (!data) return
+          setDocumentRequests(prev => (prev.some(d => d.id === data.id) ? prev : [data, ...prev]))
+          toast.success(`New document request: ${data.reference_code}`, { duration: 5000 })
+        }
+        if (payload.eventType === 'UPDATE') {
+          setDocumentRequests(prev => prev.map(d => (d.id === payload.new.id ? { ...d, ...payload.new } : d)))
+        }
+        if (payload.eventType === 'DELETE') {
+          setDocumentRequests(prev => prev.filter(d => d.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(incidentChannel)
       supabase.removeChannel(ticketChannel)
       supabase.removeChannel(announcementChannel)
       supabase.removeChannel(profileChannel)
+      supabase.removeChannel(documentChannel)
     }
   }, [profile?.barangay_id, supabase, loadBarangayData])
 
@@ -586,17 +614,46 @@ export default function OfficialDashboard() {
   }
   const statusClass = (s) => statusColor[s] || 'bg-gray-100 text-gray-500'
 
+  // Accounts still waiting on a human decision. `|| 'pending'` because a
+  // row written before verification existed reads as null, and an unknown
+  // status must never be treated as verified.
+  const pendingVerifications = useMemo(
+    () => users.filter(u =>
+      u.id !== profile?.id && !u.is_super_admin && (u.verification_status || 'pending') === 'pending'
+    ).length,
+    [users, profile]
+  )
+
+  // Open document requests, and how many have already blown the RA 11032
+  // deadline — the second number is the one that carries legal weight.
+  const documentCounts = useMemo(() => {
+    const open = documentRequests.filter(d => !['released', 'denied'].includes(d.status))
+    return { open: open.length, breach: open.filter(d => deadlineState(d).deemedApproved).length }
+  }, [documentRequests])
+
+  const handleVerificationUpdated = useCallback((userId, changes) => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...changes } : u)))
+    setTanods(prev => prev.map(u => (u.id === userId ? { ...u, ...changes } : u)))
+  }, [])
+
+  const handleDocumentUpdated = useCallback((id, changes) => {
+    setDocumentRequests(prev => prev.map(d => (d.id === id ? { ...d, ...changes } : d)))
+  }, [])
+
   const sectionTitle = {
     dashboard: 'Dashboard', incidents: 'Incidents', announcements: 'Announcements',
     tickets: 'Ticket Management', tanods: 'Tanod Management', analytics: 'AI Analytics',
-    users: 'User Management', map: 'Incident Map', calendar: 'Calendar'
+    users: 'User Management', map: 'Incident Map', calendar: 'Calendar',
+    verifications: 'Resident Verification', documents: 'Document Requests'
   }
   const sectionDesc = {
     dashboard: 'Overview of barangay operations', incidents: 'Monitor and respond to incidents',
     announcements: 'Manage community announcements', tickets: 'Handle resident support tickets',
     tanods: 'Manage field officers', analytics: 'AI-powered insights and trends',
     users: 'Manage accounts and invite codes', map: 'Visualize incidents on a map',
-    calendar: 'View activity by date'
+    calendar: 'View activity by date',
+    verifications: 'Confirm who actually lives in this barangay (RA 7160, Sec. 394)',
+    documents: 'Issue barangay documents within the RA 11032 deadline'
   }
 
   async function handleExportIncidents(format) {
@@ -743,6 +800,8 @@ export default function OfficialDashboard() {
           ]},
           { section: 'MANAGEMENT', items: [
             { key: 'tickets', label: 'Ticket Management', icon: FileText, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
+            { key: 'documents', label: 'Document Requests', icon: FileCheck2, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
+            { key: 'verifications', label: 'Verifications', icon: BadgeCheck, count: pendingVerifications, hasNew: pendingVerifications > 0 },
             { key: 'tanods', label: 'Tanod Management', icon: Shield },
             { key: 'users', label: 'User Management', icon: Users },
           ]},
@@ -1423,15 +1482,49 @@ export default function OfficialDashboard() {
                           <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
                           <p className="text-xs text-gray-400 truncate">{u.phone || 'No phone'} · {u.address || 'No address'}</p>
                         </div>
-                        <span className="text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0"
-                          style={{background: rc.bg, color: rc.color}}>
-                          {rc.label}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {/* Verification standing, next to the role — the two
+                              together are what say what this account may do. */}
+                          {!u.is_super_admin && (() => {
+                            const vs = verificationStyle(u.verification_status)
+                            return (
+                              <span className="text-[10px] px-2 py-1 rounded-full font-bold"
+                                style={{background: vs.bg, color: vs.color, border: `1px solid ${vs.border}`}}
+                                title={vs.label}>
+                                {vs.icon} {vs.short}
+                              </span>
+                            )
+                          })()}
+                          <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                            style={{background: rc.bg, color: rc.color}}>
+                            {rc.label}
+                          </span>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {!loading && profile?.barangay_id && activeSection === 'verifications' && (
+            <div className="fade-up">
+              <VerificationQueue
+                profile={profile}
+                users={users}
+                onUpdated={handleVerificationUpdated}
+              />
+            </div>
+          )}
+
+          {!loading && profile?.barangay_id && activeSection === 'documents' && (
+            <div className="fade-up">
+              <DocumentQueue
+                profile={profile}
+                requests={documentRequests}
+                onUpdated={handleDocumentUpdated}
+              />
             </div>
           )}
 

@@ -2,10 +2,12 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
+import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
+import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -66,6 +68,18 @@ function generateSecureCode(prefix) {
   return `${prefix.toUpperCase()}-${code}`
 }
 
+// The super admin's incident feed is platform-wide, so it is capped.
+// Barangay dashboards load their own barangay in full; this view exists to
+// spot what is going wrong across barangays, not to be a second copy of
+// every barangay's queue.
+const INCIDENT_FEED_LIMIT = 300
+
+const INCIDENT_STATUS_STYLE = {
+  pending:  { label: 'Pending',  color: '#f97316', bg: '#fff7ed' },
+  assigned: { label: 'Assigned', color: '#3b82f6', bg: '#eff6ff' },
+  resolved: { label: 'Resolved', color: '#22c55e', bg: '#f0fdf4' },
+}
+
 const ROLE_CONFIG = {
   resident: { color: '#5B54E8', bg: '#f0effe' },
   official: { color: '#f97316', bg: '#fff7ed' },
@@ -84,6 +98,12 @@ export default function AdminPanel() {
   const [searchingBarangays, setSearchingBarangays] = useState(false)
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
+  // Platform-wide incident feed — every barangay, not just one.
+  const [incidents, setIncidents] = useState([])
+  const [incidentSearch, setIncidentSearch] = useState('')
+  const [incidentStatusFilter, setIncidentStatusFilter] = useState('all')
+  const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
+  const [incidentBarangayFilter, setIncidentBarangayFilter] = useState('all')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('applications')
   const [statusFilter, setStatusFilter] = useState('pending')
@@ -98,7 +118,7 @@ export default function AdminPanel() {
   // One shared fetch used by initial load AND refresh — previously duplicated.
   // Promise.all runs the queries in parallel instead of one after another.
   const fetchAll = useCallback(async () => {
-    const [appsRes, usersRes, codesRes] = await Promise.all([
+    const [appsRes, usersRes, codesRes, incidentsRes] = await Promise.all([
       supabase.from('barangay_applications')
         .select('*, barangays(name, city, province)')
         .order('created_at', { ascending: false }),
@@ -111,9 +131,17 @@ export default function AdminPanel() {
         .select('*, barangays(name)')
         .order('created_at', { ascending: false })
         .limit(100),
+      // No .eq('barangay_id', ...) here — that is the whole point. RLS lets
+      // a super admin read every barangay's incidents (see the
+      // "incidents: read same barangay or super admin" policy), so this
+      // returns the platform-wide feed.
+      supabase.from('incidents')
+        .select('*, barangays(name, city, province), profiles!incidents_reported_by_fkey(full_name)')
+        .order('created_at', { ascending: false })
+        .limit(INCIDENT_FEED_LIMIT),
     ])
 
-    const firstError = appsRes.error || usersRes.error || codesRes.error
+    const firstError = appsRes.error || usersRes.error || codesRes.error || incidentsRes.error
     if (firstError) {
       toast.error('Some data failed to load: ' + firstError.message)
     }
@@ -121,6 +149,7 @@ export default function AdminPanel() {
     setApplications(appsRes.data || [])
     setUsers(usersRes.data || [])
     setInviteCodes(codesRes.data || [])
+    setIncidents(incidentsRes.data || [])
   }, [supabase])
 
   // Debounced server-side barangay search. This scales to any table size —
@@ -170,6 +199,44 @@ export default function AdminPanel() {
     init()
     return () => { cancelled = true }
   }, [supabase, router, fetchAll])
+
+  // Platform-wide incident realtime. Barangay dashboards filter their
+  // channel by barangay_id; this one deliberately does not — the super
+  // admin is watching every barangay at once.
+  useEffect(() => {
+    if (!profile?.is_super_admin) return
+
+    const channel = supabase
+      .channel('admin-all-incidents')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, async (payload) => {
+        if (payload.eventType === 'INSERT') {
+          // Refetch the one row so the barangay and reporter joins are filled in
+          const { data } = await supabase
+            .from('incidents')
+            .select('*, barangays(name, city, province), profiles!incidents_reported_by_fkey(full_name)')
+            .eq('id', payload.new.id)
+            .single()
+          if (!data) return
+          setIncidents(prev => (
+            prev.some(i => i.id === data.id)
+              ? prev
+              : [data, ...prev].slice(0, INCIDENT_FEED_LIMIT)
+          ))
+          if (data.priority === 'Critical') {
+            toast.error(`CRITICAL in ${data.barangays?.name || 'unknown barangay'}: ${data.title}`, { duration: 8000 })
+          }
+        }
+        if (payload.eventType === 'UPDATE') {
+          setIncidents(prev => prev.map(i => (i.id === payload.new.id ? { ...i, ...payload.new } : i)))
+        }
+        if (payload.eventType === 'DELETE') {
+          setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase, profile?.is_super_admin])
 
   async function refreshData() {
     setRefreshing(true)
@@ -350,6 +417,47 @@ export default function AdminPanel() {
     approvedCount: applications.filter(a => a.status === 'approved').length,
   }), [applications])
 
+  // Barangays that actually appear in the feed, for the filter dropdown.
+  const incidentBarangays = useMemo(() => {
+    const seen = new Map()
+    for (const inc of incidents) {
+      if (inc.barangay_id && !seen.has(inc.barangay_id)) {
+        seen.set(inc.barangay_id, inc.barangays?.name || 'Unknown barangay')
+      }
+    }
+    return [...seen.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [incidents])
+
+  const filteredIncidents = useMemo(() => {
+    const q = incidentSearch.trim().toLowerCase()
+    return incidents.filter(i => {
+      if (incidentStatusFilter !== 'all' && i.status !== incidentStatusFilter) return false
+      if (incidentPriorityFilter !== 'all' && i.priority !== incidentPriorityFilter) return false
+      if (incidentBarangayFilter !== 'all' && i.barangay_id !== incidentBarangayFilter) return false
+      if (!q) return true
+      return (
+        i.title?.toLowerCase().includes(q) ||
+        i.location?.toLowerCase().includes(q) ||
+        i.category?.toLowerCase().includes(q) ||
+        i.barangays?.name?.toLowerCase().includes(q) ||
+        i.barangays?.city?.toLowerCase().includes(q) ||
+        i.profiles?.full_name?.toLowerCase().includes(q)
+      )
+    })
+  }, [incidents, incidentSearch, incidentStatusFilter, incidentPriorityFilter, incidentBarangayFilter])
+
+  const incidentStats = useMemo(() => ({
+    total: incidents.length,
+    pending: incidents.filter(i => i.status === 'pending').length,
+    critical: incidents.filter(i => i.priority === 'Critical' && i.status !== 'resolved').length,
+    barangays: new Set(incidents.map(i => i.barangay_id).filter(Boolean)).size,
+    // Reports still pending past their response window. Across barangays
+    // this is the number that says which ones need help.
+    overdue: incidents.filter(i => computeStanding(i).aged).length,
+  }), [incidents])
+
   const totalBarangaysWithUsers = useMemo(
     () => new Set(users.map(u => u.barangay_id).filter(Boolean)).size,
     [users]
@@ -464,7 +572,7 @@ export default function AdminPanel() {
       <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-6">
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -512,12 +620,33 @@ export default function AdminPanel() {
             <p className="text-2xl font-black" style={{ color: '#3b82f6' }}>{users.length}{users.length >= 100 ? '+' : ''}</p>
             <p className="text-xs text-gray-500 mt-0.5">Registered</p>
           </div>
+
+          {/* Platform-wide incidents — the super admin's actual job is
+              seeing across barangays, so this is a headline number, not
+              something buried inside a tab. */}
+          <button onClick={() => setActiveTab('incidents')}
+            className="white-card p-4 text-left transition-transform hover:scale-[1.02]">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+                style={{ background: '#fef2f2' }}>
+                <AlertTriangle size={14} className="text-red-500" />
+              </div>
+              <p className="text-xs text-gray-400">Incidents</p>
+            </div>
+            <p className="text-2xl font-black" style={{ color: '#ef4444' }}>
+              {incidentStats.pending}
+            </p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Pending across {incidentStats.barangays} barangay{incidentStats.barangays === 1 ? '' : 's'}
+            </p>
+          </button>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {[
             { value: 'applications', label: 'Applications', icon: Inbox, count: pendingCount },
+            { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical },
             { value: 'codes', label: 'Invite Codes', icon: KeyRound },
             { value: 'barangays', label: 'Barangays', icon: Building2 },
             { value: 'users', label: 'Users', icon: Users },
@@ -683,6 +812,202 @@ export default function AdminPanel() {
                   )}
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+
+        {/* ALL INCIDENTS TAB — every barangay on the platform.
+            Barangay officials see only their own; this is the one view
+            that spans them, so it leads with the cross-barangay numbers
+            (which barangays are affected, and who is falling behind). */}
+        {activeTab === 'incidents' && (
+          <div className="space-y-3 fade-up">
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: 'Total in feed', value: incidentStats.total, color: '#5B54E8', sub: `Latest ${INCIDENT_FEED_LIMIT}` },
+                { label: 'Pending', value: incidentStats.pending, color: '#f97316', sub: 'Awaiting dispatch' },
+                { label: 'Critical open', value: incidentStats.critical, color: '#dc2626', sub: 'Unresolved' },
+                { label: 'Past response time', value: incidentStats.overdue, color: '#b45309', sub: 'Pending too long' },
+              ].map(stat => (
+                <div key={stat.label} className="white-card p-4">
+                  <p className="text-xs text-gray-400">{stat.label}</p>
+                  <p className="text-2xl font-black mt-1" style={{ color: stat.color }}>{stat.value}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{stat.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Filters */}
+            <div className="white-card p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={incidentSearch} onChange={e => setIncidentSearch(e.target.value)}
+                    type="search"
+                    aria-label="Search incidents"
+                    placeholder="Search by title, barangay, city, category, or reporter..."
+                    className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
+                  {incidentSearch && (
+                    <button onClick={() => setIncidentSearch('')} aria-label="Clear search"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+                <select
+                  value={incidentBarangayFilter}
+                  onChange={e => setIncidentBarangayFilter(e.target.value)}
+                  aria-label="Filter by barangay"
+                  className="input-field rounded-2xl px-4 py-2.5 text-sm text-gray-800 sm:max-w-[240px]">
+                  <option value="all">All barangays ({incidentBarangays.length})</option>
+                  {incidentBarangays.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by status">
+                  {[
+                    { value: 'all', label: 'All', color: '#5B54E8' },
+                    { value: 'pending', label: 'Pending', color: '#f97316' },
+                    { value: 'assigned', label: 'Assigned', color: '#3b82f6' },
+                    { value: 'resolved', label: 'Resolved', color: '#22c55e' },
+                  ].map(f => (
+                    <button key={f.value} onClick={() => setIncidentStatusFilter(f.value)}
+                      aria-pressed={incidentStatusFilter === f.value}
+                      className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                      style={{
+                        background: incidentStatusFilter === f.value ? f.color : '#fafaff',
+                        color: incidentStatusFilter === f.value ? 'white' : '#6b7280',
+                        border: incidentStatusFilter === f.value ? 'none' : '1px solid #f0effe',
+                      }}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="w-px self-stretch hidden sm:block" style={{ background: '#f0effe' }} />
+                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by priority">
+                  {['all', 'Critical', 'High', 'Medium', 'Low'].map(level => {
+                    const style = PRIORITY_STYLE[level]
+                    const color = style?.color || '#5B54E8'
+                    const active = incidentPriorityFilter === level
+                    return (
+                      <button key={level} onClick={() => setIncidentPriorityFilter(level)}
+                        aria-pressed={active}
+                        className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
+                        style={{
+                          background: active ? color : '#fafaff',
+                          color: active ? 'white' : '#6b7280',
+                          border: active ? 'none' : '1px solid #f0effe',
+                        }}>
+                        {style ? `${style.icon} ${style.label}` : 'All priorities'}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* List */}
+            {filteredIncidents.length === 0 ? (
+              <div className="white-card p-12 text-center">
+                <AlertTriangle size={36} className="mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-400 text-sm">
+                  {incidents.length === 0
+                    ? 'No incidents have been reported on the platform yet.'
+                    : 'No incidents match your filters'}
+                </p>
+                {incidents.length > 0 && (
+                  <button onClick={() => {
+                    setIncidentSearch(''); setIncidentStatusFilter('all')
+                    setIncidentPriorityFilter('all'); setIncidentBarangayFilter('all')
+                  }} className="mt-2 text-xs font-semibold" style={{ color: '#5B54E8' }}>
+                    Clear filters →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-white/70 px-1">
+                  Showing {filteredIncidents.length} of {incidents.length} incidents
+                  {incidents.length >= INCIDENT_FEED_LIMIT && ` (most recent ${INCIDENT_FEED_LIMIT})`}
+                </p>
+                <div className="space-y-2">
+                  {filteredIncidents.map(inc => {
+                    const cat = getCategoryMeta(inc.category)
+                    const pri = PRIORITY_STYLE[inc.priority] || PRIORITY_STYLE.Medium
+                    const st = INCIDENT_STATUS_STYLE[inc.status] || INCIDENT_STATUS_STYLE.pending
+                    const standing = computeStanding(inc)
+                    const standingStyle = STANDING_STYLE[standing.level]
+                    const basis = getBasis(inc.category)
+                    return (
+                      <div key={inc.id} className="white-card p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
+                            style={{ background: cat.bg }}>
+                            <span aria-hidden="true">{cat.icon}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-bold text-gray-800 text-sm truncate">{inc.title}</h3>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                                style={{ background: pri.bg, color: pri.color }}>
+                                {pri.icon} {pri.label}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                                style={{ background: st.bg, color: st.color }}>
+                                {st.label}
+                              </span>
+                              {standing.aged && standingStyle && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                                  style={{ background: standingStyle.bg, color: standingStyle.color, border: `1px solid ${standingStyle.border}` }}>
+                                  {standing.label}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* The cross-barangay line — this is what the
+                                barangay-scoped dashboards cannot show. */}
+                            <div className="flex items-center gap-1.5 mt-1.5">
+                              <Building2 size={11} className="text-gray-400 flex-shrink-0" />
+                              <p className="text-xs font-semibold truncate" style={{ color: '#5B54E8' }}>
+                                {inc.barangays?.name || 'Unassigned barangay'}
+                                {inc.barangays?.city && (
+                                  <span className="font-normal text-gray-400">
+                                    {' · '}{inc.barangays.city}, {inc.barangays.province}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <MapPin size={11} className="text-gray-400 flex-shrink-0" />
+                              <p className="text-xs text-gray-500 truncate">{inc.location}</p>
+                            </div>
+
+                            {basis?.law && (
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <Scale size={11} className="flex-shrink-0" style={{ color: '#5B54E8' }} />
+                                <p className="text-[11px] text-gray-500 truncate">
+                                  {inc.legal_basis || `${basis.law}${basis.sections ? `, ${basis.sections}` : ''} — ${basis.lawTitle}`}
+                                </p>
+                              </div>
+                            )}
+
+                            <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(inc.created_at)}>
+                              Reported {timeAgo(inc.created_at)}
+                              {inc.profiles?.full_name && ` by ${inc.profiles.full_name}`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
         )}

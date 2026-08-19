@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Loader2, Ticket, Minus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
+import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area,
@@ -40,20 +41,6 @@ const AnimatedDots = () => (
   </div>
 )
 
-const CATEGORY_CONFIG = {
-  Noise: { icon: '🔊', color: '#f97316' },
-  Theft: { icon: '🚨', color: '#ef4444' },
-  Violence: { icon: '⚠️', color: '#dc2626' },
-  Fire: { icon: '🔥', color: '#ea580c' },
-  Flood: { icon: '🌊', color: '#3b82f6' },
-  Infrastructure: { icon: '🛠️', color: '#8b5cf6' },
-  Animals: { icon: '🐕', color: '#a16207' },
-  Medical: { icon: '🚑', color: '#dc2626' },
-  Traffic: { icon: '🚦', color: '#0891b2' },
-  Vandalism: { icon: '🎨', color: '#7c3aed' },
-  Drugs: { icon: '💊', color: '#be185d' },
-  Other: { icon: '📝', color: '#6b7280' },
-}
 
 const HOURS_MS = 1000 * 60 * 60
 
