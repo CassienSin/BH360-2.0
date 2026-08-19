@@ -649,27 +649,91 @@ grant execute on function claim_invite_code(text, text, uuid) to authenticated, 
 
 -- ============================================================================
 -- SECTION 6 — PRIVILEGE-ESCALATION PROTECTION
--- Users can edit their own profile, but never their role, barangay, or
--- admin flag from a CLIENT request. Super admins can still change these
--- (e.g. approving an application), and server-side/SQL-editor operations
--- (auth.uid() IS NULL — no client session) are always allowed, which is
--- what lets you bootstrap the first super admin below.
+-- Users can edit their own profile — name, phone, address, avatar, duty
+-- state — but a CLIENT request can never change the columns that decide
+-- what an account is allowed to do: its role, barangay and admin flag, its
+-- verification standing, or its deactivation.
+--
+-- This is the column-level half of the authorization story. RLS decides
+-- WHICH ROWS you may write; this trigger decides WHICH COLUMNS. The
+-- "profiles: update own or super admin" policy deliberately lets people
+-- edit themselves, so without this trigger self-verification and
+-- self-reactivation would both be a single UPDATE away.
+--
+-- Super admins bypass all of it, and so do server-side/SQL-editor
+-- operations (auth.uid() IS NULL — no client session), which is what lets
+-- you bootstrap the first super admin below.
 -- ============================================================================
 
 create or replace function prevent_privilege_escalation()
 returns trigger language plpgsql security definer set search_path = public
 as $$
+declare
+  caller_is_super boolean;
+  caller_role     text;
+  caller_barangay uuid;
 begin
-  if auth.uid() is not null
-     and (new.role is distinct from old.role
-          or new.barangay_id is distinct from old.barangay_id
-          or new.is_super_admin is distinct from old.is_super_admin)
-     and not exists (
-       select 1 from profiles where id = auth.uid() and is_super_admin = true
-     )
+  -- No client session (SQL editor, service role, a SECURITY DEFINER call
+  -- from a trigger) — trusted path, nothing to guard.
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select coalesce(is_super_admin, false), role, barangay_id
+    into caller_is_super, caller_role, caller_barangay
+  from profiles where id = auth.uid();
+
+  if caller_is_super then
+    return new;
+  end if;
+
+  -- 1. Role, barangay and admin flag: never from a client.
+  if new.role is distinct from old.role
+     or new.barangay_id is distinct from old.barangay_id
+     or new.is_super_admin is distinct from old.is_super_admin
   then
     raise exception 'You cannot change role, barangay, or admin status';
   end if;
+
+  -- 2. Verification standing.
+  --
+  -- Without this, the whole manual-verification feature is decoration: the
+  -- "profiles: update own or super admin" policy lets anyone write their own
+  -- row, so a resident could simply set verification_status = 'verified' on
+  -- themselves and skip the barangay entirely. It is not enough to check
+  -- WHO is updating — it has to be checked HERE, on the columns.
+  --
+  -- The legitimate path is set_verification_status(), which is SECURITY
+  -- DEFINER and so bypasses RLS; auth.uid() inside it is still the official,
+  -- which is what the branch below recognises. A direct client UPDATE cannot
+  -- reach another person's row at all (RLS), and its own row is refused by
+  -- the first test, so those four columns are unreachable from a client.
+  if new.verification_status is distinct from old.verification_status
+     or new.verification_note is distinct from old.verification_note
+     or new.verified_by       is distinct from old.verified_by
+     or new.verified_at       is distinct from old.verified_at
+  then
+    if new.id = auth.uid() then
+      raise exception 'You cannot change your own verification status';
+    end if;
+    if not (caller_role = 'official'
+            and caller_barangay is not null
+            and caller_barangay = new.barangay_id)
+    then
+      raise exception 'Only a barangay official of this barangay may change verification';
+    end if;
+  end if;
+
+  -- 3. Deactivation is one-way from a client. app/settings lets someone
+  --    close their own account; nothing lets them reopen it, or close
+  --    somebody else's. A super admin (above) can still do both.
+  if old.deactivated_at is not null and new.deactivated_at is null then
+    raise exception 'You cannot reactivate a deactivated account';
+  end if;
+  if new.deactivated_at is distinct from old.deactivated_at and new.id <> auth.uid() then
+    raise exception 'You cannot deactivate another account';
+  end if;
+
   return new;
 end;
 $$;
