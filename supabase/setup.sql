@@ -488,8 +488,9 @@ create policy "ticket_messages: insert by participants"
 
 -- INVITE CODES: only staff manage them directly. Registration NEVER reads
 -- or writes this table from the client — it goes through the
--- validate_invite_code / claim_invite_code RPCs in Section 5, so an
--- anonymous or resident session can never enumerate valid codes.
+-- validate_invite_code RPC in Section 5 and the handle_new_user trigger in
+-- Section 7, so an anonymous or resident session can never enumerate valid
+-- codes.
 drop policy if exists "invite_codes: officials manage own barangay codes" on invite_codes;
 create policy "invite_codes: officials manage own barangay codes"
   on invite_codes for all
@@ -607,10 +608,12 @@ create policy "notification_reads: insert own"
 
 
 -- ============================================================================
--- SECTION 5 — INVITE-CODE RPCs
--- The table itself is never client-readable (Section 4). Validation and
--- claiming both go through these SECURITY DEFINER functions. Signatures
--- match app/register/page.jsx exactly: input_code, input_role, claimer.
+-- SECTION 5 — INVITE-CODE VALIDATION
+-- The table itself is never client-readable (Section 4), so an anonymous or
+-- resident session can never enumerate valid codes. The registration form
+-- checks a code through validate_invite_code() to show the barangay it
+-- belongs to before the user commits; the code is CLAIMED later, by
+-- handle_new_user() in Section 7, inside the signup transaction.
 -- ============================================================================
 
 create or replace function validate_invite_code(input_code text, input_role text)
@@ -628,23 +631,13 @@ revoke all on function validate_invite_code(text, text) from public;
 -- anon is intentional: this runs during registration, before the account exists
 grant execute on function validate_invite_code(text, text) to anon, authenticated, service_role;
 
-create or replace function claim_invite_code(input_code text, input_role text, claimer uuid)
-returns boolean
-language sql security definer set search_path = public
-as $$
-  with claimed as (
-    update invite_codes
-    set used = true, used_by = claimer
-    where code = upper(trim(input_code))
-      and role = input_role
-      and used = false
-    returning id
-  )
-  select exists (select 1 from claimed)
-$$;
-revoke all on function claim_invite_code(text, text, uuid) from public;
--- authenticated only: claiming happens right after signUp, caller always has a session
-grant execute on function claim_invite_code(text, text, uuid) to authenticated, service_role;
+-- claim_invite_code() used to be called by the client right after signUp.
+-- It is gone: handle_new_user() (Section 7) claims the code inside the same
+-- transaction that creates the auth user, which is strictly better — a
+-- failed claim aborts the signup instead of leaving an account with no
+-- profile. Dropped rather than left in place, because a privileged RPC
+-- nobody calls is just attack surface waiting for someone to find it.
+drop function if exists public.claim_invite_code(text, text, uuid);
 
 
 -- ============================================================================
@@ -1006,26 +999,69 @@ do $$ begin alter publication supabase_realtime add table tanod_locations; excep
 
 -- ============================================================================
 -- SECTION 9 — STORAGE BUCKETS
--- No SELECT/listing policy on either bucket: public-bucket files are
--- served by URL (getPublicUrl()) without RLS being consulted at all. A
--- SELECT policy here would only enable directory-style enumeration of
--- every file in the bucket (e.g. every incident photo in every
--- barangay) — Supabase's linter flags this, and the app never needs it.
+--
+-- incident-images is PRIVATE and carries a SELECT policy, because the
+-- photographs in it are evidence about identifiable people.
+--
+-- avatars stays public and therefore has no SELECT policy: a public bucket
+-- is served by URL without RLS being consulted at all, so a policy there
+-- would only enable directory-style enumeration of the whole bucket.
+-- Profile photos are already shown to everyone in the barangay, and the
+-- trade is different from the one above.
 -- ============================================================================
 
+-- PRIVATE. This bucket was public, which meant every photograph attached to
+-- an incident was readable by anyone holding the URL, with no session at
+-- all — including photographs filed under RA 9262, where the evidence is of
+-- someone being hurt at home. That is sensitive personal information under
+-- RA 10173, and a public bucket is not a defensible place to keep it.
+-- Viewers now mint a short-lived signed URL (lib/storage.js), gated by the
+-- SELECT policy below.
 insert into storage.buckets (id, name, public)
-values ('incident-images', 'incident-images', true)
-on conflict (id) do nothing;
+values ('incident-images', 'incident-images', false)
+on conflict (id) do update set public = false;
 
 insert into storage.buckets (id, name, public)
 values ('avatars', 'avatars', true)
 on conflict (id) do nothing;
 
+-- Who may read an incident photograph.
+--
+-- Uploads are keyed by uploader: '<user id>/<file>' for a report,
+-- '<user id>/resolutions/<file>' for resolution proof. That first folder is
+-- what ties an object back to a person, and through them to a barangay —
+-- which is the same boundary the incidents table itself is scoped by, so a
+-- photo is visible to exactly the people who can already read the report it
+-- belongs to.
+drop policy if exists "Incident images readable within the barangay" on storage.objects;
+create policy "Incident images readable within the barangay"
+on storage.objects for select
+to authenticated
+using (
+  bucket_id = 'incident-images'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text     -- your own upload
+    or public.am_super_admin()
+    or exists (
+      select 1 from public.profiles p
+      where p.id::text = (storage.foldername(name))[1]
+        and p.barangay_id = public.my_barangay_id()
+    )
+  )
+);
+
 drop policy if exists "Authenticated users can upload incident images" on storage.objects;
 create policy "Authenticated users can upload incident images"
 on storage.objects for insert
 to authenticated
-with check (bucket_id = 'incident-images');
+-- Scoped to the uploader's own folder. Without the path check any signed-in
+-- account could write anywhere in the bucket, including over the top of a
+-- filename it had guessed — and the read policy above trusts that first
+-- folder to say who owns the object.
+with check (
+  bucket_id = 'incident-images'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
 
 drop policy if exists "Users can delete their own incident images" on storage.objects;
 create policy "Users can delete their own incident images"
@@ -1308,6 +1344,135 @@ exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
+-- SECTION 12 — SERVER-SIDE ENFORCEMENT OF THE RA 11032 DEADLINE
+--
+-- RA 11032 Sec. 10 deems a request approved when the office lets the
+-- deadline pass. That happens by operation of law, whether or not anybody is
+-- looking — so it must not depend on an official opening the queue. The UI
+-- computes the same state on read (lib/documents.js deadlineState), but the
+-- authoritative record is stamped here, on a schedule.
+--
+-- pg_cron is a Supabase extension. If it is not enabled on your project the
+-- guarded block below skips the schedule rather than failing the whole
+-- script — enable it in Dashboard → Database → Extensions and re-run.
+-- ============================================================================
+
+create or replace function public.stamp_overdue_document_requests()
+returns integer
+language sql security definer set search_path = public
+as $$
+  with stamped as (
+    update document_requests
+    set deemed_approved_at = due_at
+    where deemed_approved_at is null
+      and status not in ('released', 'denied')
+      and due_at < now()
+    returning id
+  )
+  select count(*)::integer from stamped
+$$;
+revoke all on function public.stamp_overdue_document_requests() from public;
+grant execute on function public.stamp_overdue_document_requests() to service_role;
+
+comment on function public.stamp_overdue_document_requests() is
+  'Stamps deemed_approved_at on requests the barangay let run past their '
+  'RA 11032 Sec. 9(b)(1) deadline. Idempotent — only ever touches rows whose '
+  'deemed_approved_at is still null.';
+
+do $$
+begin
+  create extension if not exists pg_cron;
+
+  -- Hourly is enough: the deadline is close of business on a working day,
+  -- so nothing turns on minute-level precision.
+  perform cron.unschedule('stamp-overdue-document-requests')
+  where exists (select 1 from cron.job where jobname = 'stamp-overdue-document-requests');
+
+  perform cron.schedule(
+    'stamp-overdue-document-requests',
+    '7 * * * *',
+    $cron$ select public.stamp_overdue_document_requests() $cron$
+  );
+exception when others then
+  raise notice 'pg_cron not available (%), skipping the schedule. Enable it in Dashboard -> Database -> Extensions and re-run this file. The deadline is still computed on read in lib/documents.js.', sqlerrm;
+end $$;
+
+
+-- ============================================================================
+-- SECTION 13 — AI RATE LIMITING
+--
+-- /api/ai-chat and /api/ai-analytics spend real money per call. They verify
+-- the caller, which stops strangers, but does nothing about a signed-in
+-- account looping requests — the budget is gone either way.
+--
+-- The counter lives in the database rather than in the route because Vercel
+-- runs each request in whatever serverless instance is free; an in-memory
+-- limiter there would reset constantly and count only a fraction of calls.
+-- ============================================================================
+
+create table if not exists ai_usage_log (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  route text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_ai_usage_user_time on ai_usage_log(user_id, route, created_at desc);
+
+alter table ai_usage_log enable row level security;
+
+-- No client policy at all: the table is written and read only by the API
+-- routes, through the service role, which bypasses RLS. A client that could
+-- read it would learn other people's usage; one that could write it could
+-- pad the log and lock somebody else out.
+drop policy if exists "ai_usage_log: no client access" on ai_usage_log;
+
+-- Records the call and reports whether it was within the allowance, in ONE
+-- statement — checking and then inserting separately would let two
+-- simultaneous requests both see "under the limit" and both proceed.
+create or replace function public.record_ai_call(
+  p_user_id uuid,
+  p_route text,
+  p_limit integer,
+  p_window_seconds integer
+)
+returns table (allowed boolean, used integer, resets_at timestamptz)
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_used integer;
+  v_oldest timestamptz;
+  -- Taken as seconds rather than an interval: PostgREST passes RPC
+  -- arguments as JSON, and an integer needs no cast to be unambiguous.
+  v_window interval := make_interval(secs => p_window_seconds);
+begin
+  select count(*), min(created_at)
+    into v_used, v_oldest
+  from ai_usage_log
+  where user_id = p_user_id
+    and route = p_route
+    and created_at > now() - v_window;
+
+  if v_used >= p_limit then
+    -- Refused calls are NOT logged: logging them would keep pushing the
+    -- window forward and turn a brief burst into a permanent lockout.
+    return query select false, v_used, v_oldest + v_window;
+    return;
+  end if;
+
+  insert into ai_usage_log (user_id, route) values (p_user_id, p_route);
+
+  -- Opportunistic cleanup so the table does not grow without bound.
+  delete from ai_usage_log
+  where created_at < now() - interval '7 days';
+
+  return query select true, v_used + 1, coalesce(v_oldest, now()) + v_window;
+end;
+$$;
+revoke all on function public.record_ai_call(uuid, text, integer, integer) from public;
+grant execute on function public.record_ai_call(uuid, text, integer, integer) to service_role;
+
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:
@@ -1355,7 +1520,6 @@ exception when duplicate_object then null; end $$;
 --
 -- 6. VERIFY — Database → Advisors → Security Lints should show only:
 --      - validate_invite_code executable by anon/authenticated (by design)
---      - claim_invite_code executable by authenticated (by design)
 --      - my_role/my_barangay_id/am_super_admin executable by authenticated
 --        (required — RLS evaluates them as the querying user)
 --      - am_verified/set_verification_status executable by authenticated

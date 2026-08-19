@@ -10,6 +10,7 @@ import {
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG } from '@/lib/legalBasis'
+import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { EmergencyContacts } from '@/components/ResponderAvailability'
 
@@ -32,6 +33,34 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 // Icons and colours come from the same table that holds each
 // category's governing law — see lib/legalBasis.js.
 const CATEGORY = CATEGORY_CONFIG
+
+// The incident-images bucket is private, so both of these sign their own
+// URL and hand the signed one to the lightbox. Rendering nothing when the
+// URL cannot be signed is deliberate: a photo you may not see should look
+// like no photo rather than a broken image.
+function IncidentPhoto({ stored, onOpen }) {
+  const signed = useSignedIncidentUrl(stored)
+  if (!signed) return null
+  return (
+    <button onClick={() => onOpen(signed)} aria-label="View your photo"
+      className="rid-press w-full rounded-2xl overflow-hidden block mb-4"
+      style={{ border: '1px solid #f0effe' }}>
+      <img src={signed} alt="Your photo" className="w-full max-h-56 object-cover" />
+    </button>
+  )
+}
+
+function TimelinePhoto({ stored, onOpen }) {
+  const signed = useSignedIncidentUrl(stored)
+  if (!signed) return null
+  return (
+    <button onClick={() => onOpen(signed)} aria-label="View resolution photo"
+      className="rid-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
+      style={{ border: '1px solid #f0effe' }}>
+      <img src={signed} alt="" className="w-full h-full object-cover" />
+    </button>
+  )
+}
 
 const PRIORITY = {
   Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', word: 'Emergency' },
@@ -335,13 +364,8 @@ export default function ResidentIncidentDetail() {
             {incident.location}
           </p>
 
-          {incident.image_url && (
-            <button onClick={() => setLightbox({ src: incident.image_url, alt: 'Your photo' })}
-              className="rid-press mt-3 rounded-2xl overflow-hidden block w-full"
-              style={{ border: '1px solid #f0effe' }}>
-              <img src={incident.image_url} alt="Your photo" className="w-full max-h-56 object-cover" />
-            </button>
-          )}
+          <IncidentPhoto stored={incident.image_url}
+            onOpen={(url) => setLightbox({ src: url, alt: 'Your photo' })} />
 
           {Number.isFinite(incident.latitude) && (
             <div className="mt-3">
@@ -407,13 +431,8 @@ export default function ResidentIncidentDetail() {
                         "{e.quote}"
                       </p>
                     )}
-                    {e.photo && (
-                      <button onClick={() => setLightbox({ src: e.photo, alt: 'Resolution photo' })}
-                        className="rid-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
-                        style={{ border: '1px solid #f0effe' }}>
-                        <img src={e.photo} alt="" className="w-full h-full object-cover" />
-                      </button>
-                    )}
+                    <TimelinePhoto stored={e.photo}
+                      onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
                   </div>
                 </div>
               )
