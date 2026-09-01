@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE } from '@/lib/triage'
+import { firstRealError } from '@/lib/dbError'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -146,9 +147,11 @@ export default function AdminPanel() {
         .limit(INCIDENT_FEED_LIMIT),
     ])
 
-    const firstError = appsRes.error || usersRes.error || codesRes.error || incidentsRes.error
+    const firstError = firstRealError(
+      [appsRes, usersRes, codesRes, incidentsRes], 'the admin panel')
     if (firstError) {
-      toast.error('Some data failed to load: ' + firstError.message)
+      console.error('Admin panel load failed:', firstError)
+      toast.error('Some of the panel could not load. Try refreshing.')
     }
 
     setApplications(appsRes.data || [])

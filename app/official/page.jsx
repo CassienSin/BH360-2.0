@@ -16,6 +16,7 @@ import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
 import { notify } from '@/components/Toast'
+import { firstRealError } from '@/lib/dbError'
 import VerificationQueue from '@/components/VerificationQueue'
 import DocumentQueue from '@/components/DocumentQueue'
 import BlotterQueue from '@/components/BlotterQueue'
@@ -217,6 +218,13 @@ export default function OfficialDashboard() {
         .order('filed_at', { ascending: false })
         .limit(BLOTTER_LIMIT),
     ])
+    const loadError = firstRealError(
+      [inc, tix, ann, tan, allUsers, codes, docs, blotter], 'the official dashboard')
+    if (loadError) {
+      console.error('Barangay data load failed:', loadError)
+      toast.error('Some of the dashboard could not load. Try refreshing.')
+    }
+
     setIncidents(inc.data || [])
     // A full page back means there is probably another one behind it.
     setIncidentsHasMore((inc.data?.length || 0) === INCIDENT_PAGE_SIZE)
