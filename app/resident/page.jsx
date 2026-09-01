@@ -11,6 +11,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
+import { useNotificationReads, unreadCount } from '@/lib/notificationReads'
 import { notify } from '@/components/Toast'
 import { firstRealError } from '@/lib/dbError'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
@@ -400,7 +401,40 @@ export default function ResidentDashboard() {
     d => !['released', 'denied'].includes(d.status)
   ).length
 
-  const newAnnouncementCount = announcements.filter(a =>
+  const { readKeys, markRead } = useNotificationReads(profile?.id)
+
+  // The same objects the header bell gets, so both sides key read state
+  // identically and one "mark read" clears both.
+  const announcementNotifs = useMemo(
+    () => announcements.map(a => ({
+      id: a.id,
+      type: 'announcement',
+      icon: '📢',
+      color: '#f0effe',
+      title: a.title,
+      subtitle: a.content?.slice(0, 60) + (a.content?.length > 60 ? '...' : ''),
+      created_at: a.created_at,
+      data: a,
+    })),
+    [announcements]
+  )
+
+  // Unread, not total. The badge used to show announcements.length, so it
+  // sat at the same number forever no matter how many times the section was
+  // opened — there was nothing for reading one to change.
+  const unreadAnnouncementCount = unreadCount(announcementNotifs, readKeys)
+
+  // Opening the section is what marks them read, which is what finally
+  // clears the badge.
+  useEffect(() => {
+    if (activeSection !== 'announcements') return
+    if (announcementNotifs.length === 0) return
+    markRead(announcementNotifs)
+  }, [activeSection, announcementNotifs, markRead])
+
+  // Separate from unread: this one means "posted recently", which is why it
+  // stays put while you read rather than vanishing under you.
+  const recentAnnouncementCount = announcements.filter(a =>
     (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24) <= 1
   ).length
 
@@ -433,7 +467,7 @@ export default function ResidentDashboard() {
         navItems={[
           { section: 'MAIN', items: [
             { key: 'home', label: 'Home', icon: Home },
-            { key: 'announcements', label: 'Announcements', icon: Bell, count: announcements.length, hasNew: newAnnouncementCount > 0 },
+            { key: 'announcements', label: 'Announcements', icon: Bell, count: unreadAnnouncementCount, hasNew: unreadAnnouncementCount > 0 },
           ]},
           { section: 'MY ACTIVITY', items: [
             { key: 'incidents', label: 'My Incidents', icon: AlertTriangle, count: incidents.filter(i => i.status === 'pending').length },
@@ -455,16 +489,7 @@ export default function ResidentDashboard() {
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc="Stay connected with your barangay"
           notifications={[
-            ...announcements.slice(0, 5).map(a => ({
-              id: a.id,
-              type: 'announcement',
-              icon: '📢',
-              color: '#f0effe',
-              title: a.title,
-              subtitle: a.content?.slice(0, 60) + (a.content?.length > 60 ? '...' : ''),
-              created_at: a.created_at,
-              data: a,
-            })),
+            ...announcementNotifs.slice(0, 5),
             ...incidents.filter(i => i.status === 'pending').map(i => ({
               id: i.id,
               type: 'incident',
@@ -645,10 +670,10 @@ export default function ResidentDashboard() {
                         {announcements.length} {announcements.length === 1 ? 'announcement' : 'announcements'} from {profile?.barangays?.name}
                       </p>
                     </div>
-                    {newAnnouncementCount > 0 && (
+                    {recentAnnouncementCount > 0 && (
                       <span className="text-[10px] px-2 py-1 rounded-full font-bold flex-shrink-0"
                         style={{ background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite' }}>
-                        {newAnnouncementCount} NEW
+                        {recentAnnouncementCount} NEW
                       </span>
                     )}
                   </div>
