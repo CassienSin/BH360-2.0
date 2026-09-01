@@ -12,6 +12,7 @@ import TanodRoster from '@/components/TanodRoster'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
+import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
@@ -113,8 +114,16 @@ const roleConfig = {
 
 export default function OfficialDashboard() {
   const router = useRouter()
+
+  // A resident replying on a ticket used to be silent unless the official
+  // happened to have that ticket open.
+  const ticketHref = useCallback(id => `/official/ticket/${id}`, [])
+  const openTicket = useCallback(id => router.push(`/official/ticket/${id}`), [router])
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
+  const { messages: ticketReplies } = useTicketMessageAlerts({
+    profile, ticketHref, onOpen: openTicket,
+  })
   const [announcements, setAnnouncements] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
@@ -934,6 +943,7 @@ export default function OfficialDashboard() {
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc={sectionDesc[activeSection]}
           notifications={[
+            ...ticketReplies,
             ...incidents.filter(i => i.status === 'pending').map(i => ({
               id: i.id,
               type: 'incident',
@@ -963,6 +973,7 @@ export default function OfficialDashboard() {
           onNotificationClick={(notif) => {
             if (notif.type === 'incident') setActiveSection('incidents')
             if (notif.type === 'ticket') router.push(`/official/ticket/${notif.id}`)
+            if (notif.type === 'ticket-message') router.push(`/official/ticket/${notif.data.ticket_id}`)
           }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') setActiveSection('incidents')
