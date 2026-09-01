@@ -53,6 +53,13 @@ create table if not exists profiles (
   barangay_id uuid references barangays(id),
   is_super_admin boolean not null default false,
   deactivated_at timestamptz,
+  -- Written by app/settings: which toasts a resident wants, and their UI
+  -- language. Both were saved by the Settings page long before the column
+  -- existed, so every save failed with "Failed to save settings: Could not
+  -- find the 'notification_prefs' column".
+  notification_prefs jsonb not null default '{}'::jsonb,
+  language text not null default 'en',
+
   -- Duty state, maintained by the tanod's DutyToggle and by log_duty_change()
   on_duty boolean not null default false,
   duty_changed_at timestamptz,
@@ -193,6 +200,9 @@ create table if not exists support_messages (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references profiles(id),
   subject text,
+  -- app/help sends this with every message; without the column the whole
+  -- contact form failed silently behind "Failed to send message".
+  category text,
   message text not null,
   status text not null default 'open',
   created_at timestamptz default now()
@@ -243,22 +253,29 @@ create table if not exists notification_reads (
 -- here is a no-op the second time it runs.
 -- ----------------------------------------------------------------------------
 
-alter table barangays    add column if not exists phone text;
+alter table barangays        add column if not exists phone text;
 
-alter table profiles     add column if not exists on_duty boolean not null default false;
-alter table profiles     add column if not exists duty_changed_at timestamptz;
-alter table profiles     add column if not exists last_seen_at timestamptz;
+-- The Settings page and the Help contact form have been writing these three
+-- columns since before they existed. Every settings save and every support
+-- message failed against a database without them.
+alter table profiles         add column if not exists notification_prefs jsonb not null default '{}'::jsonb;
+alter table profiles         add column if not exists language text not null default 'en';
+alter table support_messages add column if not exists category text;
 
-alter table invite_codes add column if not exists used_at timestamptz;
+alter table profiles         add column if not exists on_duty boolean not null default false;
+alter table profiles         add column if not exists duty_changed_at timestamptz;
+alter table profiles         add column if not exists last_seen_at timestamptz;
 
-alter table incidents    add column if not exists original_priority text;
-alter table incidents    add column if not exists priority_override_reason text;
-alter table incidents    add column if not exists priority_overridden_by uuid references profiles(id);
-alter table incidents    add column if not exists priority_overridden_at timestamptz;
-alter table incidents    add column if not exists acknowledged_at timestamptz;
-alter table incidents    add column if not exists acknowledged_by uuid references profiles(id);
-alter table incidents    add column if not exists assignment_method text;
-alter table incidents    add column if not exists auto_assigned_at timestamptz;
+alter table invite_codes     add column if not exists used_at timestamptz;
+
+alter table incidents        add column if not exists original_priority text;
+alter table incidents        add column if not exists priority_override_reason text;
+alter table incidents        add column if not exists priority_overridden_by uuid references profiles(id);
+alter table incidents        add column if not exists priority_overridden_at timestamptz;
+alter table incidents        add column if not exists acknowledged_at timestamptz;
+alter table incidents        add column if not exists acknowledged_by uuid references profiles(id);
+alter table incidents        add column if not exists assignment_method text;
+alter table incidents        add column if not exists auto_assigned_at timestamptz;
 
 do $$ begin
   alter table incidents add constraint incidents_assignment_method_check
