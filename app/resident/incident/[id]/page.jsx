@@ -209,8 +209,10 @@ export default function ResidentIncidentDetail() {
     setFeedback(data.rating_feedback || '')
 
     if (data.assigned_to) {
-      const { data: t } = await supabase
+      const { data: t, error: responderError } = await supabase
         .from('profiles').select('full_name, phone, on_duty').eq('id', data.assigned_to).single()
+      // The report still renders without the responder's details.
+      if (responderError) console.error('Could not load the assigned tanod:', responderError)
       setResponder(t)
     }
     setLoading(false)

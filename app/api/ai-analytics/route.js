@@ -29,11 +29,20 @@ export async function POST(req) {
       return Response.json({ error: 'Not signed in.' }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role, is_super_admin, barangay_id, barangays(name)')
       .eq('id', user.id)
       .maybeSingle()
+
+    // A failed lookup would fall through to the role check below and return
+    // 403 — telling an official they are not authorized when the truth is
+    // that we could not find out.
+    if (profileError) {
+      console.error('ai-analytics: could not read the caller profile:', profileError)
+      return Response.json(
+        { error: 'Could not verify your account. Please try again.' }, { status: 503 })
+    }
 
     // Analytics is an official-facing feature — don't let any resident
     // trigger paid Sonnet calls.

@@ -52,12 +52,18 @@ export default function NewDocumentRequest() {
     async function load() {
       const { data: { user }, error } = await supabase.auth.getUser()
       if (error || !user) { router.replace('/login'); return }
-      const { data } = await supabase
+      const { data, error: profError } = await supabase
         .from('profiles')
         .select('id, full_name, role, is_super_admin, barangay_id, verification_status, verification_note, barangays(name)')
         .eq('id', user.id)
         .single()
       if (cancelled) return
+      // Without a profile the form cannot tell whether this account is
+      // verified, and would show the gate as though it had been refused.
+      if (profError) {
+        console.error('Could not load your profile:', profError)
+        toast.error('Could not load your account. Please refresh.')
+      }
       setProfile(data ?? null)
       setLoadingProfile(false)
     }

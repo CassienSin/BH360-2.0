@@ -84,13 +84,21 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
-      const { data: prof } = await supabase
+      const { data: prof, error: profError } = await supabase
         .from('profiles')
         .select('*, barangays(id, name, city, province)')
         .eq('id', user.id)
         .maybeSingle()
 
       if (cancelled) return
+      // Only a genuinely missing profile means "sign in again"; a failed
+      // request means try again.
+      if (profError) {
+        console.error('Could not load your profile:', profError)
+        toast.error('Could not load your profile. Please refresh.')
+        setLoading(false)
+        return
+      }
       if (!prof) return router.push('/login')
 
       setProfile(prof)
@@ -120,18 +128,22 @@ export default function ProfilePage() {
           setTickets(tixRes.data || [])
         }
       } else if (prof.role === 'tanod') {
-        const { data: inc } = await supabase.from('incidents')
+        const { data: inc, error: incError } = await supabase.from('incidents')
           .select('id, title, status, created_at, priority, category, resolved_at, rating')
           .eq('assigned_to', user.id)
           .order('created_at', { ascending: false })
           .limit(20)
+        // Personal stats. An empty list here would read as "you have never
+        // been assigned anything", which is a discouraging thing to get wrong.
+        if (incError) console.error('Could not load your assignment history:', incError)
         if (!cancelled) setIncidents(inc || [])
       } else if (prof.role === 'official') {
-        const { data: ann } = await supabase.from('announcements')
+        const { data: ann, error: annError } = await supabase.from('announcements')
           .select('id, title, created_at')
           .eq('posted_by', user.id)
           .order('created_at', { ascending: false })
           .limit(20)
+        if (annError) console.error('Could not load your announcements:', annError)
         if (!cancelled) setAnnouncements(ann || [])
       }
 
