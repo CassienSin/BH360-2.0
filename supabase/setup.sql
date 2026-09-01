@@ -623,6 +623,16 @@ drop policy if exists "notification_reads: insert own" on notification_reads;
 create policy "notification_reads: insert own"
   on notification_reads for insert with check (user_id = auth.uid());
 
+-- Marking read goes through PostgREST's upsert, which is INSERT ... ON
+-- CONFLICT DO UPDATE. Without an UPDATE policy the DO UPDATE half is
+-- refused (42501) the moment a marker already exists — a second tab, a
+-- reload racing the fetch — and the client rolls the read back, so a
+-- notification the person had already opened silently went unread again.
+drop policy if exists "notification_reads: update own" on notification_reads;
+create policy "notification_reads: update own"
+  on notification_reads for update using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
 
 -- ============================================================================
 -- SECTION 5 — INVITE-CODE VALIDATION
