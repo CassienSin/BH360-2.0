@@ -1682,6 +1682,68 @@ exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
+-- SECTION 15 — WEB PUSH SUBSCRIPTIONS
+--
+-- Everything in lib/notifications.js fires from inside a Supabase Realtime
+-- callback, which exists only while a page is open. Close the tab and the
+-- websocket goes with it, so a tanod who is not looking at BH360 gets
+-- nothing — which for a critical incident is the case that matters most.
+--
+-- A Web Push subscription is a durable address the browser's own push
+-- service will deliver to with no page running. One row per DEVICE, not per
+-- person: a tanod with a phone and a desk browser has two, and both should
+-- ring.
+--
+-- The endpoint is the identity. Re-subscribing on the same device returns
+-- the same endpoint, so the unique constraint plus an upsert keeps repeated
+-- permission grants from piling up duplicate rows.
+-- ============================================================================
+
+create table if not exists push_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz not null default now(),
+  last_success_at timestamptz,
+  -- Push services answer 404/410 for an endpoint that is gone for good. The
+  -- sender deletes those; this counts the softer failures so a permanently
+  -- broken endpoint can be cleaned up without guessing.
+  failure_count integer not null default 0
+);
+create index if not exists idx_push_subs_user on push_subscriptions(user_id);
+
+comment on table push_subscriptions is
+  'Web Push endpoints, one per device. Written by lib/push.js, read by '
+  '/api/push/send through the service role.';
+
+alter table push_subscriptions enable row level security;
+
+-- A person manages their own devices and sees nobody else's. The sender
+-- runs as the service role and bypasses RLS entirely, which is the only
+-- reason it can reach the officials and tanods a push is aimed at.
+drop policy if exists "push_subscriptions: read own" on push_subscriptions;
+create policy "push_subscriptions: read own"
+  on push_subscriptions for select using (user_id = auth.uid());
+
+drop policy if exists "push_subscriptions: insert own" on push_subscriptions;
+create policy "push_subscriptions: insert own"
+  on push_subscriptions for insert with check (user_id = auth.uid());
+
+drop policy if exists "push_subscriptions: update own" on push_subscriptions;
+create policy "push_subscriptions: update own"
+  on push_subscriptions for update using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Deleting is how "turn notifications off on this device" works.
+drop policy if exists "push_subscriptions: delete own" on push_subscriptions;
+create policy "push_subscriptions: delete own"
+  on push_subscriptions for delete using (user_id = auth.uid());
+
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:
@@ -1727,7 +1789,43 @@ exception when duplicate_object then null; end $$;
 --      set verification_status = 'verified', verified_at = now()
 --      where id = '<profile id>';
 --
--- 6. VERIFY — Database → Advisors → Security Lints should show only:
+-- 6. BACKGROUND NOTIFICATIONS (Web Push) — optional, but this is what makes
+--    a critical incident reach a tanod whose phone is in their pocket with
+--    BarangayHub closed. Without it, notifications only appear while a page
+--    is open.
+--
+--    a) Generate a VAPID keypair (once, ever):
+--
+--         npx web-push generate-vapid-keys
+--
+--    b) Put these in Vercel → Settings → Environment Variables, then redeploy:
+--
+--         NEXT_PUBLIC_VAPID_PUBLIC_KEY   the public key from (a)
+--         VAPID_PRIVATE_KEY              the private key from (a)  [server only]
+--         VAPID_SUBJECT                  mailto:you@yourbarangay.gov.ph
+--         PUSH_WEBHOOK_SECRET            any long random string you invent
+--
+--    c) Supabase Dashboard → Database → Webhooks → "Create a new hook":
+--
+--         Name        push-on-new-incident
+--         Table       incidents
+--         Events      Insert
+--         Type        HTTP Request
+--         Method      POST
+--         URL         https://<your-app>.vercel.app/api/push/send
+--         HTTP Headers
+--                     Content-Type: application/json
+--                     x-push-secret: <the same PUSH_WEBHOOK_SECRET>
+--
+--    The route refuses anything without that header, so the secret is what
+--    stops a stranger firing notifications at every device in the barangay.
+--    It also refuses to run at all when the keys are missing, rather than
+--    defaulting to "send to everyone".
+--
+--    d) Test it: sign in as an official, allow notifications when asked,
+--       CLOSE the tab entirely, then file an incident from another device.
+--
+-- 7. VERIFY — Database → Advisors → Security Lints should show only:
 --      - validate_invite_code executable by anon/authenticated (by design)
 --      - my_role/my_barangay_id/am_super_admin executable by authenticated
 --        (required — RLS evaluates them as the querying user)

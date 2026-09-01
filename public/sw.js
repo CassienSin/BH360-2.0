@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bh360-v2'
-const STATIC_CACHE = 'bh360-static-v2'
+const CACHE_NAME = 'bh360-v3'
+const STATIC_CACHE = 'bh360-static-v3'
 
 // Files to cache for offline use
 const STATIC_FILES = [
@@ -82,5 +82,86 @@ self.addEventListener('fetch', (event) => {
           }
         })
       })
+  )
+})
+
+// ============================================================================
+// PUSH NOTIFICATIONS
+//
+// This is what makes a notification arrive when BH360 is CLOSED. Everything
+// in lib/notifications.js fires from inside a Supabase Realtime callback,
+// which only exists while a page is open — close the tab and the websocket
+// goes with it. A push is delivered by the browser's own push service to
+// this service worker, which runs with no page at all.
+// ============================================================================
+
+self.addEventListener('push', (event) => {
+  // A push with no readable payload still has to show something: the spec
+  // requires a visible notification for every push (userVisibleOnly), and
+  // browsers show their own "This site has been updated in the background"
+  // if we do not.
+  let payload = {}
+  try {
+    payload = event.data ? event.data.json() : {}
+  } catch {
+    payload = { title: 'BarangayHub 360', body: event.data ? event.data.text() : '' }
+  }
+
+  const title = payload.title || 'BarangayHub 360'
+  const options = {
+    body: payload.body || '',
+    icon: payload.icon || '/icon-192.png',
+    badge: '/favicon-32.png',
+    // tag collapses repeats of the same event — a critical incident pushed
+    // to a tanod who also has the page open should not stack up twice.
+    tag: payload.tag,
+    renotify: Boolean(payload.tag) && payload.priority === 'Critical',
+    requireInteraction: payload.priority === 'Critical',
+    vibrate: payload.priority === 'Critical' ? [200, 100, 200, 100, 200] : [100],
+    timestamp: payload.timestamp ? Date.parse(payload.timestamp) : Date.now(),
+    data: { url: payload.url || '/', ...payload.data },
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Tapping a notification.
+//
+// lib/notifications.js has always claimed this handler existed. It did not —
+// so on Android Chrome, where `new Notification()` throws and the code falls
+// back to registration.showNotification(), tapping a notification did
+// nothing at all. Android is most of the people using this.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const target = (event.notification.data && event.notification.data.url) || '/'
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Prefer focusing a tab that is already open — opening a second copy
+      // of the dashboard is a worse answer than bringing the first forward.
+      for (const client of clientList) {
+        const sameOrigin = client.url.startsWith(self.location.origin)
+        if (sameOrigin && 'focus' in client) {
+          if ('navigate' in client && new URL(client.url).pathname !== target) {
+            return client.navigate(target).then((c) => c && c.focus())
+          }
+          return client.focus()
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target)
+      return undefined
+    })
+  )
+})
+
+// A subscription can be rotated by the push service without the user doing
+// anything. Without this the endpoint we stored goes dead silently and the
+// device simply stops receiving anything.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ includeUncontrolled: true }).then((clients) => {
+      clients.forEach((client) => client.postMessage({ type: 'PUSH_SUBSCRIPTION_CHANGED' }))
+    })
   )
 })
