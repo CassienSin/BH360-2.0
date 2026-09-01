@@ -1682,6 +1682,185 @@ exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
+-- SECTION 15 — WEB PUSH SUBSCRIPTIONS
+--
+-- Everything in lib/notifications.js fires from inside a Supabase Realtime
+-- callback, which exists only while a page is open. Close the tab and the
+-- websocket goes with it, so a tanod who is not looking at BH360 gets
+-- nothing — which for a critical incident is the case that matters most.
+--
+-- A Web Push subscription is a durable address the browser's own push
+-- service will deliver to with no page running. One row per DEVICE, not per
+-- person: a tanod with a phone and a desk browser has two, and both should
+-- ring.
+--
+-- The endpoint is the identity. Re-subscribing on the same device returns
+-- the same endpoint, so the unique constraint plus an upsert keeps repeated
+-- permission grants from piling up duplicate rows.
+-- ============================================================================
+
+create table if not exists push_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  user_agent text,
+  created_at timestamptz not null default now(),
+  last_success_at timestamptz,
+  -- Push services answer 404/410 for an endpoint that is gone for good. The
+  -- sender deletes those; this counts the softer failures so a permanently
+  -- broken endpoint can be cleaned up without guessing.
+  failure_count integer not null default 0
+);
+create index if not exists idx_push_subs_user on push_subscriptions(user_id);
+
+comment on table push_subscriptions is
+  'Web Push endpoints, one per device. Written by lib/push.js, read by '
+  '/api/push/send through the service role.';
+
+alter table push_subscriptions enable row level security;
+
+-- A person manages their own devices and sees nobody else's. The sender
+-- runs as the service role and bypasses RLS entirely, which is the only
+-- reason it can reach the officials and tanods a push is aimed at.
+drop policy if exists "push_subscriptions: read own" on push_subscriptions;
+create policy "push_subscriptions: read own"
+  on push_subscriptions for select using (user_id = auth.uid());
+
+drop policy if exists "push_subscriptions: insert own" on push_subscriptions;
+create policy "push_subscriptions: insert own"
+  on push_subscriptions for insert with check (user_id = auth.uid());
+
+drop policy if exists "push_subscriptions: update own" on push_subscriptions;
+create policy "push_subscriptions: update own"
+  on push_subscriptions for update using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Deleting is how "turn notifications off on this device" works.
+drop policy if exists "push_subscriptions: delete own" on push_subscriptions;
+create policy "push_subscriptions: delete own"
+  on push_subscriptions for delete using (user_id = auth.uid());
+
+
+-- ============================================================================
+-- SECTION 16 — DISPATCHING THE PUSH WHEN AN INCIDENT IS FILED
+--
+-- Section 15 stores the addresses; something still has to fire at them the
+-- moment a report lands. That trigger has to live in the database, because
+-- the database is the only part of the system that is awake when every
+-- browser is closed.
+--
+-- The Supabase dashboard can build this for you (Integrations → Webhooks,
+-- called "Database Webhooks"; it used to sit under Database and moves
+-- between releases). This section does the same thing in SQL so the
+-- deployment does not depend on where the button is this month, and so it
+-- is reproducible from this file alone.
+--
+-- The URL and the shared secret are per-deployment, so they live in a table
+-- rather than in the function body: see the INSERT at the bottom of this
+-- section. Until you run that INSERT the trigger is inert — it returns
+-- without sending, so filing incidents keeps working with push simply off.
+-- ============================================================================
+
+do $$
+begin
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'pg_net not available (%), so incidents will not dispatch a push. Enable it in Dashboard -> Database -> Extensions and re-run this file, or wire the webhook by hand under Integrations -> Webhooks. Everything else in this section still installs.', sqlerrm;
+end $$;
+
+-- A schema with no grants: nothing reachable through PostgREST, so the
+-- secret cannot be selected by anon or by a signed-in resident even if a
+-- policy elsewhere were mistakenly written too wide.
+create schema if not exists private;
+revoke all on schema private from public;
+
+create table if not exists private.app_config (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+
+comment on table private.app_config is
+  'Per-deployment settings the database itself needs (push endpoint URL and '
+  'shared secret). Not exposed through the API — read only by SECURITY '
+  'DEFINER functions in this schema.';
+
+alter table private.app_config enable row level security;
+revoke all on private.app_config from public;
+
+-- Fires once per new incident and hands it to /api/push/send, which decides
+-- who hears about it. The payload is shaped like a Supabase database webhook
+-- so the same route serves both wiring methods.
+create or replace function private.dispatch_incident_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select value into v_url from private.app_config where key = 'push_endpoint_url';
+  select value into v_secret from private.app_config where key = 'push_webhook_secret';
+
+  -- Not configured yet. Push is optional; the report still files.
+  if v_url is null or v_secret is null then
+    return new;
+  end if;
+
+  -- pg_net only queues the request here — its background worker does the
+  -- sending — but a misconfigured extension must never cost a resident
+  -- their report, so a failure is logged and swallowed rather than raised.
+  begin
+    perform net.http_post(
+      url := v_url,
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'x-push-secret', v_secret
+      ),
+      body := jsonb_build_object(
+        'type', 'INSERT',
+        'table', 'incidents',
+        'record', to_jsonb(new)
+      ),
+      timeout_milliseconds := 5000
+    );
+  exception when others then
+    raise warning 'dispatch_incident_push: %', sqlerrm;
+  end;
+
+  return new;
+end;
+$$;
+
+revoke all on function private.dispatch_incident_push() from public;
+
+drop trigger if exists dispatch_incident_push_trigger on incidents;
+create trigger dispatch_incident_push_trigger
+  after insert on incidents
+  for each row execute function private.dispatch_incident_push();
+
+-- ----------------------------------------------------------------------------
+-- Run this ONCE per deployment, with your own values. It is deliberately
+-- left commented out: this file is safe to re-run, and re-running it should
+-- not overwrite a working configuration with a placeholder.
+--
+--   insert into private.app_config (key, value) values
+--     ('push_endpoint_url',    'https://<your-app>.vercel.app/api/push/send'),
+--     ('push_webhook_secret',  '<the same PUSH_WEBHOOK_SECRET as in Vercel>')
+--   on conflict (key) do update
+--     set value = excluded.value, updated_at = now();
+--
+-- To check what was queued and what the app answered:
+--
+--   select id, status_code, content, created
+--     from net._http_response order by created desc limit 5;
+-- ----------------------------------------------------------------------------
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:
@@ -1727,7 +1906,47 @@ exception when duplicate_object then null; end $$;
 --      set verification_status = 'verified', verified_at = now()
 --      where id = '<profile id>';
 --
--- 6. VERIFY — Database → Advisors → Security Lints should show only:
+-- 6. BACKGROUND NOTIFICATIONS (Web Push) — optional, but this is what makes
+--    a critical incident reach a tanod whose phone is in their pocket with
+--    BarangayHub closed. Without it, notifications only appear while a page
+--    is open.
+--
+--    a) Generate a VAPID keypair (once, ever):
+--
+--         npx web-push generate-vapid-keys
+--
+--    b) Put these in Vercel → Settings → Environment Variables, then redeploy:
+--
+--         NEXT_PUBLIC_VAPID_PUBLIC_KEY   the public key from (a)
+--         VAPID_PRIVATE_KEY              the private key from (a)  [server only]
+--         VAPID_SUBJECT                  mailto:you@yourbarangay.gov.ph
+--         PUSH_WEBHOOK_SECRET            any long random string you invent
+--
+--    c) Tell the database where to send. Section 16 already created the
+--       trigger; it just needs your URL and secret. In the SQL Editor:
+--
+--         insert into private.app_config (key, value) values
+--           ('push_endpoint_url',   'https://<your-app>.vercel.app/api/push/send'),
+--           ('push_webhook_secret', '<the same PUSH_WEBHOOK_SECRET>')
+--         on conflict (key) do update
+--           set value = excluded.value, updated_at = now();
+--
+--       Use the production domain, not a preview URL — preview URLs change
+--       with every deploy.
+--
+--       (The dashboard can wire the same thing by hand under Integrations →
+--       Webhooks — "Database Webhooks". Do one or the other, not both, or
+--       every incident sends two notifications.)
+--
+--    The route refuses anything without the x-push-secret header, so the
+--    secret is what stops a stranger firing notifications at every device in
+--    the barangay. It also refuses to run at all when the keys are missing,
+--    rather than defaulting to "send to everyone".
+--
+--    d) Test it: sign in as an official, allow notifications when asked,
+--       CLOSE the tab entirely, then file an incident from another device.
+--
+-- 7. VERIFY — Database → Advisors → Security Lints should show only:
 --      - validate_invite_code executable by anon/authenticated (by design)
 --      - my_role/my_barangay_id/am_super_admin executable by authenticated
 --        (required — RLS evaluates them as the querying user)

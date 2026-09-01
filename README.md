@@ -20,6 +20,13 @@
 - **🤖 AI Assistant** — a Claude-powered chatbot that answers common barangay questions (clearances, permits, office hours, how to file complaints)
 - **⭐ Service Ratings** — rate resolved incidents and leave feedback for the responding tanod
 
+### Notifications
+- **🔔 Background push** — critical incidents reach officials and tanods **with BarangayHub closed**, via Web Push: a subscription per device, delivered by the browser's own push service to `public/sw.js`, triggered by a database trigger on incident insert rather than by any open page
+  - Works in a normal tab on Android Chrome and desktop Chrome / Edge / Firefox
+  - **iOS Safari needs the app added to the Home Screen first** (16.4+) — the app detects that case and says so, rather than reporting "unsupported"
+  - Critical alerts stay until tapped and vibrate distinctly; everything else expires
+  - A device that has uninstalled or revoked permission is removed automatically when its endpoint returns 404/410
+
 ### For Barangay Tanods (Field Officers)
 - **📋 Assignment Dashboard** — active assignments sorted by priority, with realtime notifications when a new incident is assigned (Critical assignments get louder, longer alerts)
 - **🗺️ One-tap Navigation** — open the incident location in Google Maps, Waze, or Apple Maps; call the reporter directly from the card
@@ -93,6 +100,13 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # Anthropic (for /api/ai-chat and /api/ai-analytics)
 ANTHROPIC_API_KEY=your-anthropic-key
+
+# Web Push — background notifications. Generate the pair once with
+#   npx web-push generate-vapid-keys
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
+VAPID_PRIVATE_KEY=your-vapid-private-key
+VAPID_SUBJECT=mailto:you@yourbarangay.gov.ph
+PUSH_WEBHOOK_SECRET=any-long-random-string
 ```
 
 Add the same variables in **Vercel → Project → Settings → Environment Variables** for deployment.

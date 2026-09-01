@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Bell, X, Check, Loader2 } from 'lucide-react'
 import { getPermission, requestPermission, isSupported } from '@/lib/notifications'
+import { subscribeToPush, pushSupport, watchForSubscriptionChange } from '@/lib/push'
 import toast from 'react-hot-toast'
 
 const DISMISS_KEY = 'notif-banner-dismissed'
@@ -24,9 +25,24 @@ export default function NotificationBanner() {
   useEffect(() => {
     setMounted(true)
     if (!isSupported()) return
-    setPermission(getPermission())
+    const current = getPermission()
+    setPermission(current)
     if (safeStorageGet(DISMISS_KEY)) setDismissed(true)
+
+    // Someone who granted permission on an earlier visit — or on another
+    // device — has no push subscription yet, because subscribing only
+    // started existing now. Registering here means they do not have to
+    // find a setting to turn something on they already said yes to.
+    if (current === 'granted' && pushSupport().supported) {
+      subscribeToPush().then(res => {
+        if (!res.ok) console.warn('Background notifications unavailable:', res.error)
+      })
+    }
   }, [])
+
+  // The push service can rotate a subscription without anyone doing
+  // anything; sw.js tells us so we can re-register the new endpoint.
+  useEffect(() => watchForSubscriptionChange(), [])
 
   async function handleEnable() {
     if (enabling) return
@@ -35,7 +51,23 @@ export default function NotificationBanner() {
       const result = await requestPermission()
       setPermission(result)
       if (result === 'granted') {
-        toast.success('Notifications enabled')
+        // Permission alone only covers notifications while a page is open.
+        // The subscription is what makes one arrive with the app closed, so
+        // the two go together — asking twice would be asking the same
+        // question twice.
+        const support = pushSupport()
+        if (!support.supported) {
+          toast.success('Notifications enabled')
+          if (support.reason) toast(support.reason, { duration: 7000, icon: 'ℹ️' })
+        } else {
+          const push = await subscribeToPush()
+          if (push.ok) {
+            toast.success('Notifications on, even when the app is closed')
+          } else {
+            toast.success('Notifications enabled')
+            console.warn('Background notifications unavailable:', push.error)
+          }
+        }
       } else if (result === 'denied') {
         toast.error('Notifications blocked. You can enable them in browser settings.')
       }
@@ -72,7 +104,7 @@ export default function NotificationBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-gray-800">Enable notifications</p>
-          <p className="text-xs text-gray-500">Get instant alerts for critical incidents and updates, even when you're on other tabs.</p>
+          <p className="text-xs text-gray-500">Get alerted to critical incidents and updates — even when BarangayHub is closed.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={handleEnable} disabled={enabling}
