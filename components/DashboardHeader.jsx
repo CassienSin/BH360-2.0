@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles, CheckCheck } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
 import { timeAgo } from '@/lib/timeAgo'
+import { useNotificationReads, notifKey, unreadCount as countUnread } from '@/lib/notificationReads'
 
 // Extracted so the 1-second tick re-renders only this tiny component,
 // not the whole header (including the search modal and dropdowns).
@@ -50,11 +51,6 @@ const roleConfig = {
   tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4' },
 }
 
-// Stable key per notification. Include type so an incident id and a
-// ticket id that happen to match don't collide. Module-level: it never
-// changes, so it shouldn't be re-created every render.
-const notifKey = (n) => `${n.type || 'notif'}:${n.id}`
-
 export default function DashboardHeader({
   profile,
   sidebarOpen,
@@ -69,71 +65,15 @@ export default function DashboardHeader({
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
-  // ---- Read tracking ----
-  const [readKeys, setReadKeys] = useState(new Set())
+  // Read state is shared with the sidebar badge through lib/notificationReads
+  // rather than fetched here. The bell and the badge answer the same
+  // question, so they must not keep separate answers.
+  const { readKeys, isRead, markRead } = useNotificationReads(profile?.id)
 
-  // Load this user's read markers once per login
-  useEffect(() => {
-    if (!profile?.id) return
-    let cancelled = false
-    supabase
-      .from('notification_reads')
-      .select('notif_key')
-      .eq('user_id', profile.id)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('Failed to load read markers:', error)
-          return
-        }
-        if (!cancelled && data) setReadKeys(new Set(data.map(r => r.notif_key)))
-      })
-    return () => { cancelled = true }
-  }, [profile?.id, supabase])
-
-  const isRead = useCallback((n) => readKeys.has(notifKey(n)), [readKeys])
-
-  async function markRead(n) {
-    if (!profile?.id) return
-    const key = notifKey(n)
-    if (readKeys.has(key)) return
-    // Optimistic update — the dot reacts instantly, the DB write follows
-    setReadKeys(prev => new Set(prev).add(key))
-    const { error } = await supabase.from('notification_reads').upsert(
-      { user_id: profile.id, notif_key: key },
-      { onConflict: 'user_id,notif_key' }
-    )
-    if (error) {
-      console.error('Failed to mark notification read:', error)
-      // Roll back so the UI doesn't claim a read state that won't survive
-      // a reload
-      setReadKeys(prev => {
-        const next = new Set(prev)
-        next.delete(key)
-        return next
-      })
-    }
-  }
-
-  async function markAllRead() {
-    if (!profile?.id) return
-    const rows = notifications
-      .filter(n => !readKeys.has(notifKey(n)))
-      .map(n => ({ user_id: profile.id, notif_key: notifKey(n) }))
-    if (rows.length === 0) return
-    const newKeys = rows.map(r => r.notif_key)
-    setReadKeys(prev => new Set([...prev, ...newKeys]))
-    const { error } = await supabase
-      .from('notification_reads')
-      .upsert(rows, { onConflict: 'user_id,notif_key' })
-    if (error) {
-      console.error('Failed to mark all read:', error)
-      setReadKeys(prev => {
-        const next = new Set(prev)
-        newKeys.forEach(k => next.delete(k))
-        return next
-      })
-    }
-  }
+  const markAllRead = useCallback(
+    () => markRead(notifications),
+    [markRead, notifications]
+  )
 
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -295,16 +235,16 @@ export default function DashboardHeader({
     }
   }
 
-  const unreadCount = useMemo(
-    () => notifications.filter(n => !readKeys.has(notifKey(n))).length,
+  const unread = useMemo(
+    () => countUnread(notifications, readKeys),
     [notifications, readKeys]
   )
   // Unread first, then read; newest first within each group
   const sortedNotifications = useMemo(() => {
     const byTime = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    const unread = notifications.filter(n => !readKeys.has(notifKey(n))).sort(byTime)
-    const read = notifications.filter(n => readKeys.has(notifKey(n))).sort(byTime)
-    return [...unread, ...read]
+    const fresh = notifications.filter(n => !readKeys.has(notifKey(n))).sort(byTime)
+    const seen = notifications.filter(n => readKeys.has(notifKey(n))).sort(byTime)
+    return [...fresh, ...seen]
   }, [notifications, readKeys])
 
   const rc = roleConfig[profile?.role] || roleConfig.resident
@@ -403,11 +343,11 @@ export default function DashboardHeader({
           {/* Notifications */}
           <div className="relative" ref={notifRef}>
             <button onClick={() => setNotifOpen(!notifOpen)}
-              aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
+              aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
               aria-expanded={notifOpen}
               className="relative w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
               <Bell size={16} />
-              {unreadCount > 0 && (
+              {unread > 0 && (
                 <>
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 animate-ping" />
@@ -424,12 +364,12 @@ export default function DashboardHeader({
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
                     <p className="text-xs text-gray-400" aria-live="polite">
-                      {unreadCount > 0
-                        ? `${unreadCount} unread ${unreadCount === 1 ? 'item' : 'items'}`
+                      {unread > 0
+                        ? `${unread} unread ${unread === 1 ? 'item' : 'items'}`
                         : 'All caught up'}
                     </p>
                   </div>
-                  {unreadCount > 0 && (
+                  {unread > 0 && (
                     <button onClick={markAllRead}
                       className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold hover:opacity-70 transition-opacity"
                       style={{ background: '#f0effe', color: '#5B54E8' }}>
