@@ -97,6 +97,11 @@ ANTHROPIC_API_KEY=your-anthropic-key
 
 Add the same variables in **Vercel → Project → Settings → Environment Variables** for deployment.
 
+> **`SUPABASE_SERVICE_ROLE_KEY` is required at runtime**, not just for the PSGC import
+> script. `lib/rateLimit.js` uses it to enforce the per-user limits on `/api/ai-chat` and
+> `/api/ai-analytics`, and those routes fail closed without it — the AI assistant and the
+> analytics report stop working, and the server log says so. Set it before deploying.
+
 ### 3. Database setup
 
 In the Supabase SQL editor:
