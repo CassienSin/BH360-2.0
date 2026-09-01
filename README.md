@@ -21,7 +21,7 @@
 - **⭐ Service Ratings** — rate resolved incidents and leave feedback for the responding tanod
 
 ### Notifications
-- **🔔 Background push** — critical incidents reach officials and tanods **with BarangayHub closed**, via Web Push: a subscription per device, delivered by the browser's own push service to `public/sw.js`, triggered by a Supabase database webhook on incident insert rather than by any open page
+- **🔔 Background push** — critical incidents reach officials and tanods **with BarangayHub closed**, via Web Push: a subscription per device, delivered by the browser's own push service to `public/sw.js`, triggered by a database trigger on incident insert rather than by any open page
   - Works in a normal tab on Android Chrome and desktop Chrome / Edge / Firefox
   - **iOS Safari needs the app added to the Home Screen first** (16.4+) — the app detects that case and says so, rather than reporting "unsupported"
   - Critical alerts stay until tapped and vibrate distinctly; everything else expires

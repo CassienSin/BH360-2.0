@@ -5,10 +5,10 @@ import { getPriority, getCategoryMeta } from '@/lib/legalBasis'
 /**
  * Sends a Web Push for a new incident.
  *
- * This is the piece that works with nobody's browser open. It is called by a
- * Supabase Database Webhook on INSERT into `incidents` (see the MANUAL STEPS
- * in supabase/setup.sql), so the trigger is the database itself rather than
- * any page.
+ * This is the piece that works with nobody's browser open. It is called on
+ * INSERT into `incidents` by a database trigger (Section 16 of
+ * supabase/setup.sql, or an equivalent Supabase Database Webhook), so the
+ * caller is the database itself rather than any page.
  *
  * Runs on Node, not Edge: web-push signs a VAPID JWT and encrypts the
  * payload with primitives the Edge runtime does not provide.
