@@ -12,6 +12,8 @@ import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
 import { useNotificationReads, unreadCount } from '@/lib/notificationReads'
+import RecordCard, { RecordGroup, Chip, PriorityChip } from '@/components/RecordCard'
+import { isSettled, toneFor, progressOf, partitionByLiveness } from '@/lib/recordState'
 import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
 import { notify } from '@/components/Toast'
 import { firstRealError } from '@/lib/dbError'
@@ -66,6 +68,273 @@ const priorityConfig = {
   Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
   High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
   Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
+}
+
+const INCIDENT_STEPS = ['Reported', 'Tanod assigned', 'Resolved']
+
+const STATUS_CHIP = {
+  pending:     { label: 'Waiting for a tanod', bg: '#fef3c7', color: '#b45309' },
+  assigned:    { label: 'Tanod on the way',    bg: '#dbeafe', color: '#1d4ed8' },
+  resolved:    { label: 'Resolved',            bg: '#d1fae5', color: '#047857' },
+  open:        { label: 'Open',                bg: '#fef3c7', color: '#b45309' },
+  in_progress: { label: 'Being handled',       bg: '#dbeafe', color: '#1d4ed8' },
+  closed:      { label: 'Closed',              bg: '#d1fae5', color: '#047857' },
+}
+
+function StatusChip({ status }) {
+  const c = STATUS_CHIP[status]
+  if (!c) return null
+  return <Chip bg={c.bg} color={c.color} dot>{c.label}</Chip>
+}
+
+/**
+ * A report still in progress gets the full card and its place in the queue
+ * drawn out; a resolved one collapses to a row. Nine of fourteen reports
+ * being finished is the normal case, and giving those the same height as
+ * the two still open buries the two that matter.
+ */
+const TICKET_STEPS = ['Submitted', 'Being handled', 'Closed']
+
+function TicketCard({ t, live, onOpen }) {
+  return (
+    <RecordCard
+      live={live}
+      tone={toneFor(t.status)}
+      icon={<FileText size={live ? 16 : 14} className="text-white" />}
+      iconBg={isSettled(t.status) ? '#9ca3af' : 'linear-gradient(135deg, #5B54E8, #7C75F0)'}
+      title={t.title}
+      description={live ? t.description : undefined}
+      meta={!live && t.category ? <span className="truncate">{t.category}</span> : null}
+      status={live ? <StatusChip status={t.status} /> : null}
+      badges={!live ? <StatusChip status={t.status} /> : null}
+      when={live ? timeAgoLong(t.created_at) : timeAgo(t.created_at)}
+      steps={live ? TICKET_STEPS : undefined}
+      at={progressOf(t.status)}
+      onClick={onOpen}
+      ariaLabel={`${t.title} — ${STATUS_CHIP[t.status]?.label || t.status}`}
+    />
+  )
+}
+
+const DOCUMENT_STEPS = ['Filed', 'Being processed', 'Released']
+
+/**
+ * The RA 11032 clock is the whole point of this card while a request is
+ * open, so a live one keeps every deadline notice. Once it is released or
+ * denied the clock has stopped and the row only has to say which.
+ */
+function DocumentCard({ req, live }) {
+  const doc = DOCUMENT_TYPES[req.document_type]
+  const st = DOC_STATUS_STYLE[req.status] || DOC_STATUS_STYLE.pending
+  const state = deadlineState(req)
+  const dl = DEADLINE_STYLE[state.level]
+
+  return (
+    <RecordCard
+      live={live}
+      tone={toneFor(req.status, { breached: state.level === 'breached' })}
+      icon={<span aria-hidden="true">{doc?.icon || '📄'}</span>}
+      iconBg={doc?.bg || '#f9fafb'}
+      title={doc?.label || req.document_type}
+      description={live ? req.purpose : undefined}
+      meta={
+        <span className="font-mono text-[11px]" style={{ color: '#5B54E8' }}>
+          {req.reference_code}
+        </span>
+      }
+      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
+      badges={
+        live
+          ? (state.label ? <Chip bg={dl.bg} color={dl.color}>{state.label}</Chip> : null)
+          : <Chip bg={st.bg} color={st.color}>{st.label}</Chip>
+      }
+      when={live ? undefined : timeAgo(req.released_at || req.created_at)}
+      steps={live ? DOCUMENT_STEPS : undefined}
+      at={progressOf(req.status)}
+      ariaLabel={`${doc?.label || req.document_type} — ${st.label}`}
+      footer={live ? (
+        <>
+          <span className="flex items-center gap-1.5 mt-2">
+            <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} aria-hidden="true" />
+            <span className="text-[11px]" style={{ color: dl.color }}>
+              Due {formatDeadline(req.due_at)}
+            </span>
+          </span>
+          {state.deemedApproved && (
+            <span className="block text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+              style={{ background: '#fef2f2', color: '#b91c1c' }}>
+              The deadline passed without a decision. Under <strong>RA 11032 Sec. 10</strong> this
+              request is deemed approved — show this reference at the barangay hall.
+            </span>
+          )}
+          {req.extension_reason && (
+            <span className="block text-[11px] text-gray-500 mt-1.5">
+              <strong>Extended once (Sec. 9(b)(1)):</strong> {req.extension_reason}
+            </span>
+          )}
+          <span className="block text-[11px] mt-1.5" style={{ color: '#9ca3af' }}
+            title={fullDate(req.created_at)}>
+            Filed {timeAgo(req.created_at)}
+          </span>
+        </>
+      ) : req.denial_reason ? (
+        <span className="block text-[11px] mt-1 truncate" style={{ color: '#b91c1c' }}>
+          {req.denial_reason}
+        </span>
+      ) : null}
+    />
+  )
+}
+
+const CASE_STEPS = ['Filed', 'Mediation', 'Concluded']
+
+/** Which of the three points a KP case has reached. */
+function caseProgress(kase) {
+  if (!caseIsOpen(kase)) return 2
+  return kase.status === 'filed' ? 0 : 1
+}
+
+function BlotterCard({ kase, live }) {
+  const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
+  const deadline = stageDeadline(kase)
+  const dl = KP_DEADLINE_STYLE[deadline.level]
+
+  return (
+    <RecordCard
+      live={live}
+      tone={live ? toneFor(kase.status, { breached: deadline.level === 'breach' }) : 'done'}
+      icon={<Gavel size={live ? 16 : 14} style={{ color: st.color }} />}
+      iconBg={st.bg}
+      title={`vs ${kase.respondent_name}`}
+      description={live ? kase.nature : undefined}
+      meta={
+        <span className="font-mono text-[11px] font-bold" style={{ color: '#5B54E8' }}>
+          {kase.case_number}
+        </span>
+      }
+      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
+      badges={
+        live
+          ? (deadline.label ? <Chip bg={dl.bg} color={dl.color}>{deadline.label}</Chip> : null)
+          : <Chip bg={st.bg} color={st.color}>{st.label}</Chip>
+      }
+      when={live ? undefined : timeAgo(kase.filed_at)}
+      steps={live ? CASE_STEPS : undefined}
+      at={caseProgress(kase)}
+      ariaLabel={`Case ${kase.case_number} against ${kase.respondent_name} — ${st.label}`}
+      footer={live ? (
+        <>
+          <span className="block text-[11px] text-gray-500 mt-1.5">{st.desc}</span>
+          <span className="block text-[11px] mt-1.5" style={{ color: '#9ca3af' }}
+            title={fullDate(kase.filed_at)}>
+            Filed {timeAgo(kase.filed_at)}
+          </span>
+        </>
+      ) : null}
+    />
+  )
+}
+
+/**
+ * A concluded case still carries the outcome the law attaches to it — the
+ * settlement terms, the repudiation window, the Certificate to File Action.
+ * Those are the reason someone opens the list, so they stay visible under
+ * the collapsed row rather than moving behind a tap.
+ */
+function CaseOutcome({ kase }) {
+  const deadline = stageDeadline(kase)
+  if (kase.settlement_terms) {
+    return (
+      <div className="text-[11px] px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
+        style={{ background: '#f0fdf4', color: '#166534' }}>
+        <strong>Settled:</strong> {kase.settlement_terms}
+        {deadline.level === 'window' && (
+          <span className="block mt-1">
+            You may still repudiate this within the window above if your consent was obtained by
+            fraud, violence or intimidation (Sec. 418).
+          </span>
+        )}
+      </div>
+    )
+  }
+  if (kase.cfa_reason) {
+    return (
+      <div className="text-[11px] px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
+        style={{ background: '#fef2f2', color: '#b91c1c' }}>
+        <strong>Certificate to File Action issued:</strong> {kase.cfa_reason}
+        <span className="block mt-1">You may now take this to court.</span>
+      </div>
+    )
+  }
+  if (kase.referred_to) {
+    return (
+      <p className="text-[11px] text-gray-500 ml-[22px] -mt-1">
+        <strong>Referred to:</strong> {kase.referred_to}
+      </p>
+    )
+  }
+  return null
+}
+
+function IncidentCard({ inc, live, onOpen, onRate }) {
+  const settled = isSettled(inc.status)
+  const meta = inc.location ? <span className="truncate">📍 {inc.location}</span> : null
+
+  return (
+    <RecordCard
+      live={live}
+      tone={toneFor(inc.status)}
+      icon={<AlertTriangle size={live ? 16 : 14} className="text-orange-500" />}
+      iconBg={settled ? '#f3f4f6' : (priorityConfig[inc.priority]?.bg || '#fff7ed')}
+      title={inc.title}
+      description={live ? inc.description : undefined}
+      meta={meta}
+      status={live ? <StatusChip status={inc.status} /> : null}
+      badges={<PriorityChip priority={inc.priority} config={priorityConfig} settled={settled} />}
+      when={live ? timeAgoLong(inc.created_at) : timeAgo(inc.created_at)}
+      steps={live ? INCIDENT_STEPS : undefined}
+      at={progressOf(inc.status)}
+      onClick={onOpen}
+      ariaLabel={`${inc.title} — ${STATUS_CHIP[inc.status]?.label || inc.status}`}
+      action={
+        settled && !inc.rating ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onRate() }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className={live
+              ? 'mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer'
+              : 'text-[11.5px] font-bold underline underline-offset-2 cursor-pointer whitespace-nowrap'}
+            style={live
+              ? { background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }
+              : { color: '#b45309' }}>
+            {live && <Star size={12} />} Rate this
+          </button>
+        ) : settled && inc.rating ? (
+          <Chip bg="#fffbeb" color="#b45309">★ {inc.rating}</Chip>
+        ) : null
+      }
+      footer={
+        live && inc.rating ? (
+          <span className="mt-3 p-3 rounded-xl flex items-center gap-3"
+            style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
+            <span className="flex gap-0.5" role="img" aria-label={`${inc.rating} out of 5 stars`}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <Star key={n} size={12} fill={n <= inc.rating ? '#f59e0b' : 'none'}
+                  color={n <= inc.rating ? '#f59e0b' : '#d1d5db'} aria-hidden="true" />
+              ))}
+            </span>
+            <span className="flex-1 min-w-0 block">
+              <span className="block text-xs font-bold text-amber-700">Your rating</span>
+              {inc.rating_feedback && (
+                <span className="block text-xs text-amber-900 truncate">&ldquo;{inc.rating_feedback}&rdquo;</span>
+              )}
+            </span>
+          </span>
+        ) : null
+      }
+    />
+  )
 }
 
 const sectionTitle = {
@@ -401,6 +670,25 @@ export default function ResidentDashboard() {
   const openDocumentCount = documentRequests.filter(
     d => !['released', 'denied'].includes(d.status)
   ).length
+
+  const { live: liveIncidents, done: doneIncidents } = useMemo(
+    () => partitionByLiveness(incidents),
+    [incidents]
+  )
+  const { live: liveTickets, done: doneTickets } = useMemo(
+    () => partitionByLiveness(tickets),
+    [tickets]
+  )
+  const { live: liveDocuments, done: doneDocuments } = useMemo(
+    () => partitionByLiveness(documentRequests),
+    [documentRequests]
+  )
+  // The blotter has its own vocabulary for "still going", so it brings its
+  // own predicate rather than the generic one.
+  const { live: liveCases, done: doneCases } = useMemo(
+    () => partitionByLiveness(blotterCases, k => !caseIsOpen(k)),
+    [blotterCases]
+  )
 
   const { readKeys, markRead } = useNotificationReads(profile?.id)
 
@@ -770,80 +1058,20 @@ export default function ResidentDashboard() {
                   <button onClick={() => router.push('/resident/report')} className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>Report your first →</button>
                 </div>
               )}
-              {incidents.map(inc => (
-                <div
-                  key={inc.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => router.push(`/resident/incident/${inc.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      router.push(`/resident/incident/${inc.id}`)
-                    }
-                  }}
-                  className="white-card p-5 cursor-pointer transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2"
-                  style={{ '--tw-ring-color': '#5B54E8' }}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff7ed' }}>
-                        <AlertTriangle size={16} className="text-orange-500" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
-                          {inc.priority && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
-                              style={{
-                                background: priorityConfig[inc.priority]?.bg || '#f9fafb',
-                                color: priorityConfig[inc.priority]?.color || '#6b7280',
-                                ...(inc.priority === 'Critical' ? { animation: 'pulse 2s ease-in-out infinite' } : {}),
-                              }}>
-                              <span>{priorityConfig[inc.priority]?.icon}</span> {inc.priority}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-500 text-xs mt-1">{inc.description}</p>
-                        <p className="text-gray-300 text-xs mt-1.5">
-                          📍 {inc.location}
-                          <span className="mx-1.5">·</span>
-                          <span title={fullDate(inc.created_at)}>{timeAgo(inc.created_at)}</span>
-                        </p>
-
-                        {/* Show rating if already rated */}
-                        {inc.rating && (
-                          <div className="mt-3 p-3 rounded-xl flex items-center gap-3" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-                            <div className="flex gap-0.5" role="img" aria-label={`${inc.rating} out of 5 stars`}>
-                              {[1, 2, 3, 4, 5].map(s => (
-                                <Star key={s} size={12} fill={s <= inc.rating ? '#f59e0b' : 'none'} color={s <= inc.rating ? '#f59e0b' : '#d1d5db'} aria-hidden="true" />
-                              ))}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-amber-700">Your rating</p>
-                              {inc.rating_feedback && <p className="text-xs text-amber-900 truncate">"{inc.rating_feedback}"</p>}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Rate Service button for unrated resolved */}
-                        {inc.status === 'resolved' && !inc.rating && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setRatingModal(inc) }}
-                            className="mt-3 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105"
-                            style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 4px 12px rgba(251,191,36,0.3)' }}>
-                            <Star size={12} fill="white" /> Rate the Service
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusColor[inc.status]}`}>{inc.status}</span>
-                      <ChevronRight size={14} className="text-gray-300" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <RecordGroup label="In progress" count={liveIncidents.length}>
+                {liveIncidents.map(inc => (
+                  <IncidentCard key={inc.id} inc={inc} live
+                    onOpen={() => router.push(`/resident/incident/${inc.id}`)}
+                    onRate={() => setRatingModal(inc)} />
+                ))}
+              </RecordGroup>
+              <RecordGroup label="Resolved" count={doneIncidents.length}>
+                {doneIncidents.map(inc => (
+                  <IncidentCard key={inc.id} inc={inc}
+                    onOpen={() => router.push(`/resident/incident/${inc.id}`)}
+                    onRate={() => setRatingModal(inc)} />
+                ))}
+              </RecordGroup>
             </div>
           )}
 
@@ -864,27 +1092,18 @@ export default function ResidentDashboard() {
                   <button onClick={() => router.push('/resident/ticket/new')} className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>Create your first →</button>
                 </div>
               )}
-              {tickets.map(t => (
-                <button key={t.id} onClick={() => router.push(`/resident/ticket/${t.id}`)}
-                  className="white-card p-5 cursor-pointer w-full text-left block">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-                        <FileText size={16} className="text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-semibold text-gray-800 text-sm truncate">{t.title}</h3>
-                        <p className="text-gray-400 text-xs mt-0.5 truncate">{t.description}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusColor[t.status]}`}>{t.status.replace('_', ' ')}</span>
-                      <ChevronRight size={14} className="text-gray-300" />
-                    </div>
-                  </div>
-                </button>
-              ))}
+              <RecordGroup label="Open" count={liveTickets.length}>
+                {liveTickets.map(t => (
+                  <TicketCard key={t.id} t={t} live
+                    onOpen={() => router.push(`/resident/ticket/${t.id}`)} />
+                ))}
+              </RecordGroup>
+              <RecordGroup label="Closed" count={doneTickets.length}>
+                {doneTickets.map(t => (
+                  <TicketCard key={t.id} t={t}
+                    onOpen={() => router.push(`/resident/ticket/${t.id}`)} />
+                ))}
+              </RecordGroup>
             </div>
           )}
 
@@ -939,74 +1158,16 @@ export default function ResidentDashboard() {
                 </div>
               )}
 
-              {documentRequests.map(req => {
-                const doc = DOCUMENT_TYPES[req.document_type]
-                const st = DOC_STATUS_STYLE[req.status] || DOC_STATUS_STYLE.pending
-                const state = deadlineState(req)
-                const dl = DEADLINE_STYLE[state.level]
-                return (
-                  <div key={req.id} className="white-card p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
-                        style={{ background: doc?.bg || '#f9fafb' }}>
-                        <span aria-hidden="true">{doc?.icon || '📄'}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-gray-800 text-sm">
-                            {doc?.label || req.document_type}
-                          </h3>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                            style={{ background: st.bg, color: st.color }}>
-                            {st.label}
-                          </span>
-                          {state.label && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                              style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}>
-                              {state.label}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-mono text-[11px] mt-1" style={{ color: '#5B54E8' }}>
-                          {req.reference_code}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">{req.purpose}</p>
-
-                        <div className="flex items-center gap-1.5 mt-2">
-                          <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} />
-                          <p className="text-[11px]" style={{ color: dl.color }}>
-                            {state.decided
-                              ? `${st.desc} · ${timeAgo(req.released_at || req.created_at)}`
-                              : `Due ${formatDeadline(req.due_at)}`}
-                          </p>
-                        </div>
-
-                        {state.deemedApproved && (
-                          <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
-                            style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                            The deadline passed without a decision. Under <strong>RA 11032 Sec. 10</strong> this
-                            request is deemed approved — show this reference at the barangay hall.
-                          </p>
-                        )}
-                        {req.extension_reason && (
-                          <p className="text-[11px] text-gray-500 mt-1.5">
-                            <strong>Extended once (Sec. 9(b)(1)):</strong> {req.extension_reason}
-                          </p>
-                        )}
-                        {req.denial_reason && (
-                          <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                            style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                            <strong>Denied:</strong> {req.denial_reason}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(req.created_at)}>
-                          Filed {timeAgo(req.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+              <RecordGroup label="In progress" count={liveDocuments.length}>
+                {liveDocuments.map(req => (
+                  <DocumentCard key={req.id} req={req} live />
+                ))}
+              </RecordGroup>
+              <RecordGroup label="Decided" count={doneDocuments.length}>
+                {doneDocuments.map(req => (
+                  <DocumentCard key={req.id} req={req} />
+                ))}
+              </RecordGroup>
             </div>
           )}
 
@@ -1042,66 +1203,17 @@ export default function ResidentDashboard() {
                 </div>
               )}
 
-              {blotterCases.map(kase => {
-                const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
-                const deadline = stageDeadline(kase)
-                const dl = KP_DEADLINE_STYLE[deadline.level]
-                return (
-                  <div key={kase.id} className="white-card p-5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold" style={{ color: '#5B54E8' }}>
-                        {kase.case_number}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                        style={{ background: st.bg, color: st.color }}>
-                        {st.label}
-                      </span>
-                      {deadline.label && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                          style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}
-                          title={deadline.citation || undefined}>
-                          {deadline.label}
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-sm font-semibold text-gray-800 mt-1.5">
-                      vs {kase.respondent_name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{kase.nature}</p>
-                    <p className="text-[11px] text-gray-500 mt-1.5">{st.desc}</p>
-
-                    {kase.settlement_terms && (
-                      <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
-                        style={{ background: '#f0fdf4', color: '#166534' }}>
-                        <strong>Settled:</strong> {kase.settlement_terms}
-                        {deadline.level === 'window' && (
-                          <span className="block mt-1">
-                            You may still repudiate this within the window above if your consent was
-                            obtained by fraud, violence or intimidation (Sec. 418).
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    {kase.cfa_reason && (
-                      <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
-                        style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                        <strong>Certificate to File Action issued:</strong> {kase.cfa_reason}
-                        <span className="block mt-1">You may now take this to court.</span>
-                      </p>
-                    )}
-                    {kase.referred_to && (
-                      <p className="text-[11px] text-gray-500 mt-2">
-                        <strong>Referred to:</strong> {kase.referred_to}
-                      </p>
-                    )}
-
-                    <p className="text-[11px] text-gray-400 mt-2" title={fullDate(kase.filed_at)}>
-                      Filed {timeAgo(kase.filed_at)}
-                    </p>
+              <RecordGroup label="Ongoing" count={liveCases.length}>
+                {liveCases.map(kase => <BlotterCard key={kase.id} kase={kase} live />)}
+              </RecordGroup>
+              <RecordGroup label="Concluded" count={doneCases.length}>
+                {doneCases.map(kase => (
+                  <div key={kase.id} className="space-y-2">
+                    <BlotterCard kase={kase} />
+                    <CaseOutcome kase={kase} />
                   </div>
-                )
-              })}
+                ))}
+              </RecordGroup>
             </div>
           )}
 
