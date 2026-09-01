@@ -110,7 +110,10 @@ export default function NewAnnouncement() {
         router.push('/login')
         return
       }
-      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+      const { data: prof, error: profError } = await supabase
+        .from('profiles').select('full_name').eq('id', user.id).single()
+      // Only used for the preview byline — the announcement posts either way.
+      if (profError) console.error('Could not load your name for the preview:', profError)
       if (!cancelled && prof?.full_name) setPosterName(prof.full_name)
     }
     loadProfile()

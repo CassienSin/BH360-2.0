@@ -179,8 +179,15 @@ export default function IncidentDetail() {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) { router.replace('/login'); return }
 
-    const { data: prof } = await supabase
+    const { data: prof, error: profError } = await supabase
       .from('profiles').select('role, barangay_id').eq('id', user.id).single()
+    // A failed query is not the same as being the wrong role.
+    if (profError) {
+      console.error('Could not load your profile:', profError)
+      toast.error('Could not load this incident. Please refresh.')
+      setLoading(false)
+      return
+    }
     if (prof?.role !== 'official') { router.replace('/login'); return }
 
     const { data, error } = await supabase
@@ -195,16 +202,21 @@ export default function IncidentDetail() {
     // Everyone who appears in the timeline, resolved in one query
     const ids = [data.assigned_to, data.acknowledged_by, data.priority_overridden_by].filter(Boolean)
     if (ids.length) {
-      const { data: rows } = await supabase
+      const { data: rows, error: rowsError } = await supabase
         .from('profiles').select('id, full_name, phone, on_duty, avatar_url').in('id', ids)
+      // Names for the audit trail. Without them it falls back to ids, which
+      // is ugly but readable — not worth interrupting the page for.
+      if (rowsError) console.error('Could not load the people named on this incident:', rowsError)
       const map = {}
       for (const r of rows || []) map[r.id] = r
       setPeople(map)
     }
 
-    const { data: tanodRows } = await supabase
+    const { data: tanodRows, error: tanodError } = await supabase
       .from('profiles').select('id, full_name, phone, on_duty')
       .eq('barangay_id', prof.barangay_id).eq('role', 'tanod').is('deactivated_at', null)
+    // Feeds the dispatch picker; an empty list would read as "no tanods".
+    if (tanodError) console.error('Could not load the tanod roster:', tanodError)
     setTanods(tanodRows || [])
 
     setLoading(false)

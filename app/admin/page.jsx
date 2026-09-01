@@ -219,11 +219,12 @@ export default function AdminPanel() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents' }, async (payload) => {
         if (payload.eventType === 'INSERT') {
           // Refetch the one row so the barangay and reporter joins are filled in
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('incidents')
             .select('*, barangays(name, city, province), profiles!incidents_reported_by_fkey(full_name)')
             .eq('id', payload.new.id)
             .single()
+          if (error) console.error('Could not load the new incident:', error)
           if (!data) return
           setIncidents(prev => (
             prev.some(i => i.id === data.id)
