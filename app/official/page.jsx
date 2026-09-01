@@ -15,6 +15,7 @@ import NotificationBanner from '@/components/NotificationBanner'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
+import { notify } from '@/components/Toast'
 import VerificationQueue from '@/components/VerificationQueue'
 import DocumentQueue from '@/components/DocumentQueue'
 import BlotterQueue from '@/components/BlotterQueue'
@@ -283,14 +284,23 @@ export default function OfficialDashboard() {
           if (data) {
             // Dedup guard: a reconnect refetch may already have this row
             setIncidents(prev => (prev.some(i => i.id === data.id) ? prev : [data, ...prev]))
+            const open = { label: 'Open', onClick: () => router.push(`/official/incident/${data.id}`) }
             if (data.priority === 'Critical') {
-              toast.error(`🚨 CRITICAL: ${data.title}`, { duration: 8000 })
+              // Stays until someone dismisses it. An unattended emergency
+              // alert should not be able to expire quietly.
+              notify.critical({
+                kind: `Critical · ${data.category || 'Incident'}`,
+                title: data.title, body: data.location, action: open,
+              })
               notifyCriticalIncident(data)
             } else if (data.priority === 'High') {
-              toast(`⚠️ HIGH PRIORITY: ${data.title}`, { duration: 6000, icon: '🟠' })
+              notify.warn({
+                kind: `High priority · ${data.category || 'Incident'}`,
+                title: data.title, body: data.location, action: open,
+              })
               notifyNewIncident(data)
             } else {
-              toast.success(`🆕 New incident: ${data.title}`, { duration: 5000 })
+              notify.info({ kind: 'New report', title: data.title, body: data.location, action: open })
               notifyNewIncident(data)
             }
           }
@@ -334,7 +344,12 @@ export default function OfficialDashboard() {
             .single()
           if (data) {
             setTickets(prev => (prev.some(t => t.id === data.id) ? prev : [data, ...prev]))
-            toast.success(`📋 New ticket: ${data.title}`, { duration: 5000 })
+            notify.info({
+              kind: 'New ticket',
+              title: data.title,
+              body: data.profiles?.full_name ? `From ${data.profiles.full_name}` : undefined,
+              action: { label: 'Open', onClick: () => router.push(`/official/ticket/${data.id}`) },
+            })
           }
         }
         if (payload.eventType === 'UPDATE') {
@@ -424,7 +439,12 @@ export default function OfficialDashboard() {
             .single()
           if (!data) return
           setDocumentRequests(prev => (prev.some(d => d.id === data.id) ? prev : [data, ...prev]))
-          toast.success(`New document request: ${data.reference_code}`, { duration: 5000 })
+          notify.info({
+            kind: 'Document request',
+            title: `${data.reference_code} filed`,
+            body: 'RA 11032 starts the clock from today.',
+            action: { label: 'Open queue', onClick: () => setActiveSection('documents') },
+          })
         }
         if (payload.eventType === 'UPDATE') {
           setDocumentRequests(prev => prev.map(d => (d.id === payload.new.id ? { ...d, ...payload.new } : d)))
@@ -442,7 +462,7 @@ export default function OfficialDashboard() {
       supabase.removeChannel(profileChannel)
       supabase.removeChannel(documentChannel)
     }
-  }, [profile?.barangay_id, supabase, loadBarangayData])
+  }, [profile?.barangay_id, supabase, loadBarangayData, router])
 
   // Active assignment count per tanod — shown in the dispatch dropdown so
   // officials naturally balance the load ("Reyes · 2 active")

@@ -14,6 +14,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAssignment } from '@/lib/notifications'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
+import { notify } from '@/components/Toast'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 
 
@@ -246,11 +247,19 @@ export default function TanodDashboard() {
 
           const toastId = `assignment-${data.id}`
           if (data.priority === 'Critical') {
-            toast.error(`🚨 CRITICAL ASSIGNMENT: ${data.title}`, { duration: 8000, id: toastId })
+      notify.critical({
+        kind: `Critical · ${data.category || 'Assignment'}`,
+        title: data.title,
+        body: data.location,
+      })
           } else if (data.priority === 'High') {
             toast(`⚠️ HIGH PRIORITY: ${data.title}`, { duration: 6000, icon: '🟠', id: toastId })
           } else {
-            toast.success(`🚨 New assignment: ${data.title}`, { duration: 5000, id: toastId })
+      notify.warn({
+        kind: 'New assignment',
+        title: data.title,
+        body: data.location,
+      })
           }
           notifyNewAssignment(data)
         } else if (payload.eventType === 'UPDATE') {

@@ -112,11 +112,11 @@ export default function DutyToggle({ profile, onStatusChange }) {
     }
 
     if (next) {
-      toast.success('🛡️ You are now ON DUTY')
+      toast.success('You are now on duty')
       beat() // record the first trail point right away
     } else {
       setLocationOk(null)
-      toast.success('You are now off duty. Rest well!')
+      toast.success('You are now off duty')
     }
     onStatusChange?.(next)
   }

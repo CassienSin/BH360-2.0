@@ -11,6 +11,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
+import { notify } from '@/components/Toast'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
 import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
@@ -238,7 +239,11 @@ export default function ResidentDashboard() {
           ? prev
           : [payload.new, ...prev])
         if (prefs.announcements !== false) {
-          toast.success(`📢 New announcement: ${payload.new.title}`, { duration: 5000 })
+          notify.info({
+            kind: 'Announcement',
+            title: payload.new.title,
+            action: { label: 'Read it', onClick: () => setActiveSection('announcements') },
+          })
           notifyNewAnnouncement(payload.new)
         }
       })
@@ -252,12 +257,19 @@ export default function ResidentDashboard() {
           if (i.id === payload.new.id) {
             if (payload.old.status !== payload.new.status) {
               const statusMessage = {
-                assigned: '🛡️ Tanod has been assigned to your incident',
-                resolved: '✅ Your incident has been resolved!',
+                assigned: 'A tanod is on the way',
+                resolved: 'Your report has been resolved',
               }
               if (statusMessage[payload.new.status] && prefs.incidents !== false) {
-                toast.success(statusMessage[payload.new.status], {
+                notify.success({
+                  kind: 'Your report',
+                  title: statusMessage[payload.new.status],
+                  body: payload.new.title,
                   id: `incident-${payload.new.id}-${payload.new.status}`,
+                  action: {
+                    label: 'Open',
+                    onClick: () => router.push(`/resident/incident/${payload.new.id}`),
+                  },
                 })
                 notifyStatusUpdate({ id: payload.new.id, title: payload.new.title }, payload.new.status)
               }
@@ -287,13 +299,27 @@ export default function ResidentDashboard() {
           d.id === payload.new.id ? { ...d, ...payload.new } : d
         ))
         if (payload.old.status !== payload.new.status) {
-          const message = {
-            processing: '🕐 The barangay started processing your document',
-            ready: '📄 Your document is ready for pickup',
-            released: '✅ Your document has been released',
-            denied: '⛔ Your document request was denied — see the reason',
+          const update = {
+            processing: { severity: 'info', title: 'The barangay started processing your document' },
+            ready: {
+              severity: 'success', title: 'Your document is ready for pickup',
+              body: 'Bring a valid ID to the barangay hall.',
+            },
+            released: { severity: 'success', title: 'Your document has been released' },
+            denied: {
+              severity: 'warn', title: 'Your document request was denied',
+              body: payload.new.denial_reason || 'Open the request to see the reason given.',
+            },
           }[payload.new.status]
-          if (message) toast.success(message, { id: `doc-${payload.new.id}-${payload.new.status}` })
+          if (update) {
+            const { severity, ...rest } = update
+            notify[severity]({
+              kind: 'Document request',
+              id: `doc-${payload.new.id}-${payload.new.status}`,
+              action: { label: 'View', onClick: () => setActiveSection('documents') },
+              ...rest,
+            })
+          }
         }
       })
       // A resident's own verification decision, so the account stops saying
@@ -307,9 +333,26 @@ export default function ResidentDashboard() {
         setProfile(prev => (prev ? { ...prev, ...payload.new } : prev))
         if (payload.old.verification_status !== payload.new.verification_status) {
           if (payload.new.verification_status === 'verified') {
-            toast.success('✅ A barangay official verified your account')
+            // Verification exists to unlock exactly one thing, so the toast
+            // opens that door rather than announcing a permission change and
+            // leaving the resident to work out what it bought them.
+            notify.success({
+              kind: 'Verified',
+              title: 'Your account is verified',
+              body: 'You can now request barangay clearances and certificates.',
+              action: {
+                label: 'Request a document',
+                onClick: () => router.push('/resident/documents/new'),
+              },
+            })
           } else if (payload.new.verification_status === 'rejected') {
-            toast.error('Your account could not be verified — see your dashboard')
+            notify.warn({
+              kind: 'Verification',
+              title: 'A barangay official could not verify your account',
+              body: payload.new.verification_note
+                || 'Open your dashboard to see what the barangay needs.',
+              action: { label: 'See why', onClick: () => setActiveSection('home') },
+            })
           }
         }
       })
