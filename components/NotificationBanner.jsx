@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Bell, X, Check, Loader2 } from 'lucide-react'
+import { Bell, BellOff, X, Check, Loader2 } from 'lucide-react'
 import { getPermission, requestPermission, isSupported } from '@/lib/notifications'
 import { subscribeToPush, pushSupport, watchForSubscriptionChange } from '@/lib/push'
+import { primeAudio } from '@/lib/audioAlert'
 import toast from 'react-hot-toast'
 
 const DISMISS_KEY = 'notif-banner-dismissed'
@@ -48,6 +49,10 @@ export default function NotificationBanner() {
     if (enabling) return
     setEnabling(true)
     try {
+      // The same click is also the user gesture the browser wants before it
+      // will let the emergency siren make a sound, so spend it on both.
+      primeAudio()
+
       const result = await requestPermission()
       setPermission(result)
       if (result === 'granted') {
@@ -87,9 +92,39 @@ export default function NotificationBanner() {
   }
 
   // Render nothing until mounted (prevents hydration mismatch), or when
-  // there's nothing to ask: unsupported browser, already decided, dismissed.
-  const hidden = !mounted || !isSupported() || permission !== 'default' || dismissed
-  if (hidden) return null
+  // there's nothing to say: unsupported browser, already granted, dismissed.
+  if (!mounted || !isSupported() || permission === 'granted' || dismissed) return null
+
+  // Blocked. Previously this rendered nothing at all, so an official whose
+  // browser had denied the permission saw no banner, got no notifications,
+  // and had nothing telling them why — the app looked simply broken. The
+  // page cannot re-ask once denied; only the browser's own settings can
+  // undo it, so the honest thing is to say where that is.
+  if (permission === 'denied') {
+    return (
+      <div className="fade-up mb-4" role="status">
+        <div className="rounded-2xl p-4 flex items-center gap-3"
+          style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
+            style={{ background: '#f59e0b' }}>
+            <BellOff size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold" style={{ color: '#92400e' }}>Notifications are blocked</p>
+            <p className="text-xs" style={{ color: '#b45309' }}>
+              You won&apos;t be alerted to critical incidents. Turn them back on in your
+              browser: tap the padlock (or ⓘ) beside the address bar → Notifications → Allow.
+            </p>
+          </div>
+          <button onClick={handleDismiss} aria-label="Dismiss notification banner"
+            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors hover:bg-white"
+            style={{ color: '#b45309' }}>
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fade-up mb-4" role="status">
