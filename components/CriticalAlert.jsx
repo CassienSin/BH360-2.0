@@ -1,8 +1,13 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, MapPin, User, Clock, Phone, Volume2, VolumeX, Scale } from 'lucide-react'
 import { LEGAL_BASIS } from '@/lib/legalBasis'
 import { timeAgo } from '@/lib/timeAgo'
+import { showNotification } from '@/lib/notifications'
+import {
+  installAudioPrimer, primeAudio, playSiren,
+  isAudioUnlocked, onAudioUnlockChange,
+} from '@/lib/audioAlert'
 
 /**
  * Blocking emergency alert for Critical incidents.
@@ -25,58 +30,30 @@ const SIREN_INTERVAL_MS = 3000   // re-sound every 3s until acknowledged
 const TITLE_FLASH_MS = 900
 
 /* -------------------------------------------------------------------------
-   Siren via Web Audio API. Deliberately synthesized rather than an mp3:
-   no asset to 404, no CDN round-trip at the exact moment it's needed.
-   Two-tone rise-fall, the shape people recognize as an emergency tone.
+   Siren. The tone itself lives in lib/audioAlert.js, which also handles the
+   browser's "no sound before a user gesture" rule — the reason this used to
+   stay silent until someone pressed Mute and Unmute.
+
+   Returns whether sound is currently possible, so the modal can offer a way
+   to turn it on instead of quietly playing nothing.
 ------------------------------------------------------------------------- */
 function useSiren(enabled) {
-  const ctxRef = useRef(null)
-  const timerRef = useRef(null)
+  const [canSound, setCanSound] = useState(isAudioUnlocked)
 
-  const blast = useCallback(() => {
-    try {
-      if (!ctxRef.current) {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext
-        if (!AudioCtx) return
-        ctxRef.current = new AudioCtx()
-      }
-      const ctx = ctxRef.current
-      // Browsers suspend audio contexts created before a user gesture
-      if (ctx.state === 'suspended') ctx.resume()
-
-      const now = ctx.currentTime
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-
-      osc.type = 'sine'
-      osc.frequency.setValueAtTime(660, now)
-      osc.frequency.linearRampToValueAtTime(880, now + 0.35)
-      osc.frequency.linearRampToValueAtTime(660, now + 0.7)
-
-      // Fade in/out so it doesn't click
-      gain.gain.setValueAtTime(0, now)
-      gain.gain.linearRampToValueAtTime(0.28, now + 0.05)
-      gain.gain.setValueAtTime(0.28, now + 0.6)
-      gain.gain.linearRampToValueAtTime(0, now + 0.75)
-
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.start(now)
-      osc.stop(now + 0.8)
-    } catch {
-      // Audio is a nice-to-have — never let it break the alert itself
-    }
-  }, [])
+  // Unlock on the first interaction with the dashboard, well before any
+  // emergency arrives.
+  useEffect(() => installAudioPrimer(), [])
+  useEffect(() => onAudioUnlockChange(setCanSound), [])
 
   useEffect(() => {
-    if (!enabled) {
-      clearInterval(timerRef.current)
-      return
-    }
-    blast()
-    timerRef.current = setInterval(blast, SIREN_INTERVAL_MS)
-    return () => clearInterval(timerRef.current)
-  }, [enabled, blast])
+    if (!enabled) return
+    let stopped = false
+    playSiren()
+    const id = setInterval(() => { if (!stopped) playSiren() }, SIREN_INTERVAL_MS)
+    return () => { stopped = true; clearInterval(id) }
+  }, [enabled])
+
+  return canSound
 }
 
 /* -------------------------------------------------------------------------
@@ -104,20 +81,22 @@ function useTitleFlash(active, message) {
    or the window is minimized, which the modal cannot do.
 ------------------------------------------------------------------------- */
 function fireBrowserNotification(incident) {
-  try {
-    if (typeof Notification === 'undefined') return
-    if (Notification.permission !== 'granted') return
-    const n = new Notification('🚨 CRITICAL INCIDENT', {
-      body: `${incident.title}\n📍 ${incident.location || 'Location not specified'}`,
-      tag: `critical-${incident.id}`,   // replaces rather than stacks duplicates
-      requireInteraction: true,          // stays until dismissed
-      badge: '/logo.png',
-      icon: '/logo.png',
-    })
-    n.onclick = () => { window.focus(); n.close() }
-  } catch {
-    // Notification constructor throws on some mobile browsers — ignore
-  }
+  // Through showNotification rather than `new Notification()` directly:
+  // Android Chrome throws "Illegal constructor" for the latter, so on the
+  // phones most officials actually carry the critical notification was
+  // being swallowed by a catch block. showNotification falls back to the
+  // service worker, which Android does allow.
+  //
+  // force: true because this one is worth showing even with the tab in
+  // front — an official looking at a different part of the dashboard still
+  // needs to be told.
+  showNotification('🚨 CRITICAL INCIDENT', {
+    body: `${incident.title}\n📍 ${incident.location || 'Location not specified'}`,
+    tag: `critical-${incident.id}`,   // replaces rather than stacks duplicates
+    requireInteraction: true,          // stays until dismissed
+    force: true,
+    data: { url: `/official/incident/${incident.id}` },
+  })
 }
 
 export default function CriticalAlert({
@@ -138,17 +117,14 @@ export default function CriticalAlert({
   const current = queue[0] || null
   const active = Boolean(current)
 
-  useSiren(active && !muted)
+  const canSound = useSiren(active && !muted)
   useTitleFlash(active, '🚨 CRITICAL INCIDENT')
 
-  // Ask for notification permission once, on mount, so it's already granted
-  // by the time an emergency actually arrives
-  useEffect(() => {
-    if (typeof Notification === 'undefined') return
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {})
-    }
-  }, [])
+  // Permission is NOT requested here. Firefox rejects requestPermission()
+  // outside a user gesture and Chrome can auto-dismiss it, and a prompt
+  // that gets dismissed leaves permission 'denied' for good — which then
+  // hides NotificationBanner, the one surface that could have asked
+  // properly. Asking is the banner's job, from a real click.
 
   // Fire a browser notification once per incident
   useEffect(() => {
@@ -345,11 +321,22 @@ export default function CriticalAlert({
               </div>
             )}
 
-            <button onClick={() => setMuted(m => !m)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
-              {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
-              {muted ? 'Sound off' : 'Mute alert sound'}
-            </button>
+            {/* Sound blocked by the browser: say so and offer the gesture
+                that fixes it, rather than showing a Mute button for a siren
+                that was never audible. */}
+            {!canSound && !muted ? (
+              <button onClick={() => primeAudio()}
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-black transition-transform active:scale-95"
+                style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
+                <VolumeX size={12} /> Alert sound is off — tap to turn it on
+              </button>
+            ) : (
+              <button onClick={() => { setMuted(m => !m); primeAudio() }}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
+                {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                {muted ? 'Sound off' : 'Mute alert sound'}
+              </button>
+            )}
             <p className="text-[10px] text-center text-gray-400 leading-relaxed">
               {multiple
                 ? 'Each incident must be acknowledged separately. Your name and the time are recorded.'
