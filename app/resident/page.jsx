@@ -12,6 +12,7 @@ import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
 import { notify } from '@/components/Toast'
+import { firstRealError } from '@/lib/dbError'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
 import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
@@ -203,8 +204,14 @@ export default function ResidentDashboard() {
       ])
 
       if (cancelled) return
-      const firstError = annRes.error || incRes.error || tixRes.error || docRes.error || kpRes.error
-      if (firstError) toast.error('Some data failed to load: ' + firstError.message)
+      // A table that has not been created yet is a deployment gap, not
+      // something a resident can act on — see lib/dbError.js.
+      const firstError = firstRealError(
+        [annRes, incRes, tixRes, docRes, kpRes], 'the resident dashboard')
+      if (firstError) {
+        console.error('Resident dashboard load failed:', firstError)
+        toast.error('Some of your dashboard could not load. Pull down to refresh.')
+      }
 
       setAnnouncements(annRes.data || [])
       setIncidents(incRes.data || [])
