@@ -1800,10 +1800,10 @@ comment on table private.app_config is
 alter table private.app_config enable row level security;
 revoke all on private.app_config from public;
 
--- Fires once per new incident and hands it to /api/push/send, which decides
--- who hears about it. The payload is shaped like a Supabase database webhook
--- so the same route serves both wiring methods.
-create or replace function private.dispatch_incident_push()
+-- Fires on a row worth telling somebody about and hands it to
+-- /api/push/send, which decides who hears. Generic over the table so a new
+-- kind of alert is a trigger, not another copy of this function.
+create or replace function private.dispatch_push()
 returns trigger
 language plpgsql
 security definer
@@ -1816,14 +1816,15 @@ begin
   select value into v_url from private.app_config where key = 'push_endpoint_url';
   select value into v_secret from private.app_config where key = 'push_webhook_secret';
 
-  -- Not configured yet. Push is optional; the report still files.
+  -- Not configured yet. Push is optional; the row still saves.
   if v_url is null or v_secret is null then
     return new;
   end if;
 
   -- pg_net only queues the request here — its background worker does the
   -- sending — but a misconfigured extension must never cost a resident
-  -- their report, so a failure is logged and swallowed rather than raised.
+  -- their report or their reply, so a failure is logged and swallowed
+  -- rather than raised.
   begin
     perform net.http_post(
       url := v_url,
@@ -1833,25 +1834,36 @@ begin
       ),
       body := jsonb_build_object(
         'type', 'INSERT',
-        'table', 'incidents',
+        'table', tg_table_name,
         'record', to_jsonb(new)
       ),
       timeout_milliseconds := 5000
     );
   exception when others then
-    raise warning 'dispatch_incident_push: %', sqlerrm;
+    raise warning 'dispatch_push(%): %', tg_table_name, sqlerrm;
   end;
 
   return new;
 end;
 $$;
 
-revoke all on function private.dispatch_incident_push() from public;
+revoke all on function private.dispatch_push() from public;
 
 drop trigger if exists dispatch_incident_push_trigger on incidents;
 create trigger dispatch_incident_push_trigger
   after insert on incidents
-  for each row execute function private.dispatch_incident_push();
+  for each row execute function private.dispatch_push();
+
+-- A reply on a support ticket. The detail pages already stream the
+-- conversation to whoever has it open; this is for the far more common
+-- case of the other party being somewhere else, or nowhere at all.
+drop trigger if exists dispatch_ticket_message_push_trigger on ticket_messages;
+create trigger dispatch_ticket_message_push_trigger
+  after insert on ticket_messages
+  for each row execute function private.dispatch_push();
+
+-- Superseded by the generic dispatch_push above.
+drop function if exists private.dispatch_incident_push();
 
 -- ----------------------------------------------------------------------------
 -- Run this ONCE per deployment, with your own values. It is deliberately
@@ -1918,8 +1930,12 @@ create trigger dispatch_incident_push_trigger
 --
 -- 6. BACKGROUND NOTIFICATIONS (Web Push) — optional, but this is what makes
 --    a critical incident reach a tanod whose phone is in their pocket with
---    BarangayHub closed. Without it, notifications only appear while a page
+--    BarangayHub closed, and an official's reply reach the resident who
+--    filed the ticket. Without it, notifications only appear while a page
 --    is open.
+--
+--    Section 16 wires two triggers to it: a new incident, and a reply on a
+--    support ticket. One configuration below covers both.
 --
 --    a) Generate a VAPID keypair (once, ever):
 --

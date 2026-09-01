@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
@@ -12,6 +12,7 @@ import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
 import { useNotificationReads, unreadCount } from '@/lib/notificationReads'
+import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
 import { notify } from '@/components/Toast'
 import { firstRealError } from '@/lib/dbError'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
@@ -403,6 +404,14 @@ export default function ResidentDashboard() {
 
   const { readKeys, markRead } = useNotificationReads(profile?.id)
 
+  // An official replying on a ticket used to be silent unless you happened
+  // to have that ticket open.
+  const ticketHref = useCallback(id => `/resident/ticket/${id}`, [])
+  const openTicket = useCallback(id => router.push(`/resident/ticket/${id}`), [router])
+  const { messages: ticketReplies } = useTicketMessageAlerts({
+    profile, ticketHref, onOpen: openTicket,
+  })
+
   // The same objects the header bell gets, so both sides key read state
   // identically and one "mark read" clears both.
   const announcementNotifs = useMemo(
@@ -489,6 +498,7 @@ export default function ResidentDashboard() {
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc="Stay connected with your barangay"
           notifications={[
+            ...ticketReplies,
             ...announcementNotifs.slice(0, 5),
             ...incidents.filter(i => i.status === 'pending').map(i => ({
               id: i.id,
@@ -505,6 +515,7 @@ export default function ResidentDashboard() {
           onNotificationClick={(notif) => {
             if (notif.type === 'announcement') setActiveSection('announcements')
             if (notif.type === 'incident') router.push(`/resident/incident/${notif.id}`)
+            if (notif.type === 'ticket-message') router.push(`/resident/ticket/${notif.data.ticket_id}`)
           }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') router.push(`/resident/incident/${item.id}`)
