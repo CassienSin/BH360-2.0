@@ -56,23 +56,38 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <Toaster
           position="top-right"
+          gutter={10}
           toastOptions={{
-            duration: 3000,
+            /* The COMPACT density of components/Toast.jsx — one-line
+               confirmations like "Saved" or "Copied". Same radius, shadow and
+               left rail as the full card there, so the two read as one system.
+               Anything with a title and a detail, an action, or a severity
+               worth colouring goes through notify() instead.
+
+               4s, not the old 3s: three seconds is fine for "Saved" and too
+               quick to finish reading anything longer. */
+            duration: 4000,
             style: {
               fontFamily: "var(--font-sora), Sora, sans-serif",
               fontSize: "13px",
               fontWeight: 600,
-              borderRadius: "16px",
-              padding: "12px 16px",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              maxWidth: "340px",
               boxShadow: "0 8px 32px rgba(91,84,232,0.15)",
+              background: "#ffffff",
+              border: "1px solid #eceaf6",
+              borderLeft: "4px solid #5B54E8",
+              color: "#1f2937",
             },
             success: {
-              iconTheme: { primary: "#22c55e", secondary: "white" },
-              style: { border: "1px solid #dcfce7", background: "#f0fdf4", color: "#166534" },
+              iconTheme: { primary: "#16a34a", secondary: "white" },
+              style: { borderLeft: "4px solid #16a34a" },
             },
             error: {
-              iconTheme: { primary: "#ef4444", secondary: "white" },
-              style: { border: "1px solid #fecaca", background: "#fff1f1", color: "#991b1b" },
+              duration: 6000,
+              iconTheme: { primary: "#dc2626", secondary: "white" },
+              style: { borderLeft: "4px solid #dc2626" },
             },
           }}
         />

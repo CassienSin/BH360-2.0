@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone, BadgeCheck, FileCheck2 } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -15,9 +15,12 @@ import NotificationBanner from '@/components/NotificationBanner'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
+import { notify } from '@/components/Toast'
 import VerificationQueue from '@/components/VerificationQueue'
 import DocumentQueue from '@/components/DocumentQueue'
+import BlotterQueue from '@/components/BlotterQueue'
 import { deadlineState } from '@/lib/documents'
+import { stageDeadline as blotterDeadline, isOpen as blotterIsOpen } from '@/lib/katarungan'
 import { verificationStyle } from '@/lib/verification'
 import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 
@@ -99,6 +102,7 @@ const TICKET_LIMIT = 200
 const ANNOUNCEMENT_LIMIT = 100
 const USER_LIMIT = 300
 const INVITE_CODE_LIMIT = 100
+const BLOTTER_LIMIT = 200
 
 const roleConfig = {
   resident: { color: '#5B54E8', bg: '#f0effe', label: 'Resident' },
@@ -117,6 +121,7 @@ export default function OfficialDashboard() {
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   const [documentRequests, setDocumentRequests] = useState([])
+  const [blotterCases, setBlotterCases] = useState([])
   const [incidentsHasMore, setIncidentsHasMore] = useState(false)
   const [loadingMoreIncidents, setLoadingMoreIncidents] = useState(false)
   const [activeSection, setActiveSection] = useState('dashboard')
@@ -170,7 +175,7 @@ export default function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes, docs] = await Promise.all([
+    const [inc, tix, ann, tan, allUsers, codes, docs, blotter] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -206,6 +211,11 @@ export default function OfficialDashboard() {
         .select('*, profiles!document_requests_requested_by_fkey(full_name, phone)')
         .eq('barangay_id', bid)
         .order('due_at', { ascending: true }),
+      supabase.from('blotter_cases')
+        .select('*')
+        .eq('barangay_id', bid)
+        .order('filed_at', { ascending: false })
+        .limit(BLOTTER_LIMIT),
     ])
     setIncidents(inc.data || [])
     // A full page back means there is probably another one behind it.
@@ -216,6 +226,7 @@ export default function OfficialDashboard() {
     setUsers(allUsers.data || [])
     setInviteCodes(codes.data || [])
     setDocumentRequests(docs.data || [])
+    setBlotterCases(blotter.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -273,14 +284,23 @@ export default function OfficialDashboard() {
           if (data) {
             // Dedup guard: a reconnect refetch may already have this row
             setIncidents(prev => (prev.some(i => i.id === data.id) ? prev : [data, ...prev]))
+            const open = { label: 'Open', onClick: () => router.push(`/official/incident/${data.id}`) }
             if (data.priority === 'Critical') {
-              toast.error(`🚨 CRITICAL: ${data.title}`, { duration: 8000 })
+              // Stays until someone dismisses it. An unattended emergency
+              // alert should not be able to expire quietly.
+              notify.critical({
+                kind: `Critical · ${data.category || 'Incident'}`,
+                title: data.title, body: data.location, action: open,
+              })
               notifyCriticalIncident(data)
             } else if (data.priority === 'High') {
-              toast(`⚠️ HIGH PRIORITY: ${data.title}`, { duration: 6000, icon: '🟠' })
+              notify.warn({
+                kind: `High priority · ${data.category || 'Incident'}`,
+                title: data.title, body: data.location, action: open,
+              })
               notifyNewIncident(data)
             } else {
-              toast.success(`🆕 New incident: ${data.title}`, { duration: 5000 })
+              notify.info({ kind: 'New report', title: data.title, body: data.location, action: open })
               notifyNewIncident(data)
             }
           }
@@ -324,7 +344,12 @@ export default function OfficialDashboard() {
             .single()
           if (data) {
             setTickets(prev => (prev.some(t => t.id === data.id) ? prev : [data, ...prev]))
-            toast.success(`📋 New ticket: ${data.title}`, { duration: 5000 })
+            notify.info({
+              kind: 'New ticket',
+              title: data.title,
+              body: data.profiles?.full_name ? `From ${data.profiles.full_name}` : undefined,
+              action: { label: 'Open', onClick: () => router.push(`/official/ticket/${data.id}`) },
+            })
           }
         }
         if (payload.eventType === 'UPDATE') {
@@ -414,7 +439,12 @@ export default function OfficialDashboard() {
             .single()
           if (!data) return
           setDocumentRequests(prev => (prev.some(d => d.id === data.id) ? prev : [data, ...prev]))
-          toast.success(`New document request: ${data.reference_code}`, { duration: 5000 })
+          notify.info({
+            kind: 'Document request',
+            title: `${data.reference_code} filed`,
+            body: 'RA 11032 starts the clock from today.',
+            action: { label: 'Open queue', onClick: () => setActiveSection('documents') },
+          })
         }
         if (payload.eventType === 'UPDATE') {
           setDocumentRequests(prev => prev.map(d => (d.id === payload.new.id ? { ...d, ...payload.new } : d)))
@@ -432,7 +462,7 @@ export default function OfficialDashboard() {
       supabase.removeChannel(profileChannel)
       supabase.removeChannel(documentChannel)
     }
-  }, [profile?.barangay_id, supabase, loadBarangayData])
+  }, [profile?.barangay_id, supabase, loadBarangayData, router])
 
   // Active assignment count per tanod — shown in the dispatch dropdown so
   // officials naturally balance the load ("Reyes · 2 active")
@@ -678,6 +708,23 @@ export default function OfficialDashboard() {
     return { open: open.length, breach: open.filter(d => deadlineState(d).deemedApproved).length }
   }, [documentRequests])
 
+  // Cases still before the Lupon, and how many have run past the period
+  // RA 7160 allows for the stage they are in.
+  const blotterCounts = useMemo(() => {
+    const open = blotterCases.filter(blotterIsOpen)
+    return { open: open.length, breach: open.filter(c => blotterDeadline(c).level === 'breach').length }
+  }, [blotterCases])
+
+  // One handler for both an update and an insert: BlotterQueue passes
+  // 'created' when the row is new, because the filing form lives inside it.
+  const handleBlotterChanged = useCallback((id, changes, kind) => {
+    if (kind === 'created') {
+      setBlotterCases(prev => (prev.some(c => c.id === id) ? prev : [changes, ...prev]))
+      return
+    }
+    setBlotterCases(prev => prev.map(c => (c.id === id ? { ...c, ...changes } : c)))
+  }, [])
+
   const handleVerificationUpdated = useCallback((userId, changes) => {
     setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...changes } : u)))
     setTanods(prev => prev.map(u => (u.id === userId ? { ...u, ...changes } : u)))
@@ -691,7 +738,8 @@ export default function OfficialDashboard() {
     dashboard: 'Dashboard', incidents: 'Incidents', announcements: 'Announcements',
     tickets: 'Ticket Management', tanods: 'Tanod Management', analytics: 'AI Analytics',
     users: 'User Management', map: 'Incident Map', calendar: 'Calendar',
-    verifications: 'Resident Verification', documents: 'Document Requests'
+    verifications: 'Resident Verification', documents: 'Document Requests',
+    blotter: 'Katarungang Pambarangay'
   }
   const sectionDesc = {
     dashboard: 'Overview of barangay operations', incidents: 'Monitor and respond to incidents',
@@ -700,7 +748,8 @@ export default function OfficialDashboard() {
     users: 'Manage accounts and invite codes', map: 'Visualize incidents on a map',
     calendar: 'View activity by date',
     verifications: 'Confirm who actually lives in this barangay (RA 7160, Sec. 394)',
-    documents: 'Issue barangay documents within the RA 11032 deadline'
+    documents: 'Issue barangay documents within the RA 11032 deadline',
+    blotter: 'Barangay justice — mediation, Pangkat and Certificates to File Action'
   }
 
   async function handleExportIncidents(format) {
@@ -849,6 +898,7 @@ export default function OfficialDashboard() {
             { key: 'tickets', label: 'Ticket Management', icon: FileText, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
             { key: 'documents', label: 'Document Requests', icon: FileCheck2, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
             { key: 'verifications', label: 'Verifications', icon: BadgeCheck, count: pendingVerifications, hasNew: pendingVerifications > 0 },
+            { key: 'blotter', label: 'Blotter / Lupon', icon: Gavel, count: blotterCounts.open, badge: blotterCounts.breach > 0 ? 'OVERDUE' : undefined },
             { key: 'tanods', label: 'Tanod Management', icon: Shield },
             { key: 'users', label: 'User Management', icon: Users },
           ]},
@@ -1574,6 +1624,18 @@ export default function OfficialDashboard() {
                 profile={profile}
                 requests={documentRequests}
                 onUpdated={handleDocumentUpdated}
+              />
+            </div>
+          )}
+
+          {!loading && profile?.barangay_id && activeSection === 'blotter' && (
+            <div className="fade-up">
+              <BlotterQueue
+                profile={profile}
+                cases={blotterCases}
+                incidents={incidents}
+                residents={users.filter(u => u.role === 'resident')}
+                onChanged={handleBlotterChanged}
               />
             </div>
           )}

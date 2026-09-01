@@ -35,7 +35,7 @@ export default function NotificationBanner() {
       const result = await requestPermission()
       setPermission(result)
       if (result === 'granted') {
-        toast.success("🔔 Notifications enabled! You'll be alerted of important updates.", { duration: 4000 })
+        toast.success('Notifications enabled')
       } else if (result === 'denied') {
         toast.error('Notifications blocked. You can enable them in browser settings.')
       }

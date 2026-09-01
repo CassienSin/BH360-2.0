@@ -534,3 +534,140 @@
 .leaflet-bottom {
   z-index: 1 !important;
 }
+/* ============================================================================
+   NOTIFICATION TOASTS  (components/Toast.jsx)
+
+   Two densities of one component. The card below is the full form — severity
+   rail, typed kind, title, detail, optional action, timer bar. The compact
+   form is react-hot-toast's own markup, restyled in app/layout.tsx to carry
+   the same rail, radius and shadow, so a one-line "Saved" and a critical
+   incident alert are visibly the same family.
+   ========================================================================= */
+
+.bh-toast {
+  display: flex;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  overflow: hidden;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #eceaf6;
+  box-shadow: 0 8px 32px rgba(91, 84, 232, 0.15);
+  pointer-events: auto;
+}
+
+.bh-toast-rail { flex: none; width: 4px; }
+
+.bh-toast-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.bh-toast-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 12px 12px 14px;
+}
+
+.bh-toast-text { min-width: 0; flex: 1; }
+
+.bh-toast-kind {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.bh-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #1f2937;
+}
+
+.bh-toast-detail {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.bh-toast-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+.bh-toast-btn,
+.bh-toast-btn-ghost {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 0;
+  border-radius: 9px;
+  padding: 6px 11px;
+  cursor: pointer;
+  transition: filter 120ms ease, background 120ms ease;
+}
+.bh-toast-btn { color: #ffffff; }
+.bh-toast-btn:hover { filter: brightness(1.08); }
+.bh-toast-btn-ghost { background: #f4f4f6; color: #6b7280; }
+.bh-toast-btn-ghost:hover { background: #e9e9ee; color: #4b5563; }
+
+.bh-toast-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -1px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 120ms ease, color 120ms ease;
+}
+.bh-toast-close:hover { background: #f4f4f6; color: #4b5563; }
+
+.bh-toast-btn:focus-visible,
+.bh-toast-btn-ghost:focus-visible,
+.bh-toast-close:focus-visible {
+  outline: 2px solid #5B54E8;
+  outline-offset: 2px;
+}
+
+.bh-toast-meter { height: 3px; background: #f1eff9; }
+.bh-toast-meter i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  animation-name: bhToastMeter;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+@keyframes bhToastMeter {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* Enter/exit. react-hot-toast tells us which via t.visible; these mirror the
+   spring it uses for its own toasts so the two densities move alike. */
+@keyframes bhToastIn {
+  0%   { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.94); }
+  60%  { opacity: 1; transform: translate3d(0, 2px, 0) scale(1.012); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes bhToastOut {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.95); }
+}
+
+.bh-toast-in  { animation: bhToastIn 400ms cubic-bezier(0.21, 1.02, 0.73, 1) both; }
+.bh-toast-out { animation: bhToastOut 320ms ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bh-toast-in,
+  .bh-toast-out { animation: none; }
+  /* The bar still empties — it is information, not decoration — it just
+     does not slide in. */
+  .bh-toast-out { opacity: 0; }
+}

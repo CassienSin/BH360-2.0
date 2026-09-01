@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale } from 'lucide-react'
+import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -11,8 +11,10 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
+import { notify } from '@/components/Toast'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
+import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -66,7 +68,7 @@ const priorityConfig = {
 const sectionTitle = {
   home: 'Home', announcements: 'Announcements',
   incidents: 'My Incidents', tickets: 'My Tickets',
-  documents: 'My Documents', ai: 'AI Assistant',
+  documents: 'My Documents', blotter: 'My Blotter Cases', ai: 'AI Assistant',
 }
 
 const Skeleton = ({ className, style }) => <div className={`skeleton-shimmer ${className}`} style={style} />
@@ -108,6 +110,7 @@ export default function ResidentDashboard() {
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [documentRequests, setDocumentRequests] = useState([])
+  const [blotterCases, setBlotterCases] = useState([])
   const [activeSection, setActiveSection] = useState('home')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -173,7 +176,7 @@ export default function ResidentDashboard() {
       }
 
       // Parallel instead of one-after-another — noticeably faster first paint
-      const [annRes, incRes, tixRes, docRes] = await Promise.all([
+      const [annRes, incRes, tixRes, docRes, kpRes] = await Promise.all([
         supabase.from('announcements').select('*')
           .eq('barangay_id', prof.barangay_id)
           .order('created_at', { ascending: false })
@@ -190,16 +193,24 @@ export default function ResidentDashboard() {
           .eq('requested_by', user.id)
           .order('created_at', { ascending: false })
           .limit(100),
+        // Cases where this resident is the recorded complainant. The blotter
+        // is kept by the barangay, so this is read-only — but a complainant
+        // should be able to see where their own case has got to.
+        supabase.from('blotter_cases').select('*')
+          .eq('complainant_id', user.id)
+          .order('filed_at', { ascending: false })
+          .limit(50),
       ])
 
       if (cancelled) return
-      const firstError = annRes.error || incRes.error || tixRes.error || docRes.error
+      const firstError = annRes.error || incRes.error || tixRes.error || docRes.error || kpRes.error
       if (firstError) toast.error('Some data failed to load: ' + firstError.message)
 
       setAnnouncements(annRes.data || [])
       setIncidents(incRes.data || [])
       setTickets(tixRes.data || [])
       setDocumentRequests(docRes.data || [])
+      setBlotterCases(kpRes.data || [])
       setLoading(false)
     }
     loadData()
@@ -228,7 +239,11 @@ export default function ResidentDashboard() {
           ? prev
           : [payload.new, ...prev])
         if (prefs.announcements !== false) {
-          toast.success(`📢 New announcement: ${payload.new.title}`, { duration: 5000 })
+          notify.info({
+            kind: 'Announcement',
+            title: payload.new.title,
+            action: { label: 'Read it', onClick: () => setActiveSection('announcements') },
+          })
           notifyNewAnnouncement(payload.new)
         }
       })
@@ -242,12 +257,19 @@ export default function ResidentDashboard() {
           if (i.id === payload.new.id) {
             if (payload.old.status !== payload.new.status) {
               const statusMessage = {
-                assigned: '🛡️ Tanod has been assigned to your incident',
-                resolved: '✅ Your incident has been resolved!',
+                assigned: 'A tanod is on the way',
+                resolved: 'Your report has been resolved',
               }
               if (statusMessage[payload.new.status] && prefs.incidents !== false) {
-                toast.success(statusMessage[payload.new.status], {
+                notify.success({
+                  kind: 'Your report',
+                  title: statusMessage[payload.new.status],
+                  body: payload.new.title,
                   id: `incident-${payload.new.id}-${payload.new.status}`,
+                  action: {
+                    label: 'Open',
+                    onClick: () => router.push(`/resident/incident/${payload.new.id}`),
+                  },
                 })
                 notifyStatusUpdate({ id: payload.new.id, title: payload.new.title }, payload.new.status)
               }
@@ -277,13 +299,27 @@ export default function ResidentDashboard() {
           d.id === payload.new.id ? { ...d, ...payload.new } : d
         ))
         if (payload.old.status !== payload.new.status) {
-          const message = {
-            processing: '🕐 The barangay started processing your document',
-            ready: '📄 Your document is ready for pickup',
-            released: '✅ Your document has been released',
-            denied: '⛔ Your document request was denied — see the reason',
+          const update = {
+            processing: { severity: 'info', title: 'The barangay started processing your document' },
+            ready: {
+              severity: 'success', title: 'Your document is ready for pickup',
+              body: 'Bring a valid ID to the barangay hall.',
+            },
+            released: { severity: 'success', title: 'Your document has been released' },
+            denied: {
+              severity: 'warn', title: 'Your document request was denied',
+              body: payload.new.denial_reason || 'Open the request to see the reason given.',
+            },
           }[payload.new.status]
-          if (message) toast.success(message, { id: `doc-${payload.new.id}-${payload.new.status}` })
+          if (update) {
+            const { severity, ...rest } = update
+            notify[severity]({
+              kind: 'Document request',
+              id: `doc-${payload.new.id}-${payload.new.status}`,
+              action: { label: 'View', onClick: () => setActiveSection('documents') },
+              ...rest,
+            })
+          }
         }
       })
       // A resident's own verification decision, so the account stops saying
@@ -297,9 +333,26 @@ export default function ResidentDashboard() {
         setProfile(prev => (prev ? { ...prev, ...payload.new } : prev))
         if (payload.old.verification_status !== payload.new.verification_status) {
           if (payload.new.verification_status === 'verified') {
-            toast.success('✅ A barangay official verified your account')
+            // Verification exists to unlock exactly one thing, so the toast
+            // opens that door rather than announcing a permission change and
+            // leaving the resident to work out what it bought them.
+            notify.success({
+              kind: 'Verified',
+              title: 'Your account is verified',
+              body: 'You can now request barangay clearances and certificates.',
+              action: {
+                label: 'Request a document',
+                onClick: () => router.push('/resident/documents/new'),
+              },
+            })
           } else if (payload.new.verification_status === 'rejected') {
-            toast.error('Your account could not be verified — see your dashboard')
+            notify.warn({
+              kind: 'Verification',
+              title: 'A barangay official could not verify your account',
+              body: payload.new.verification_note
+                || 'Open your dashboard to see what the barangay needs.',
+              action: { label: 'See why', onClick: () => setActiveSection('home') },
+            })
           }
         }
       })
@@ -379,6 +432,7 @@ export default function ResidentDashboard() {
             { key: 'incidents', label: 'My Incidents', icon: AlertTriangle, count: incidents.filter(i => i.status === 'pending').length },
             { key: 'tickets', label: 'My Tickets', icon: FileText, count: tickets.filter(t => t.status === 'open').length },
             { key: 'documents', label: 'My Documents', icon: FileCheck2, count: openDocumentCount },
+            { key: 'blotter', label: 'My Blotter Cases', icon: Gavel, count: blotterCases.filter(caseIsOpen).length },
           ]},
           { section: 'SUPPORT', items: [
             { key: 'ai', label: 'AI Assistant', icon: MessageCircle, badge: 'AI' },
@@ -907,6 +961,101 @@ export default function ResidentDashboard() {
                         </p>
                       </div>
                     </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+
+          {/* MY BLOTTER CASES — read-only. The blotter is the barangay's
+              record, kept by the secretary; a complainant does not edit it,
+              but they should be able to see where their case has got to and
+              what the law says happens next. */}
+          {!loading && profile?.barangay_id && activeSection === 'blotter' && (
+            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+
+              <div className="white-card p-4">
+                <div className="flex items-start gap-2">
+                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
+                  <p className="text-[11px] text-gray-600 leading-relaxed">
+                    <strong style={{ color: '#5B54E8' }}>RA 7160, Secs. 408–418</strong> — the barangay
+                    summons the other party by the <strong>next working day</strong> and has{' '}
+                    <strong>15 days</strong> from your first meeting to mediate. If that fails, a
+                    Pangkat gets 15 more. Only when conciliation fails does the barangay issue a{' '}
+                    <strong>Certificate to File Action</strong>, which is what lets you go to court
+                    (Sec. 412). To open a case, go to the barangay hall.
+                  </p>
+                </div>
+              </div>
+
+              {blotterCases.length === 0 && (
+                <div className="white-card p-10 text-center">
+                  <Gavel size={36} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
+                  <p className="text-gray-400 text-sm">You have no blotter cases on record.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    Cases are recorded at the barangay hall by the secretary.
+                  </p>
+                </div>
+              )}
+
+              {blotterCases.map(kase => {
+                const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
+                const deadline = stageDeadline(kase)
+                const dl = KP_DEADLINE_STYLE[deadline.level]
+                return (
+                  <div key={kase.id} className="white-card p-5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-bold" style={{ color: '#5B54E8' }}>
+                        {kase.case_number}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        style={{ background: st.bg, color: st.color }}>
+                        {st.label}
+                      </span>
+                      {deadline.label && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                          style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}
+                          title={deadline.citation || undefined}>
+                          {deadline.label}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-sm font-semibold text-gray-800 mt-1.5">
+                      vs {kase.respondent_name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{kase.nature}</p>
+                    <p className="text-[11px] text-gray-500 mt-1.5">{st.desc}</p>
+
+                    {kase.settlement_terms && (
+                      <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+                        style={{ background: '#f0fdf4', color: '#166534' }}>
+                        <strong>Settled:</strong> {kase.settlement_terms}
+                        {deadline.level === 'window' && (
+                          <span className="block mt-1">
+                            You may still repudiate this within the window above if your consent was
+                            obtained by fraud, violence or intimidation (Sec. 418).
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {kase.cfa_reason && (
+                      <p className="text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+                        style={{ background: '#fef2f2', color: '#b91c1c' }}>
+                        <strong>Certificate to File Action issued:</strong> {kase.cfa_reason}
+                        <span className="block mt-1">You may now take this to court.</span>
+                      </p>
+                    )}
+                    {kase.referred_to && (
+                      <p className="text-[11px] text-gray-500 mt-2">
+                        <strong>Referred to:</strong> {kase.referred_to}
+                      </p>
+                    )}
+
+                    <p className="text-[11px] text-gray-400 mt-2" title={fullDate(kase.filed_at)}>
+                      Filed {timeAgo(kase.filed_at)}
+                    </p>
                   </div>
                 )
               })}
