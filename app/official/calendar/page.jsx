@@ -70,13 +70,22 @@ export default function CalendarView() {
           return
         }
 
-        const { data: prof } = await supabase
+        const { data: prof, error: profError } = await supabase
           .from('profiles')
           .select('*, barangays(name)')
           .eq('id', user.id)
           .single()
 
         if (cancelled) return
+      // A failed query is not the same as being the wrong role. Sending
+      // someone to the login page for a network blip signs them out of a
+      // session that is perfectly valid.
+        if (profError) {
+          console.error('Could not load your profile:', profError)
+          toast.error('Could not load the calendar. Please refresh.')
+          setLoading(false)
+          return
+        }
         if (prof?.role !== 'official' || !prof?.barangay_id) {
           router.push('/login')
           return

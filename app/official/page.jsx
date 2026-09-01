@@ -245,10 +245,13 @@ export default function OfficialDashboard() {
         if (cancelled) return
         if (!session) return router.replace('/login')
         const user = session.user
-        const { data: prof } = await supabase.from('profiles')
+        const { data: prof, error: profError } = await supabase.from('profiles')
           .select('*, barangays(id, name, city, province)')
           .eq('id', user.id).single()
         if (cancelled) return
+        // A failed query is not the same as being the wrong role — the catch
+        // below reports it rather than signing a valid session out.
+        if (profError) throw profError
         if (prof?.role !== 'official') return router.replace('/login')
         setProfile(prof)
 
@@ -284,11 +287,14 @@ export default function OfficialDashboard() {
         filter: `barangay_id=eq.${bid}`,
       }, async (payload) => {
         if (payload.eventType === 'INSERT') {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('incidents')
             .select('*, profiles!incidents_reported_by_fkey(full_name)')
             .eq('id', payload.new.id)
             .single()
+          // Realtime said an incident arrived; if we cannot read it back the
+          // dashboard would just never show it.
+          if (error) console.error('Could not load the new incident:', error)
           if (data) {
             // Dedup guard: a reconnect refetch may already have this row
             setIncidents(prev => (prev.some(i => i.id === data.id) ? prev : [data, ...prev]))
@@ -345,11 +351,12 @@ export default function OfficialDashboard() {
         filter: `barangay_id=eq.${bid}`,
       }, async (payload) => {
         if (payload.eventType === 'INSERT') {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('tickets')
             .select('*, profiles!tickets_created_by_fkey(full_name)')
             .eq('id', payload.new.id)
             .single()
+          if (error) console.error('Could not load the new ticket:', error)
           if (data) {
             setTickets(prev => (prev.some(t => t.id === data.id) ? prev : [data, ...prev]))
             notify.info({
@@ -440,11 +447,12 @@ export default function OfficialDashboard() {
         filter: `barangay_id=eq.${bid}`,
       }, async (payload) => {
         if (payload.eventType === 'INSERT') {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('document_requests')
             .select('*, profiles!document_requests_requested_by_fkey(full_name, phone)')
             .eq('id', payload.new.id)
             .single()
+          if (error) console.error('Could not load the new document request:', error)
           if (!data) return
           setDocumentRequests(prev => (prev.some(d => d.id === data.id) ? prev : [data, ...prev]))
           notify.info({

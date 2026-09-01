@@ -105,11 +105,14 @@ export default function TanodRoster({ profile }) {
       }, async () => {
         // Assignment counts are cheap to recount and hard to patch
         // incrementally (dispatch, resolve, reassign…) — just refetch.
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('incidents')
           .select('assigned_to')
           .eq('barangay_id', profile.barangay_id)
           .eq('status', 'assigned')
+        // A failure here would show every tanod on zero active assignments,
+        // which reads as "free" and skews who gets dispatched next.
+        if (error) console.error('Could not recount active assignments:', error)
         const counts = {}
         for (const row of data || []) {
           if (row.assigned_to) counts[row.assigned_to] = (counts[row.assigned_to] || 0) + 1
