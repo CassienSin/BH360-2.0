@@ -121,8 +121,16 @@ export default function HelpPage() {
         router.push('/login')
         return
       }
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (!cancelled) setProfile(prof)
+      const { data: prof, error: profError } = await supabase
+        .from('profiles').select('*').eq('id', user.id).single()
+      if (cancelled) return
+      // submitSupport() needs profile.id; without it the form says "still
+      // loading your account" forever rather than naming the problem.
+      if (profError) {
+        console.error('Could not load your profile:', profError)
+        toast.error('Could not load your account. Please refresh.')
+      }
+      setProfile(prof)
     }
     load()
     return () => { cancelled = true }

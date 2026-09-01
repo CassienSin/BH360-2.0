@@ -47,12 +47,20 @@ export default function LoginPage() {
     async function checkExistingSession() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session || cancelled) return
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('role, is_super_admin, deactivated_at')
         .eq('id', session.user.id)
         .maybeSingle()
       if (cancelled || profile?.deactivated_at) return
+      // dashboardPath(null) resolves to '/resident', so routing on a failed
+      // lookup would drop an official — or the super admin — onto the
+      // resident dashboard. Stay on the login page instead and let them
+      // sign in deliberately.
+      if (error || !profile) {
+        console.error('Could not read the signed-in profile:', error)
+        return
+      }
       window.location.replace(dashboardPath(profile))
     }
     checkExistingSession()
