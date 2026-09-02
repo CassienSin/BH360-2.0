@@ -3,7 +3,6 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { MapPin, CheckCircle, Clock, AlertTriangle, Home, Phone, Navigation, TrendingUp, Award, Zap, FileText, Star } from 'lucide-react'
-import Image from 'next/image'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
 import DashboardHeader from '@/components/DashboardHeader'
@@ -16,11 +15,20 @@ import { notifyNewAssignment } from '@/lib/notifications'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { notify } from '@/components/Toast'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
+import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
+import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
+import { greeting } from '@/lib/homeSummary'
+import { toneFor } from '@/lib/recordState'
+import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
+import {
+  RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
+  tanodSummary, mostUrgentAssignment, tanodStats,
+} from '@/lib/tanod'
 
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
-const HOURS_MS = 1000 * 60 * 60
+const PAGE_SIZE = 50
 const INCIDENT_SELECT = '*, profiles!incidents_reported_by_fkey(full_name, phone)'
 
 const DOTS = Array.from({ length: 20 }, (_, i) => ({
@@ -98,6 +106,12 @@ export default function TanodDashboard() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [resolveModal, setResolveModal] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  // The refetch on tab focus must not silently shrink a list the tanod has
+  // already paged through.
+  const pageSizeRef = useRef(PAGE_SIZE)
+  const [busyStamp, setBusyStamp] = useState(null)
   const [directionsMenu, setDirectionsMenu] = useState(null)
 
   // Mirror of incident ids, so the realtime handler can tell "new to me"
@@ -141,14 +155,19 @@ export default function TanodDashboard() {
   }, [])
 
   // ---- Data loading ----
-  const fetchIncidents = useCallback(async (userId) => {
+  // Bounded, like the official queue. A tanod's history only grows, and
+  // loading every incident they have ever been sent slows the page down for
+  // the assignments they actually need now.
+  const fetchIncidents = useCallback(async (userId, limit = PAGE_SIZE) => {
     const { data, error } = await supabase
       .from('incidents')
       .select(INCIDENT_SELECT)
       .eq('assigned_to', userId)
       .order('created_at', { ascending: false })
+      .limit(limit + 1)
     if (error) throw error
-    return data || []
+    const rows = data || []
+    return { rows: rows.slice(0, limit), hasMore: rows.length > limit }
   }, [supabase])
 
   useEffect(() => {
@@ -185,9 +204,10 @@ export default function TanodDashboard() {
         }
         setProfile(prof)
 
-        const inc = await fetchIncidents(user.id)
+        const { rows, hasMore } = await fetchIncidents(user.id)
         if (cancelled) return
-        setIncidents(inc)
+        setIncidents(rows)
+        setHasMore(hasMore)
       } catch (err) {
         console.error('Failed to load dashboard:', err)
         if (!cancelled) toast.error('Failed to load your assignments. Please refresh.')
@@ -208,8 +228,9 @@ export default function TanodDashboard() {
     const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
       try {
-        const inc = await fetchIncidents(profile.id)
-        setIncidents(inc)
+        const { rows, hasMore } = await fetchIncidents(profile.id, pageSizeRef.current)
+        setIncidents(rows)
+        setHasMore(hasMore)
       } catch {
         // Non-critical background refresh — stay quiet on failure
       }
@@ -291,6 +312,60 @@ export default function TanodDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }
 
+  /**
+   * Record having seen an assignment, or having reached it.
+   *
+   * The value sent is only a request — stamp_incident_response() in the
+   * database decides what the time says and whose name is on it, so a
+   * response time cannot be edited after the fact.
+   */
+  async function stampResponse(incident, field) {
+    if (busyStamp) return
+    setBusyStamp(incident.id)
+    const { data, error } = await supabase
+      .from('incidents')
+      .update({ [field]: new Date().toISOString() })
+      .eq('id', incident.id)
+      .select(INCIDENT_SELECT)
+      .single()
+    setBusyStamp(null)
+
+    if (error || !data) {
+      console.error('Could not record response:', error)
+      toast.error('Could not save that. Check your signal and try again.')
+      return
+    }
+
+    // Take the row back from the database rather than guessing — the stamp
+    // it wrote is the one that counts.
+    setIncidents(prev => prev.map(i => (i.id === data.id ? { ...i, ...data } : i)))
+    notify.success({
+      kind: field === 'arrived_at' ? 'On scene' : 'On the way',
+      title: incident.title,
+      body: field === 'arrived_at'
+        ? 'The barangay can see you have arrived.'
+        : 'The barangay knows you have seen this.',
+      id: `stamp-${incident.id}-${field}`,
+    })
+  }
+
+  async function loadMore() {
+    if (!profile?.id || loadingMore) return
+    setLoadingMore(true)
+    const next = pageSizeRef.current + PAGE_SIZE
+    try {
+      const { rows, hasMore: more } = await fetchIncidents(profile.id, next)
+      pageSizeRef.current = next
+      setIncidents(rows)
+      setHasMore(more)
+    } catch (err) {
+      console.error('Could not load older assignments:', err)
+      toast.error('Could not load older assignments.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   async function handleResolve({ notes, imageUrl, resolvedAt }) {
     const incidentId = resolveModal.id
     const { error } = await supabase.from('incidents').update({
@@ -334,15 +409,11 @@ export default function TanodDashboard() {
   }
 
   // ---- Derived data (memoized) ----
-  const assignedIncidents = useMemo(() =>
-    incidents
-      .filter(i => i.status === 'assigned')
-      .sort((a, b) => {
-        const aPriority = PRIORITY_CONFIG[a.priority]?.order || 2
-        const bPriority = PRIORITY_CONFIG[b.priority]?.order || 2
-        if (aPriority !== bPriority) return bPriority - aPriority
-        return new Date(b.created_at) - new Date(a.created_at)
-      }),
+  // Worst first, and within one priority the one waiting longest — see
+  // byUrgency. The old comparator put the newest first, which is the
+  // opposite of a queue.
+  const assignedIncidents = useMemo(
+    () => incidents.filter(i => i.status === 'assigned').sort(byUrgency),
     [incidents]
   )
 
@@ -351,35 +422,67 @@ export default function TanodDashboard() {
     [incidents]
   )
 
-  const stats = useMemo(() => {
-    const thisMonth = new Date()
-    thisMonth.setDate(1)
-    thisMonth.setHours(0, 0, 0, 0)
+  const stats = useMemo(() => tanodStats(incidents), [incidents])
 
-    const resolvedThisMonth = resolvedIncidents.filter(i =>
-      new Date(i.resolved_at || i.created_at) >= thisMonth
-    ).length
+  const overdue = useMemo(
+    () => overdueAssignments(assignedIncidents),
+    [assignedIncidents]
+  )
 
-    const times = resolvedIncidents
-      .filter(i => i.resolved_at)
-      .map(i => (new Date(i.resolved_at) - new Date(i.created_at)) / HOURS_MS)
-    const avgHours = times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length : null
-    const avgResponseTime = avgHours === null
-      ? null
-      : avgHours < 1 ? `${Math.round(avgHours * 60)}m` : `${avgHours.toFixed(1)}h`
+  const unacknowledged = useMemo(
+    () => assignedIncidents.filter(i => !i.acknowledged_at).length,
+    [assignedIncidents]
+  )
 
-    const rated = resolvedIncidents.filter(i => i.rating)
-    const avgRating = rated.length > 0
-      ? (rated.reduce((a, b) => a + b.rating, 0) / rated.length).toFixed(1)
-      : null
+  const brief = useMemo(
+    () => tanodSummary({
+      assignments: assignedIncidents,
+      onDuty: Boolean(profile?.on_duty),
+      barangayName: profile?.barangays?.name,
+    }),
+    [assignedIncidents, profile]
+  )
 
-    const totalAssigned = incidents.length
-    const resolutionRate = totalAssigned > 0
-      ? Math.round((resolvedIncidents.length / totalAssigned) * 100)
-      : 0
+  const urgent = useMemo(
+    () => mostUrgentAssignment(assignedIncidents),
+    [assignedIncidents]
+  )
 
-    return { resolvedThisMonth, avgResponseTime, avgRating, ratedCount: rated.length, totalAssigned, resolutionRate }
-  }, [incidents, resolvedIncidents])
+  // Counts of what still needs doing, not totals. "Unopened" is the one
+  // that did not exist before: a tanod could be sent three reports and the
+  // dashboard could not tell them which they had actually looked at.
+  const tanodTiles = useMemo(() => [
+    {
+      key: 'unopened', icon: <AlertTriangle size={17} />, tone: 'waiting',
+      count: unacknowledged, quiet: unacknowledged === 0,
+      label: unacknowledged === 1 ? 'Not opened yet' : 'Not opened yet',
+      caption: `${assignedIncidents.length} assigned`,
+      onClick: () => navClick('active'),
+    },
+    {
+      key: 'overdue', icon: <Clock size={17} />, tone: 'overdue',
+      count: overdue.length, quiet: overdue.length === 0,
+      label: overdue.length === 1 ? 'Past its time' : 'Past their time',
+      caption: overdue.length ? 'respond as soon as you can' : 'all within target',
+      onClick: () => navClick('active'),
+    },
+    {
+      key: 'month', icon: <Zap size={17} />, tone: 'done',
+      count: stats.resolvedThisMonth, quiet: stats.resolvedThisMonth === 0,
+      label: 'Resolved this month',
+      caption: `${stats.resolvedTotal} all time`,
+      onClick: () => navClick('stats'),
+    },
+    {
+      key: 'response', icon: <Award size={17} />, tone: 'info',
+      count: stats.respond.label || '—', quiet: !stats.respond.label,
+      label: 'Average response',
+      caption: stats.respond.sample
+        ? `over ${stats.respond.sample} report${stats.respond.sample === 1 ? '' : 's'}`
+        : 'nothing acknowledged yet',
+      onClick: () => navClick('stats'),
+    },
+  ], [unacknowledged, assignedIncidents.length, overdue.length, stats])
 
   const recentRatings = useMemo(
     () => resolvedIncidents.filter(i => i.rating).slice(0, 5),
@@ -475,78 +578,55 @@ export default function TanodDashboard() {
 
           {!loading && activeSection === 'home' && (
             <div className="space-y-6 fade-up max-w-2xl mx-auto">
-              <div className="white-card p-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>Welcome back</p>
-                  <h2 className="text-2xl font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }}>{profile?.full_name?.split(' ')[0]} 🛡️</h2>
-                  <p className="text-gray-400 text-sm mt-1">
-                    You have {assignedIncidents.length} active assignment{assignedIncidents.length !== 1 ? 's' : ''}{profile?.barangays?.name ? ` in ${profile.barangays.name}` : ''}.
-                  </p>
-                </div>
-                <div className="hidden sm:block w-16 h-16 relative">
-                  <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain opacity-20" />
-                </div>
-              </div>
+              <HomeSummary
+                greeting={greeting()}
+                name={profile?.full_name?.split(' ')[0]}
+                summary={brief.text}
+                pressing={urgent}
+                allClearNote={profile?.on_duty
+                  ? 'On duty — you will be told the moment something comes in'
+                  : 'Go on duty so the barangay can dispatch to you'}
+                onOpen={() => navClick('active')}
+              />
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Your Status</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <button onClick={() => navClick('active')} className="glass-card p-4 text-left">
-                    <AlertTriangle size={18} className="mb-2 text-white opacity-80" />
-                    <p className="text-2xl font-bold text-white">{assignedIncidents.length}</p>
-                    <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Active</p>
-                  </button>
-                  <button onClick={() => navClick('resolved')} className="glass-card p-4 text-left">
-                    <CheckCircle size={18} className="mb-2 text-white opacity-80" />
-                    <p className="text-2xl font-bold text-white">{resolvedIncidents.length}</p>
-                    <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Resolved</p>
-                  </button>
-                  <button onClick={() => navClick('stats')} className="glass-card p-4 text-left">
-                    <Zap size={18} className="mb-2 text-white opacity-80" />
-                    <p className="text-2xl font-bold text-white">{stats.resolvedThisMonth}</p>
-                    <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>This Month</p>
-                  </button>
-                  <button onClick={() => navClick('stats')} className="glass-card p-4 text-left">
-                    <Award size={18} className="mb-2 text-white opacity-80" />
-                    <p className="text-2xl font-bold text-white">{stats.resolutionRate}%</p>
-                    <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Success</p>
-                  </button>
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
+                  {brief.allClear ? 'Your record' : 'Needs you'}
+                </p>
+                <TileGrid tiles={tanodTiles} render={(tile, className) => (
+                  <ActivityTile {...tile} className={className} />
+                )} />
               </div>
 
               {assignedIncidents.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Priority Assignments</p>
-                    <button onClick={() => navClick('active')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/85">Next up</p>
+                    <button onClick={() => navClick('active')}
+                      className="text-xs font-semibold text-white/75 hover:text-white transition-colors">
+                      View all →
+                    </button>
                   </div>
                   <div className="space-y-2">
-                    {assignedIncidents.slice(0, 2).map(inc => {
+                    {assignedIncidents.slice(0, 3).map(inc => {
                       const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
+                      const standing = computeStanding(inc)
+                      const stage = responseStage(inc)
                       return (
-                        <div key={inc.id} className="white-card px-4 py-3 flex items-center gap-3 cursor-pointer"
-                          onClick={() => navClick('active')}>
-                          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base" style={{ background: cat.bg }}>
-                            {cat.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                              {inc.priority && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5"
-                                  style={{
-                                    background: PRIORITY_CONFIG[inc.priority]?.bg,
-                                    color: PRIORITY_CONFIG[inc.priority]?.color,
-                                    ...(inc.priority === 'Critical' ? { animation: 'pulse 2s ease-in-out infinite' } : {}),
-                                  }}>
-                                  {PRIORITY_CONFIG[inc.priority]?.icon}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-400 truncate">📍 {inc.location}</p>
-                          </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700 flex-shrink-0">assigned</span>
-                        </div>
+                        <RecordCard key={inc.id}
+                          tone={standing.aged ? 'overdue' : toneFor(inc.status)}
+                          icon={<span aria-hidden="true">{cat.icon}</span>}
+                          iconBg={cat.bg}
+                          title={inc.title}
+                          meta={inc.location ? `📍 ${inc.location}` : 'No location given'}
+                          badges={standing.aged
+                            ? <Chip bg={STANDING_STYLE[standing.level].bg} color={STANDING_STYLE[standing.level].color}>
+                                {standing.label}
+                              </Chip>
+                            : <Chip bg="#f0effe" color="#5B54E8">{RESPONSE_STEPS[stage]}</Chip>}
+                          when={timeAgo(inc.created_at)}
+                          onClick={() => navClick('active')}
+                          ariaLabel={`${inc.title} — ${RESPONSE_STEPS[stage]}`} />
                       )
                     })}
                   </div>
@@ -575,12 +655,19 @@ export default function TanodDashboard() {
               {assignedIncidents.map(inc => {
                 const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
                 const hasCoords = inc.latitude && inc.longitude
+                const standing = computeStanding(inc)
+                const stage = responseStage(inc)
+                const action = nextAction(inc)
+                const stamping = busyStamp === inc.id
                 return (
-                  <div key={inc.id} className="white-card p-5 relative overflow-visible">
-                    {inc.priority === 'Critical' && (
-                      <div className="absolute top-0 left-0 right-0 h-1 rounded-t-2xl overflow-hidden"
-                        style={{ background: 'linear-gradient(90deg, #dc2626, #ef4444, #dc2626)', animation: 'shimmer 2s linear infinite' }} />
-                    )}
+                  <div key={inc.id} className="white-card p-5 pl-6 relative overflow-visible">
+                    {/* The rail says how this one stands — priority normally,
+                        the aging colour once it is past its response time,
+                        which is the more urgent fact while it applies. */}
+                    <span className="absolute left-0 top-5 bottom-5 w-1 rounded-r" aria-hidden="true"
+                      style={{ background: standing.aged
+                        ? STANDING_STYLE[standing.level].color
+                        : (PRIORITY_CONFIG[inc.priority]?.color || '#9ca3af') }} />
 
                     <div className="flex items-start gap-3 mb-3">
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl" style={{ background: cat.bg }}>
@@ -594,12 +681,27 @@ export default function TanodDashboard() {
                               style={{
                                 background: PRIORITY_CONFIG[inc.priority]?.bg,
                                 color: PRIORITY_CONFIG[inc.priority]?.color,
-                                ...(inc.priority === 'Critical' ? { animation: 'pulse 2s ease-in-out infinite' } : {}),
                               }}>
                               <span>{PRIORITY_CONFIG[inc.priority]?.icon}</span> {inc.priority}
                             </span>
                           )}
-                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-700">assigned</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                            style={{ background: '#f0effe', color: '#5B54E8' }}>
+                            {RESPONSE_STEPS[stage]}
+                          </span>
+                          {/* The same aging signal the officials' queue
+                              shows. The person expected to respond had no
+                              way of seeing it. */}
+                          {standing.aged && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
+                              style={{
+                                background: STANDING_STYLE[standing.level].bg,
+                                color: STANDING_STYLE[standing.level].color,
+                              }}
+                              title={`${inc.priority} reports target ${activeWindowLabel(inc)}.`}>
+                              <Clock size={10} /> {standing.label}
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-500 text-sm mt-1">{inc.description}</p>
                         <div className="flex items-center gap-1 mt-2 text-gray-400 text-xs">
@@ -671,14 +773,72 @@ export default function TanodDashboard() {
                       </button>
 
                       <button onClick={() => setResolveModal(inc)}
-                        className={`w-full py-2.5 rounded-2xl text-xs font-bold text-white transition-all hover:scale-105 flex items-center justify-center gap-1.5 ${!hasCoords && 'col-span-2'}`}
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 16px rgba(34,197,94,0.3)' }}>
+                        className={`w-full py-2.5 rounded-2xl text-xs font-bold transition-all hover:scale-105 flex items-center justify-center gap-1.5 ${!hasCoords && 'col-span-2'}`}
+                        style={stage >= 2
+                          ? { background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', boxShadow: '0 4px 16px rgba(34,197,94,0.3)' }
+                          : { background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
                         <CheckCircle size={12} /> Resolve
                       </button>
                     </div>
+
+                    {/* What to do next, one step at a time. Nothing here
+                        existed before — a tanod could only resolve, so the
+                        barangay never learned when anyone had seen a report
+                        or reached it. */}
+                    {action && action.key !== 'resolve' && (
+                      <button onClick={() => stampResponse(inc, action.field)}
+                        disabled={stamping}
+                        className="w-full py-3 rounded-2xl text-sm font-black text-white transition-transform
+                          active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+                        style={{
+                          background: action.key === 'acknowledge'
+                            ? 'linear-gradient(135deg, #5B54E8, #7C75F0)'
+                            : 'linear-gradient(135deg, #f59e0b, #d97706)',
+                          boxShadow: action.key === 'acknowledge'
+                            ? '0 8px 24px rgba(91,84,232,0.35)'
+                            : '0 8px 24px rgba(245,158,11,0.35)',
+                        }}>
+                        {action.key === 'acknowledge'
+                          ? <><Navigation size={15} /> {stamping ? 'Saving…' : action.label}</>
+                          : <><MapPin size={15} /> {stamping ? 'Saving…' : action.label}</>}
+                      </button>
+                    )}
+
+                    {/* The trail so far, and how far it has to go. */}
+                    <ol className="flex items-center mt-3.5 pt-3.5 border-t" style={{ borderColor: '#f3f4f6' }}>
+                      {RESPONSE_STEPS.map((label, i) => {
+                        const state = i < stage ? 'done' : i === stage ? 'now' : 'todo'
+                        const dot = state === 'done' ? '#10b981' : state === 'now' ? '#5B54E8' : '#e5e7eb'
+                        const ink = state === 'done' ? '#047857' : state === 'now' ? '#5B54E8' : '#9ca3af'
+                        return (
+                          <li key={label} className="contents">
+                            {i > 0 && (
+                              <span className="flex-1 h-0.5 mx-1.5 rounded-sm min-w-[10px]" aria-hidden="true"
+                                style={{ background: i <= stage ? '#10b981' : '#e5e7eb' }} />
+                            )}
+                            <span className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" aria-hidden="true"
+                                style={{ background: dot, ...(state === 'now' ? { boxShadow: '0 0 0 3px rgba(91,84,232,0.18)' } : {}) }} />
+                              <span className={`text-[10.5px] font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
+                                style={{ color: ink }}>{label}</span>
+                            </span>
+                          </li>
+                        )
+                      })}
+                    </ol>
                   </div>
                 )
               })}
+
+              {hasMore && (
+                <div className="pt-1 pb-2 text-center">
+                  <button onClick={loadMore} disabled={loadingMore}
+                    className="px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
+                    style={{ background: 'white', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    {loadingMore ? 'Loading…' : 'Load older assignments'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -689,53 +849,45 @@ export default function TanodDashboard() {
                   <p className="text-gray-400 text-sm">No resolved incidents yet.</p>
                 </div>
               )}
-              {resolvedIncidents.map(inc => {
-                const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                return (
-                  <div key={inc.id} className="white-card p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl" style={{ background: cat.bg }}>
-                        {cat.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-semibold text-gray-800 text-sm">{inc.title}</h3>
-                          {inc.priority && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
-                              style={{ background: PRIORITY_CONFIG[inc.priority]?.bg, color: PRIORITY_CONFIG[inc.priority]?.color }}>
-                              <span>{PRIORITY_CONFIG[inc.priority]?.icon}</span> {inc.priority}
-                            </span>
-                          )}
-                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700">resolved</span>
-                        </div>
-                        <p className="text-gray-500 text-xs mt-1">{inc.description}</p>
-                        <div className="flex items-center gap-1 mt-1.5 text-gray-300 text-xs">
-                          <MapPin size={12} /><span>{inc.location}</span>
-                        </div>
-                        {inc.resolved_at && (
-                          <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1" title={fullDate(inc.resolved_at)}>
-                            <CheckCircle size={11} /> Resolved {timeAgo(inc.resolved_at)}
-                          </p>
-                        )}
+              <RecordGroup label="Resolved" count={resolvedIncidents.length}>
+                {resolvedIncidents.map(inc => {
+                  const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
+                  return (
+                    <div key={inc.id} className="space-y-2">
+                      <RecordCard
+                        tone="done"
+                        icon={<span aria-hidden="true">{cat.icon}</span>}
+                        iconBg="#f3f4f6"
+                        title={inc.title}
+                        meta={inc.location ? `📍 ${inc.location}` : 'No location given'}
+                        badges={inc.rating
+                          ? <Chip bg="#fffbeb" color="#b45309">★ {inc.rating}</Chip>
+                          : <Chip bg="#d1fae5" color="#047857">Resolved</Chip>}
+                        when={timeAgo(inc.resolved_at || inc.created_at)}
+                        ariaLabel={`${inc.title} — resolved`} />
 
-                        {inc.resolution_notes && (
-                          <div className="mt-3 p-3 rounded-xl" style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                            <div className="flex items-start gap-2">
-                              <FileText size={11} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                              <p className="text-xs text-emerald-900">{inc.resolution_notes}</p>
-                            </div>
+                      {/* What the tanod wrote and photographed is the record
+                          of the job, so it stays visible rather than moving
+                          behind a tap. */}
+                      {(inc.resolution_notes || inc.resolution_image_url) && (
+                        <div className="ml-[22px] px-3 py-2.5 rounded-xl flex items-start gap-2.5"
+                          style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
+                          <FileText size={12} className="text-emerald-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            {inc.resolution_notes && (
+                              <p className="text-[11.5px] text-emerald-900 leading-relaxed">{inc.resolution_notes}</p>
+                            )}
+                            <IncidentPhoto stored={inc.resolution_image_url} alt="Resolution proof"
+                              className="block mt-2 rounded-lg overflow-hidden"
+                              imgClassName="w-full max-h-28 object-cover"
+                              style={{ border: '1px solid #dcfce7', maxWidth: '180px' }} />
                           </div>
-                        )}
-
-                        <IncidentPhoto stored={inc.resolution_image_url} alt="Resolution proof"
-                          className="block mt-2 rounded-xl overflow-hidden"
-                          imgClassName="w-full max-h-32 object-cover"
-                          style={{ border: '1px solid #dcfce7', maxWidth: '200px' }} />
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </RecordGroup>
             </div>
           )}
 
@@ -754,20 +906,45 @@ export default function TanodDashboard() {
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Each of these now says what it measures. "Avg Response"
+                    used to be resolved_at - created_at — the time to finish
+                    the job, presented as the time to answer the call — and
+                    every average carries the sample it came from, because
+                    the stamps only start existing now. */}
                 {[
-                  { label: 'Total Resolved', value: resolvedIncidents.length, icon: CheckCircle, color: '#22c55e', bg: '#f0fdf4' },
-                  { label: 'This Month', value: stats.resolvedThisMonth, icon: Zap, color: '#f97316', bg: '#fff7ed' },
-                  { label: 'Avg Response', value: stats.avgResponseTime || 'N/A', icon: Clock, color: '#3b82f6', bg: '#eff6ff' },
-                  { label: 'Avg Rating', value: stats.avgRating ? `${stats.avgRating}★` : 'N/A', icon: Star, color: '#f59e0b', bg: '#fffbeb' },
-                ].map(({ label, value, icon: Icon, color, bg }) => (
+                  { label: 'Resolved, all time', value: stats.resolvedTotal, note: `${stats.resolutionRate}% of what you were sent`, icon: CheckCircle, color: '#22c55e', bg: '#f0fdf4' },
+                  { label: 'Resolved this month', value: stats.resolvedThisMonth, note: 'since the 1st', icon: Zap, color: '#f97316', bg: '#fff7ed' },
+                  { label: 'Time to respond', value: stats.respond.label || 'N/A', note: stats.respond.sample ? `over ${stats.respond.sample} report${stats.respond.sample === 1 ? '' : 's'}` : 'nothing acknowledged yet', icon: Clock, color: '#3b82f6', bg: '#eff6ff' },
+                  { label: 'Rating from residents', value: stats.avgRating ? `${stats.avgRating}★` : 'N/A', note: stats.ratedCount ? `from ${stats.ratedCount} rating${stats.ratedCount === 1 ? '' : 's'}` : 'not rated yet', icon: Star, color: '#f59e0b', bg: '#fffbeb' },
+                ].map(({ label, value, note, icon: Icon, color, bg }) => (
                   <div key={label} className="white-card p-4">
                     <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3" style={{ background: bg }}>
                       <Icon size={18} style={{ color }} />
                     </div>
-                    <p className="text-2xl font-bold" style={{ color }}>{value}</p>
-                    <p className="text-xs text-gray-400 mt-1">{label}</p>
+                    <p className="text-2xl font-bold tabular-nums" style={{ color }}>{value}</p>
+                    <p className="text-xs font-semibold text-gray-700 mt-1">{label}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>{note}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* The two halves of a response, which nobody could see
+                  before because neither was being recorded. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="white-card p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Travel time</p>
+                  <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.travel.label || 'N/A'}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>
+                    {stats.travel.sample ? `acknowledged to on scene, over ${stats.travel.sample}` : 'no arrivals recorded yet'}
+                  </p>
+                </div>
+                <div className="white-card p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Start to finish</p>
+                  <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.resolve.label || 'N/A'}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>
+                    {stats.resolve.sample ? `reported to resolved, over ${stats.resolve.sample}` : 'nothing resolved yet'}
+                  </p>
+                </div>
               </div>
 
               {/* Resolution Rate */}

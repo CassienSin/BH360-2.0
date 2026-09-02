@@ -121,6 +121,12 @@ create table if not exists incidents (
   acknowledged_at timestamptz,
   acknowledged_by uuid references profiles(id),
 
+  -- When the tanod reached the scene. With acknowledged_at this separates
+  -- the two halves of a response: how long before anyone saw the report,
+  -- and how long the travel took. Neither was measurable before — the
+  -- tanod had no way to record either.
+  arrived_at timestamptz,
+
   -- How the current tanod got here (see auto_assign_tanod / mark_manual_assignment)
   assignment_method text check (assignment_method in ('auto', 'auto_offduty', 'manual', 'reassigned')),
   auto_assigned_at timestamptz,
@@ -274,6 +280,7 @@ alter table incidents        add column if not exists priority_overridden_by uui
 alter table incidents        add column if not exists priority_overridden_at timestamptz;
 alter table incidents        add column if not exists acknowledged_at timestamptz;
 alter table incidents        add column if not exists acknowledged_by uuid references profiles(id);
+alter table incidents        add column if not exists arrived_at timestamptz;
 alter table incidents        add column if not exists assignment_method text;
 alter table incidents        add column if not exists auto_assigned_at timestamptz;
 
@@ -999,6 +1006,60 @@ grant execute on function public.prune_tanod_locations() to anon, authenticated,
 create or replace trigger prune_old_locations
   after insert on tanod_locations
   for each row execute function public.prune_tanod_locations();
+
+
+-- ----------------------------------------------------------------------------
+-- RESPONSE STAMPS
+--
+-- acknowledged_at and arrived_at are the barangay's record of how fast it
+-- answered, so they are not taken from whoever sent the update. The client
+-- asks for a stamp; the database decides what it says and who it names.
+--
+-- Once written they do not move. A response time that can be edited after
+-- the fact is not a measurement of anything.
+-- ----------------------------------------------------------------------------
+create or replace function public.stamp_incident_response()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  -- Newly acknowledged: the clock reads now, and the name is whoever is
+  -- actually signed in — not whatever the payload claimed.
+  if new.acknowledged_at is not null and old.acknowledged_at is null then
+    new.acknowledged_at := now();
+    new.acknowledged_by := coalesce(auth.uid(), new.acknowledged_by);
+  elsif old.acknowledged_at is not null then
+    -- Already stamped. Keep both fields exactly as they were, whatever the
+    -- update tried to do with them.
+    new.acknowledged_at := old.acknowledged_at;
+    new.acknowledged_by := old.acknowledged_by;
+  end if;
+
+  if new.arrived_at is not null and old.arrived_at is null then
+    new.arrived_at := now();
+    -- Reaching the scene implies having seen it. A tanod who taps "on
+    -- scene" from a notification without opening the report first would
+    -- otherwise leave a gap where the acknowledgement should be.
+    if new.acknowledged_at is null then
+      new.acknowledged_at := now();
+      new.acknowledged_by := coalesce(auth.uid(), new.assigned_to);
+    end if;
+  elsif old.arrived_at is not null then
+    new.arrived_at := old.arrived_at;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.stamp_incident_response() from public;
+
+drop trigger if exists stamp_incident_response_trigger on incidents;
+create trigger stamp_incident_response_trigger
+  before update on incidents
+  for each row execute function public.stamp_incident_response();
 
 
 -- ============================================================================
