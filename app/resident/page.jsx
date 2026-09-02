@@ -13,7 +13,7 @@ import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
 import { useNotificationReads, unreadCount, notifKey } from '@/lib/notificationReads'
 import RecordCard, { RecordGroup, Chip, PriorityChip } from '@/components/RecordCard'
-import { HomeSummary, ActivityTile } from '@/components/HomeSummary'
+import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { greeting, activityCounts, summarySentence, mostPressing } from '@/lib/homeSummary'
 import { isSettled, toneFor, progressOf, partitionByLiveness } from '@/lib/recordState'
 import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
@@ -977,13 +977,9 @@ export default function ResidentDashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
                   {homeSummary.allClear ? 'Your activity' : 'Needs you'}
                 </p>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {homeTiles.map((tile, i) => (
-                    <ActivityTile key={tile.key} {...tile}
-                      className={homeTiles.length % 2 === 1 && i === homeTiles.length - 1
-                        ? 'col-span-2 lg:col-span-1' : ''} />
-                  ))}
-                </div>
+                <TileGrid tiles={homeTiles} render={(tile, className) => (
+                  <ActivityTile {...tile} className={className} />
+                )} />
               </div>
 
               <div className="fade-up-2">

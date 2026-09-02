@@ -3,7 +3,6 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
-import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -13,6 +12,10 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
+import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
+import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
+import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
+import { greeting, officialSummary, officialMostPressing, unassignedIncidents } from '@/lib/homeSummary'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
@@ -110,6 +113,55 @@ const roleConfig = {
   resident: { color: '#5B54E8', bg: '#f0effe', label: 'Resident' },
   official: { color: '#f97316', bg: '#fff7ed', label: 'Official' },
   tanod: { color: '#22c55e', bg: '#f0fdf4', label: 'Tanod' },
+}
+
+const INCIDENT_STATUS_CHIP = {
+  pending:  { label: 'Unassigned', bg: '#fef3c7', color: '#b45309' },
+  assigned: { label: 'Dispatched', bg: '#dbeafe', color: '#1d4ed8' },
+  resolved: { label: 'Resolved',   bg: '#d1fae5', color: '#047857' },
+}
+const statusChip = s => INCIDENT_STATUS_CHIP[s] || { label: s, bg: '#f3f4f6', color: '#6b7280' }
+
+const TICKET_STATUS = {
+  open:        { label: 'Open',         bg: '#fef3c7', color: '#b45309' },
+  in_progress: { label: 'Being handled', bg: '#dbeafe', color: '#1d4ed8' },
+  closed:      { label: 'Closed',       bg: '#d1fae5', color: '#047857' },
+}
+const OFFICIAL_TICKET_STEPS = ['Received', 'Being handled', 'Closed']
+
+/**
+ * Six tickets all titled "Request for Barangay Clearance" were
+ * indistinguishable in the old list — same icon, same title, and the only
+ * thing separating them was "1mo ago" in grey on grey. The sender and the
+ * category now carry that weight, and the ones already closed collapse to
+ * rows so the queue is what fills the screen.
+ */
+function OfficialTicketCard({ t, live, onOpen }) {
+  const st = TICKET_STATUS[t.status] || TICKET_STATUS.open
+  const from = t.profiles?.full_name || 'a resident'
+
+  return (
+    <RecordCard
+      live={live}
+      tone={toneFor(t.status)}
+      icon={<FileText size={live ? 16 : 14} className="text-white" />}
+      iconBg={isSettled(t.status) ? '#9ca3af' : 'linear-gradient(135deg, #5B54E8, #7C75F0)'}
+      title={t.title}
+      description={live ? t.description : undefined}
+      meta={
+        <span className="truncate">
+          {from}{t.category ? ` · ${t.category}` : ''}
+        </span>
+      }
+      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
+      badges={!live ? <Chip bg={st.bg} color={st.color}>{st.label}</Chip> : null}
+      when={live ? timeAgoLong(t.created_at) : timeAgo(t.created_at)}
+      steps={live ? OFFICIAL_TICKET_STEPS : undefined}
+      at={progressOf(t.status)}
+      onClick={onOpen}
+      ariaLabel={`${t.title} from ${from} — ${st.label}`}
+    />
+  )
 }
 
 export default function OfficialDashboard() {
@@ -554,10 +606,10 @@ export default function OfficialDashboard() {
     })
   }, [users, userSearch, userRoleFilter])
 
-  function navClick(key) {
+  const navClick = useCallback((key) => {
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
-  }
+  }, [])
 
   async function doDispatch(incidentId, tanod) {
     // Atomic: only succeeds while the incident is still pending, so two
@@ -681,12 +733,12 @@ export default function OfficialDashboard() {
     }
   }
 
-  const statusColor = {
-    pending: 'bg-amber-100 text-amber-700', assigned: 'bg-blue-100 text-blue-700',
-    resolved: 'bg-emerald-100 text-emerald-700', open: 'bg-amber-100 text-amber-700',
-    in_progress: 'bg-blue-100 text-blue-700', closed: 'bg-emerald-100 text-emerald-700',
-  }
-  const statusClass = (s) => statusColor[s] || 'bg-gray-100 text-gray-500'
+    // An official works the queue; the closed ones are a record. Splitting
+  // them is what stops a month of finished tickets burying today's.
+  const { live: liveTickets, done: doneTickets } = useMemo(
+    () => partitionByLiveness(filteredTickets),
+    [filteredTickets]
+  )
 
   // Older incidents, fetched by CURSOR rather than by offset: the realtime
   // subscription prepends new rows as they arrive, which would shift every
@@ -739,6 +791,90 @@ export default function OfficialDashboard() {
     const open = blotterCases.filter(blotterIsOpen)
     return { open: open.length, breach: open.filter(c => blotterDeadline(c).level === 'breach').length }
   }, [blotterCases])
+
+  // Everything the dashboard says, derived once.
+  const officialBrief = useMemo(
+    () => officialSummary({
+      incidents, tickets,
+      documentsOpen: documentCounts.open, documentsBreached: documentCounts.breach,
+      casesOpen: blotterCounts.open, casesBreached: blotterCounts.breach,
+      verificationsPending: pendingVerifications,
+      tanodsOnDuty: tanods.filter(t => t.on_duty).length,
+      tanodsTotal: tanods.length,
+      barangayName: profile?.barangays?.name,
+    }),
+    [incidents, tickets, documentCounts, blotterCounts, pendingVerifications, tanods, profile]
+  )
+
+  const officialPressing = useMemo(() => officialMostPressing({ incidents }), [incidents])
+
+  const officialTiles = useMemo(() => {
+    const unassigned = unassignedIncidents(incidents).length
+    const openIncidents = incidents.filter(i => !isSettled(i.status)).length
+    const openTickets = tickets.filter(t => !isSettled(t.status)).length
+    const onDuty = tanods.filter(t => t.on_duty).length
+
+    const tiles = [
+      {
+        key: 'unassigned', icon: <AlertTriangle size={17} />, tone: 'waiting',
+        count: unassigned, quiet: unassigned === 0,
+        label: unassigned === 1 ? 'Report unassigned' : 'Reports unassigned',
+        caption: `${openIncidents} open · ${incidents.length} all time`,
+        onClick: () => navClick('incidents'),
+      },
+      {
+        // Nobody on duty is the reason the next report sits unassigned, so
+        // it goes red rather than the green a zero used to be drawn in.
+        key: 'duty', icon: <Shield size={17} />,
+        tone: onDuty === 0 && tanods.length > 0 ? 'overdue' : 'done',
+        count: onDuty, quiet: false,
+        label: 'On duty now',
+        caption: tanods.length ? `of ${tanods.length} tanod${tanods.length === 1 ? '' : 's'}` : 'no tanods yet',
+        onClick: () => navClick('tanods'),
+      },
+      {
+        key: 'tickets', icon: <FileText size={17} />, tone: 'active',
+        count: openTickets, quiet: openTickets === 0,
+        label: openTickets === 1 ? 'Ticket needs a reply' : 'Tickets need a reply',
+        caption: `${tickets.length} in total`,
+        onClick: () => navClick('tickets'),
+      },
+      {
+        key: 'documents', icon: <FileCheck2 size={17} />,
+        tone: documentCounts.breach > 0 ? 'overdue' : 'active',
+        count: documentCounts.open, quiet: documentCounts.open === 0,
+        label: documentCounts.open === 1 ? 'Document waiting' : 'Documents waiting',
+        caption: documentCounts.breach > 0
+          ? `${documentCounts.breach} past the RA 11032 deadline`
+          : 'all within the deadline',
+        onClick: () => navClick('documents'),
+      },
+    ]
+
+    if (pendingVerifications > 0) {
+      tiles.push({
+        key: 'verifications', icon: <BadgeCheck size={17} />, tone: 'info',
+        count: pendingVerifications, quiet: false,
+        label: pendingVerifications === 1 ? 'Resident to verify' : 'Residents to verify',
+        caption: 'waiting on an official',
+        onClick: () => navClick('verifications'),
+      })
+    }
+    if (blotterCounts.open > 0) {
+      tiles.push({
+        key: 'blotter', icon: <Gavel size={17} />,
+        tone: blotterCounts.breach > 0 ? 'overdue' : 'waiting',
+        count: blotterCounts.open, quiet: false,
+        label: blotterCounts.open === 1 ? 'Blotter case' : 'Blotter cases',
+        caption: blotterCounts.breach > 0
+          ? `${blotterCounts.breach} past a KP deadline`
+          : 'before the Lupon',
+        onClick: () => navClick('blotter'),
+      })
+    }
+    return tiles
+  }, [incidents, tickets, tanods, documentCounts, blotterCounts, pendingVerifications, navClick])
+
 
   // One handler for both an update and an insert: BlotterQueue passes
   // 'created' when the row is new, because the filing form lives inside it.
@@ -1007,55 +1143,53 @@ export default function OfficialDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'dashboard' && (
             <div className="space-y-6 fade-up">
-              <div className="white-card p-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{color: '#5B54E8'}}>Welcome back</p>
-                  <h2 className="text-2xl font-bold text-gray-800" style={{letterSpacing: '-0.5px'}}>
-                    {profile?.full_name?.split(' ')[0]} 👋
-                  </h2>
-                  <p className="text-gray-400 text-sm mt-1">Managing {profile?.barangays?.name || 'your barangay'}</p>
-                </div>
-                <div className="hidden sm:block w-16 h-16 relative">
-                  <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain opacity-20" />
-                </div>
+              <HomeSummary
+                greeting={greeting()}
+                name={profile?.full_name?.split(' ')[0]}
+                summary={officialBrief.text}
+                pressing={officialPressing}
+                allClearNote={
+                  tanods.length === 0
+                    ? 'No tanods on the roster yet'
+                    : `${tanods.filter(t => t.on_duty).length} of ${tanods.length} tanods on duty`
+                }
+                onOpen={() => officialPressing?.href && router.push(officialPressing.href)}
+              />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
+                  {officialBrief.allClear ? 'The barangay today' : 'Needs the barangay'}
+                </p>
+                {/* These replace both the old Quick Actions and the old
+                    Overview. The four "quick actions" were sidebar links
+                    wearing a card, and the Overview's headline number was
+                    the TOTAL — 15 incidents — with the count that actually
+                    needed acting on demoted to a caption beneath it. */}
+                <TileGrid tiles={officialTiles} render={(tile, className) => (
+                  <ActivityTile {...tile} className={className} />
+                )} />
               </div>
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Quick Actions</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: 'View Incidents', icon: AlertTriangle, color: '#fff7ed', iconColor: '#f97316', section: 'incidents' },
-                    { label: 'Manage Tanods', icon: Shield, color: '#f0fdf4', iconColor: '#22c55e', section: 'tanods' },
-                    { label: 'Announcements', icon: Bell, color: '#f0effe', iconColor: '#5B54E8', section: 'announcements' },
-                    { label: 'AI Analytics', icon: BarChart2, color: '#fff1f2', iconColor: '#f43f5e', section: 'analytics' },
-                  ].map(({ label, icon: Icon, color, iconColor, section }) => (
-                    <button key={label} onClick={() => navClick(section)}
-                      className="white-card p-4 text-center flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{background: color}}>
-                        <Icon size={20} style={{color: iconColor}} />
-                      </div>
-                      <span className="text-xs font-semibold text-gray-700">{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Overview</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: 'Total Incidents', value: incidents.length, sub: `+${incidents.filter(i => i.status === 'pending').length} pending`, textColor: '#5B54E8' },
-                    { label: 'On Duty Now', value: tanods.filter(t => t.on_duty).length, sub: `of ${tanods.length} tanods`, textColor: '#22c55e' },
-                    { label: 'Open Tickets', value: tickets.filter(t => t.status === 'open').length, sub: `${tickets.filter(t => t.status === 'in_progress').length} in progress`, textColor: '#f97316' },
-                    { label: 'Resolved', value: incidents.filter(i => i.status === 'resolved').length, sub: `${incidents.length > 0 ? Math.round(incidents.filter(i => i.status === 'resolved').length / incidents.length * 100) : 0}% rate`, textColor: '#f43f5e' },
-                  ].map(({ label, value, sub, textColor }) => (
-                    <div key={label} className="white-card p-5">
-                      <p className="text-xs text-gray-400 mb-1">{sub}</p>
-                      <p className="text-3xl font-bold" style={{color: textColor}}>{value}</p>
-                      <p className="text-sm font-medium text-gray-600 mt-1">{label}</p>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
+                <button onClick={() => navClick('announcements')}
+                  className="white-card relative w-full text-left p-4 pl-[22px] flex items-center gap-3.5
+                    cursor-pointer focus:outline-none focus-visible:ring-2"
+                  style={{ '--tw-ring-color': '#ffffff' }}>
+                  <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
+                    style={{ background: '#5B54E8' }} aria-hidden="true" />
+                  <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                    <Bell size={20} className="text-white" />
+                  </span>
+                  <span className="flex-1 min-w-0 block">
+                    <span className="block text-[15px] font-extrabold text-gray-800">Post an announcement</span>
+                    <span className="block text-xs mt-0.5" style={{ color: '#6b7280' }}>
+                      Reaches every resident of {profile?.barangays?.name || 'the barangay'} at once
+                    </span>
+                  </span>
+                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                </button>
               </div>
 
               <TanodRoster profile={profile} />
@@ -1066,21 +1200,22 @@ export default function OfficialDashboard() {
                   <button onClick={() => navClick('incidents')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
                 </div>
                 <div className="space-y-2">
-                  {incidents.slice(0, 3).map(inc => {
+                  {incidents.slice(0, 4).map(inc => {
                     const cat = categoryConfig[inc.category] || categoryConfig.Other
+                    const settled = isSettled(inc.status)
                     return (
-                      <div key={inc.id} className="white-card px-4 py-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-lg" style={{background: cat.bg}}>
-                            {cat.icon}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                            <p className="text-xs text-gray-400 truncate" title={fullDate(inc.created_at)}>{inc.profiles?.full_name} · {inc.location} · {timeAgo(inc.created_at)}</p>
-                          </div>
-                        </div>
-                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold flex-shrink-0 ${statusClass(inc.status)}`}>{inc.status}</span>
-                      </div>
+                      <RecordCard key={inc.id}
+                        tone={toneFor(inc.status)}
+                        icon={<span aria-hidden="true">{cat.icon}</span>}
+                        iconBg={settled ? '#f3f4f6' : cat.bg}
+                        title={inc.title}
+                        meta={[inc.profiles?.full_name, inc.location].filter(Boolean).join(' · ')}
+                        badges={<Chip bg={statusChip(inc.status).bg} color={statusChip(inc.status).color}>
+                          {statusChip(inc.status).label}
+                        </Chip>}
+                        when={timeAgo(inc.created_at)}
+                        onClick={() => router.push(`/official/incident/${inc.id}`)}
+                        ariaLabel={`${inc.title} — ${inc.status}`} />
                     )
                   })}
                   {incidents.length === 0 && (
@@ -1205,29 +1340,18 @@ export default function OfficialDashboard() {
                 </div>
               )}
 
-              {filteredTickets.map(t => (
-                <div key={t.id} onClick={() => router.push(`/official/ticket/${t.id}`)}
-                  role="button" tabIndex={0}
-                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/official/ticket/${t.id}`) } }}
-                  className="white-card p-5 cursor-pointer">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)'}}>
-                        <FileText size={16} className="text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm truncate">{t.title}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">From {t.profiles?.full_name || 'a resident'} · {timeAgo(t.created_at)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${statusClass(t.status)}`}>{t.status.replace('_', ' ')}</span>
-                      <ChevronRight size={14} className="text-gray-300" />
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <RecordGroup label="Needs a reply" count={liveTickets.length}>
+                {liveTickets.map(t => (
+                  <OfficialTicketCard key={t.id} t={t} live
+                    onOpen={() => router.push(`/official/ticket/${t.id}`)} />
+                ))}
+              </RecordGroup>
+              <RecordGroup label="Closed" count={doneTickets.length}>
+                {doneTickets.map(t => (
+                  <OfficialTicketCard key={t.id} t={t}
+                    onOpen={() => router.push(`/official/ticket/${t.id}`)} />
+                ))}
+              </RecordGroup>
             </div>
           )}
 

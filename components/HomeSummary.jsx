@@ -1,4 +1,5 @@
 'use client'
+import { Fragment } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { TONE_RAIL } from '@/lib/recordState'
 
@@ -68,6 +69,49 @@ export function HomeSummary({ greeting, name, summary, pressing, allClearNote, o
  * cards use, in the same colours, so the home screen and the lists read as
  * one system rather than two designs that happen to share a font.
  */
+
+/**
+ * The grid that holds the tiles.
+ *
+ * The column count follows how many there are, because a five-tile row of
+ * four leaves one stranded on its own line — which is the ragged grid this
+ * whole change set out to remove. Static class strings, since Tailwind
+ * cannot see a template literal.
+ */
+const TILE_GRID = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-2 lg:grid-cols-4',
+  5: 'grid-cols-2 lg:grid-cols-5',
+  6: 'grid-cols-2 lg:grid-cols-3',
+}
+
+/* `key` is React's, not a prop — spreading it into a component warns. */
+function stripKey(tile) {
+  const rest = { ...tile }
+  delete rest.key
+  return rest
+}
+
+export function TileGrid({ tiles, render }) {
+  const cols = TILE_GRID[tiles.length] || 'grid-cols-2 lg:grid-cols-4'
+  // An odd count still leaves a gap in the two-column phone layout, so the
+  // last one takes the full width there.
+  const odd = tiles.length % 2 === 1
+  return (
+    <div className={`grid ${cols} gap-3`}>
+      {tiles.map((tile, i) => (
+        // The grid owns the key so the caller can spread the tile without
+        // React warning about a key arriving through the spread.
+        <Fragment key={tile.key}>
+          {render(stripKey(tile), odd && i === tiles.length - 1 ? 'col-span-2 lg:col-span-1' : '')}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
 export function ActivityTile({ icon, count, label, caption, tone = 'waiting', quiet, onClick, className = '' }) {
   const rail = quiet ? '#e5e7eb' : (TONE_RAIL[tone] || TONE_RAIL.waiting)
   return (
