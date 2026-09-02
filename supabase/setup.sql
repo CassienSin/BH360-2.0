@@ -783,6 +783,102 @@ create trigger protect_profile_privileges
   execute function prevent_privilege_escalation();
 
 
+-- ----------------------------------------------------------------------------
+-- WHAT A REPORTER MAY CHANGE ABOUT THEIR OWN REPORT
+--
+-- The update policy on incidents says WHO may write — staff of the barangay,
+-- or the resident who filed it, so they can rate the service afterwards. It
+-- says nothing about WHAT they may write, and Postgres reuses a policy's
+-- USING clause as its WITH CHECK when none is given, so the only columns
+-- constrained were the ones the USING clause happens to mention.
+--
+-- A resident could therefore mark their own report resolved, or raise it to
+-- Critical. The second is the worse one: priority drives the emergency path,
+-- so it was a self-serve route to firing the blocking alert, the siren and a
+-- push at every official and tanod in the barangay.
+--
+-- Rating is the whole of a reporter's business with a filed report. Anything
+-- else they send is put back the way it was, silently — the client has no
+-- legitimate reason to be sending it, and failing the write would break the
+-- rating form for no gain.
+-- ----------------------------------------------------------------------------
+create or replace function public.prevent_incident_tampering()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_role text;
+begin
+  -- No session (the service role, a trigger, a cron job) is not a reporter
+  -- acting on their own report, and is trusted.
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  caller_role := public.my_role();
+
+  -- Staff dispatch, resolve, adjust priority and record their response.
+  -- Their limits are the RLS policy's, not this trigger's.
+  if caller_role in ('official', 'tanod') or public.am_super_admin() then
+    return new;
+  end if;
+
+  -- Everyone else: a resident, on their own report. Keep the three rating
+  -- columns and restore the rest.
+  new.title                    := old.title;
+  new.description              := old.description;
+  new.location                 := old.location;
+  new.category                 := old.category;
+  new.priority                 := old.priority;
+  new.status                   := old.status;
+  new.image_url                := old.image_url;
+  new.latitude                 := old.latitude;
+  new.longitude                := old.longitude;
+  new.reported_by              := old.reported_by;
+  new.assigned_to              := old.assigned_to;
+  new.barangay_id              := old.barangay_id;
+  new.created_at               := old.created_at;
+  new.legal_basis              := old.legal_basis;
+  new.response_mode            := old.response_mode;
+  new.auto_escalated           := old.auto_escalated;
+  new.original_priority        := old.original_priority;
+  new.priority_override_reason := old.priority_override_reason;
+  new.priority_overridden_by   := old.priority_overridden_by;
+  new.priority_overridden_at   := old.priority_overridden_at;
+  new.acknowledged_at          := old.acknowledged_at;
+  new.acknowledged_by          := old.acknowledged_by;
+  new.acknowledged_offline_at  := old.acknowledged_offline_at;
+  new.arrived_at               := old.arrived_at;
+  new.assignment_method        := old.assignment_method;
+  new.auto_assigned_at         := old.auto_assigned_at;
+  new.resolution_notes         := old.resolution_notes;
+  new.resolution_image_url     := old.resolution_image_url;
+  new.resolved_at              := old.resolved_at;
+
+  -- A rating belongs to a finished report, and is given once. Re-rating
+  -- would let someone walk a score up or down after the fact.
+  if old.status <> 'resolved' or old.rating is not null then
+    new.rating          := old.rating;
+    new.rating_feedback := old.rating_feedback;
+    new.rated_at        := old.rated_at;
+  end if;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.prevent_incident_tampering() from public;
+
+-- Named to sort before stamp_incident_response_trigger: BEFORE triggers fire
+-- in name order, and the guard has to run before the stamps it protects.
+drop trigger if exists prevent_incident_tampering_trigger on incidents;
+create trigger prevent_incident_tampering_trigger
+  before update on incidents
+  for each row execute function public.prevent_incident_tampering();
+
+
 -- ============================================================================
 -- SECTION 7 — SIGNUP, AUTO-DISPATCH AND DUTY TRIGGERS
 --
