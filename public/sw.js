@@ -1,5 +1,10 @@
-const CACHE_NAME = 'bh360-v4'
-const STATIC_CACHE = 'bh360-static-v4'
+// The runtime cache is deliberately NOT versioned. Next's asset URLs are
+// content-hashed, so a stale entry is unreachable rather than wrong, and
+// RUNTIME_MAX bounds the growth. Versioning it meant every worker update
+// threw away the chunks the offline page itself needs — so right after an
+// update, the one page that has to work offline was the one that could not.
+const CACHE_NAME = 'bh360-runtime'
+const STATIC_CACHE = 'bh360-static-v5'
 
 // The runtime cache grew without limit before: every page a person visited
 // stayed forever. A phone with little free space is exactly the device this
@@ -26,10 +31,14 @@ const STATIC_FILES = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      console.log('[SW] Caching static files')
-      return cache.addAll(STATIC_FILES).catch(err => {
-        console.warn('[SW] Cache failed for some files:', err)
-      })
+      // One at a time, not addAll: addAll is all-or-nothing, so a single
+      // missing icon used to throw away the whole precache — including
+      // /offline, the one file that has to be there when nothing else is.
+      return Promise.all(STATIC_FILES.map((url) =>
+        cache.add(url).catch((err) => {
+          console.warn('[SW] Could not cache', url, err)
+        })
+      ))
     })
   )
   // No skipWaiting() here. Taking over mid-session lets a new worker serve
@@ -96,8 +105,21 @@ self.addEventListener('fetch', (event) => {
           if (cached) return cached
           // A page we cannot serve should say so, not drop someone onto
           // the landing screen with no explanation.
+          //
+          // Redirect rather than serving /offline's HTML at the requested
+          // URL: the App Router hydrates against the address bar, so handing
+          // it one route's markup under another route's URL trips the error
+          // boundary — which is how "no connection" ended up rendering as
+          // "we hit a snag". After the redirect the URL and the payload
+          // agree, and the page can offer to retry where they were going.
           if (request.mode === 'navigate') {
-            return caches.match('/offline').then(page => page || caches.match('/'))
+            const url = new URL(request.url)
+            if (url.pathname !== '/offline') {
+              const target = new URL('/offline', self.location.origin)
+              target.searchParams.set('from', url.pathname + url.search)
+              return Response.redirect(target.toString(), 302)
+            }
+            return caches.match('/offline')
           }
         })
       })

@@ -100,9 +100,41 @@ export default function RootLayout({
         <Script id="sw-register" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
+              // A new worker does not take over on its own — it waits until
+              // every tab the old one controls has closed, which on an
+              // installed app can be never. That left people running an old
+              // worker indefinitely: exactly how a fix to offline behaviour
+              // fails to reach the phone that needs it.
+              //
+              // So the swap happens here, at the one moment it is safe: a
+              // full reload, where the page that loads is served entirely by
+              // the new worker rather than half by each.
+              var reloading = false
+              navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (reloading) return
+                reloading = true
+                window.location.reload()
+              })
+
               navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('[PWA] Service Worker registered:', reg.scope))
-                .catch(err => console.log('[PWA] SW registration failed:', err))
+                .then(function (reg) {
+                  function promote(worker) {
+                    if (!worker) return
+                    worker.addEventListener('statechange', function () {
+                      // Only when something was already in charge. On a first
+                      // install there is nothing to replace and no reload to do.
+                      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                        worker.postMessage('SKIP_WAITING')
+                      }
+                    })
+                  }
+                  if (reg.waiting && navigator.serviceWorker.controller) {
+                    reg.waiting.postMessage('SKIP_WAITING')
+                  }
+                  promote(reg.installing)
+                  reg.addEventListener('updatefound', function () { promote(reg.installing) })
+                })
+                .catch(function (err) { console.log('[PWA] SW registration failed:', err) })
             }
           `}
         </Script>

@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { WifiOff, RefreshCw } from 'lucide-react'
 import { useOnline } from '@/lib/useOnline'
 import { pending, describe } from '@/lib/offline/outbox'
@@ -10,8 +11,11 @@ import { pending, describe } from '@/lib/offline/outbox'
  * It used to fall back to '/', which is the landing page — so losing signal
  * mid-session dropped a tanod onto a marketing screen with no explanation.
  */
-export default function Offline() {
+function OfflineInner() {
   const online = useOnline()
+  // Where they were actually trying to go, so Try again returns them there
+  // rather than reloading this page.
+  const from = useSearchParams().get('from')
   const [waiting, setWaiting] = useState(null)
 
   useEffect(() => { pending().then(items => setWaiting(describe(items))) }, [])
@@ -41,11 +45,11 @@ export default function Offline() {
           </p>
         )}
 
-        <button onClick={() => window.location.reload()}
+        <button onClick={() => { window.location.href = from || '/' }}
           className="mt-5 w-full py-3 rounded-2xl text-sm font-bold text-white
             flex items-center justify-center gap-2 transition-transform active:scale-95"
           style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-          <RefreshCw size={15} /> Try again
+          <RefreshCw size={15} /> {from ? 'Try that page again' : 'Try again'}
         </button>
 
         <p className="text-[11px] mt-3" style={{ color: '#9ca3af' }}>
@@ -53,5 +57,14 @@ export default function Offline() {
         </p>
       </div>
     </main>
+  )
+}
+
+/** useSearchParams needs a Suspense boundary in the App Router. */
+export default function Offline() {
+  return (
+    <Suspense fallback={null}>
+      <OfflineInner />
+    </Suspense>
   )
 }

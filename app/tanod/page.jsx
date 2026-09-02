@@ -197,6 +197,22 @@ export default function TanodDashboard() {
       // someone to the login page for a network blip signs them out of a
       // session that is perfectly valid.
         if (profError) {
+          // Offline, this is the first thing to fail — and returning here
+          // meant the snapshot below never ran, so a tanod with no signal
+          // got "please refresh" and a blank page instead of the
+          // assignments already on their phone.
+          const cachedProfile = await snapshot.load(user.id, 'profile')
+          if (cachedProfile?.rows?.[0]) {
+            setProfile(cachedProfile.rows[0])
+            const cachedIncidents = await snapshot.load(user.id, 'incidents')
+            if (cachedIncidents) {
+              setIncidents(cachedIncidents.rows)
+              setStaleSince(cachedIncidents.savedAt)
+            }
+            setHasMore(false)
+            setLoading(false)
+            return
+          }
           console.error('Could not load your profile:', profError)
           toast.error('Could not load your profile. Please refresh.')
           setLoading(false)
@@ -207,6 +223,8 @@ export default function TanodDashboard() {
           return
         }
         setProfile(prof)
+        // Kept so the next load with no signal has something to render.
+        snapshot.save(user.id, 'profile', [prof])
 
         try {
           const { rows, hasMore } = await fetchIncidents(user.id)

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { WifiOff, RefreshCw, Check } from 'lucide-react'
 import { useOnline } from '@/lib/useOnline'
 import { pending, describe } from '@/lib/offline/outbox'
@@ -14,6 +15,7 @@ import { onOutboxChange, drainOutbox } from '@/lib/offline/sync'
  * that what they did is being held rather than dropped.
  */
 export default function OfflineBanner() {
+  const router = useRouter()
   const online = useOnline()
   const [queued, setQueued] = useState([])
   const [syncing, setSyncing] = useState(false)
@@ -22,6 +24,16 @@ export default function OfflineBanner() {
   const refresh = useCallback(async () => {
     setQueued(await pending())
   }, [])
+
+  // Pull the offline page's own code down while there is still a
+  // connection. Precaching its HTML is not enough — the route's JS chunks
+  // have build-hashed names no static list can know, so without this the
+  // one page that has to work offline is the one that cannot: it arrives as
+  // markup with nothing to hydrate it and the error boundary takes over.
+  useEffect(() => {
+    if (!online) return
+    router.prefetch('/offline')
+  }, [online, router])
 
   // onOutboxChange reads once on subscribe, so this is the only effect
   // needed and setState happens in its callback rather than in the body.
