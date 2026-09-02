@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation' 
+import { isSettled } from '@/lib/recordState'
 import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil, ArrowUpDown } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG, getPriority } from '@/lib/legalBasis'
@@ -566,6 +567,20 @@ export default function IncidentsSection({
     if (priority !== 'all' && !priorityCounts[priority]) setPriority('all')
   }, [priorityCounts, priority])
 
+  // Live first, settled after, each side keeping the order the filters and
+  // sort produced. `firstSettled` marks where the divider goes.
+  const { grouped, settledCount } = useMemo(() => {
+    const live = filtered.filter(i => !isSettled(i.status))
+    const settled = filtered.filter(i => isSettled(i.status))
+    return {
+      settledCount: settled.length,
+      grouped: [
+        ...live.map(inc => ({ inc, firstSettled: false })),
+        ...settled.map((inc, i) => ({ inc, firstSettled: i === 0 })),
+      ],
+    }
+  }, [filtered])
+
   const exportMeta = { status, category, priority, count: filtered.length }
   const advancedActive = category !== 'all' || priority !== 'all'
 
@@ -807,7 +822,10 @@ export default function IncidentsSection({
       )}
 
       {/* ================= CARDS ================= */}
-      {filtered.map((inc, index) => {
+      {/* Live first, then the settled ones under their own heading. An
+          official works the queue; a month of resolved reports at the same
+          height as today's buries the ones that still need dispatching. */}
+      {grouped.map(({ inc, firstSettled }, index) => {
         const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
         const pri = PRIORITY_CONFIG[inc.priority] || PRIORITY_CONFIG.Medium
         const st = STATUS_CONFIG[inc.status] || STATUS_CONFIG.pending
@@ -834,11 +852,19 @@ export default function IncidentsSection({
           : pri.color
 
         return (
-          <article key={inc.id} className="white-card inc-card inc-lift overflow-hidden"
+          <Fragment key={inc.id}>
+          {firstSettled && (
+            <div className="flex items-center gap-2.5 mt-3 mb-0.5 px-0.5">
+              <span className="inc-t10 font-bold uppercase tracking-[0.12em] text-white/70">
+                Resolved · {settledCount}
+              </span>
+              <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
+            </div>
+          )}
+          <article className="white-card inc-card inc-lift overflow-hidden"
             style={{
               animationDelay: `${Math.min(index, 8) * 25}ms`,
               borderLeft: `4px solid ${railColor}`,
-              opacity: isResolved ? 0.82 : 1,
             }}>
             <div className="p-3.5">
 
@@ -1059,6 +1085,7 @@ export default function IncidentsSection({
               </div>
             )}
           </article>
+          </Fragment>
         )
       })}
 
