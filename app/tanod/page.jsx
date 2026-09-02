@@ -18,6 +18,9 @@ import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
 import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { greeting } from '@/lib/homeSummary'
+import { KINDS } from '@/lib/offline/outbox'
+import { enqueue, drainOutbox } from '@/lib/offline/sync'
+import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import {
@@ -112,6 +115,7 @@ export default function TanodDashboard() {
   // already paged through.
   const pageSizeRef = useRef(PAGE_SIZE)
   const [busyStamp, setBusyStamp] = useState(null)
+  const [staleSince, setStaleSince] = useState(null)
   const [directionsMenu, setDirectionsMenu] = useState(null)
 
   // Mirror of incident ids, so the realtime handler can tell "new to me"
@@ -204,10 +208,24 @@ export default function TanodDashboard() {
         }
         setProfile(prof)
 
-        const { rows, hasMore } = await fetchIncidents(user.id)
-        if (cancelled) return
-        setIncidents(rows)
-        setHasMore(hasMore)
+        try {
+          const { rows, hasMore } = await fetchIncidents(user.id)
+          if (cancelled) return
+          setIncidents(rows)
+          setHasMore(hasMore)
+          setStaleSince(null)
+          snapshot.save(user.id, 'incidents', rows)
+        } catch (loadErr) {
+          // No signal, or the request failed. Show what was last loaded
+          // rather than an empty page — and say when it is from, so nobody
+          // reads month-old assignments as today's.
+          const cached = await snapshot.load(user.id, 'incidents')
+          if (cancelled) return
+          if (!cached) throw loadErr
+          setIncidents(cached.rows)
+          setHasMore(false)
+          setStaleSince(cached.savedAt)
+        }
       } catch (err) {
         console.error('Failed to load dashboard:', err)
         if (!cancelled) toast.error('Failed to load your assignments. Please refresh.')
@@ -219,6 +237,13 @@ export default function TanodDashboard() {
 
     return () => { cancelled = true }
   }, [supabase, router, fetchIncidents])
+
+  // Anything queued in a previous session goes out as soon as this one has
+  // a profile to send it as.
+  useEffect(() => {
+    if (!profile?.id) return
+    drainOutbox(profile.id)
+  }, [profile?.id])
 
   // Revalidate when the tab regains focus. The realtime filter only delivers
   // rows where assigned_to is still this tanod, so re-assignments AWAY from
@@ -331,8 +356,30 @@ export default function TanodDashboard() {
     setBusyStamp(null)
 
     if (error || !data) {
-      console.error('Could not record response:', error)
-      toast.error('Could not save that. Check your signal and try again.')
+      // The tap is not lost. A tanod standing in a dead spot is exactly who
+      // this is for, so it goes in the outbox and syncs when signal returns.
+      const kind = field === 'arrived_at' ? KINDS.ARRIVE : KINDS.ACKNOWLEDGE
+      const queued = await enqueue(kind,
+        { id: incident.id, queuedAt: new Date().toISOString() },
+        { userId: profile?.id })
+
+      if (!queued) {
+        console.error('Could not record response, and could not queue it:', error)
+        toast.error('Could not save that, and this browser will not let it be held. Try again with a signal.')
+        return
+      }
+
+      // Show it locally so the card moves on. The database has the last
+      // word when this syncs — its own stamp is what counts.
+      setIncidents(prev => prev.map(i => (i.id === incident.id
+        ? { ...i, [field]: new Date().toISOString(), queuedOffline: true }
+        : i)))
+      notify.info({
+        kind: 'Saved for later',
+        title: incident.title,
+        body: 'No signal — this will be sent the moment you are back online.',
+        id: `queued-${incident.id}-${field}`,
+      })
       return
     }
 
@@ -376,8 +423,32 @@ export default function TanodDashboard() {
     }).eq('id', incidentId)
 
     if (error) {
-      // Keep the modal open so the tanod's notes/photo aren't lost
-      toast.error('Failed to save resolution. Please try again.')
+      // A resolution written in the field is worth holding onto. Only the
+      // row is queued — a photo that never uploaded cannot be replayed from
+      // here, so the modal stays open when there is one.
+      if (imageUrl) {
+        toast.error('Could not save. The photo needs a connection — try again when you have one.')
+        return
+      }
+      const queued = await enqueue(KINDS.RESOLVE,
+        { id: incidentId, notes, imageUrl: null, resolvedAt },
+        { userId: profile?.id })
+      if (!queued) {
+        toast.error('Failed to save resolution. Please try again.')
+        return
+      }
+      setIncidents(prev => prev.map(i =>
+        i.id === incidentId
+          ? { ...i, status: 'resolved', resolution_notes: notes, resolved_at: resolvedAt, queuedOffline: true }
+          : i
+      ))
+      setResolveModal(null)
+      notify.info({
+        kind: 'Saved for later',
+        title: 'Resolution held',
+        body: 'No signal — it will be sent the moment you are back online.',
+        id: `queued-resolve-${incidentId}`,
+      })
       return
     }
 
@@ -578,6 +649,16 @@ export default function TanodDashboard() {
 
           {!loading && activeSection === 'home' && (
             <div className="space-y-6 fade-up max-w-2xl mx-auto">
+              {staleSince && (
+                <div className="rounded-2xl px-4 py-2.5 flex items-center gap-2.5"
+                  style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.28)' }}>
+                  <Clock size={14} className="text-white flex-shrink-0" aria-hidden="true" />
+                  <p className="text-[12.5px] font-semibold text-white">
+                    Showing what was last loaded, as of {snapshot.asOf(staleSince)}.
+                  </p>
+                </div>
+              )}
+
               <HomeSummary
                 greeting={greeting()}
                 name={profile?.full_name?.split(' ')[0]}

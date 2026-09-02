@@ -145,9 +145,19 @@ export function ReportOutcome({ incident, availability, barangayPhone, onDone })
   const offDutyFallback = incident?.assignment_method === 'auto_offduty'
   const basis = LEGAL_BASIS[incident?.category]
 
-  const state = offDutyFallback ? 'offduty' : assigned ? 'assigned' : 'unassigned'
+  // A report that never reached the database is not "recorded and officials
+  // will see it" — it is on this phone. Saying otherwise to someone who has
+  // just reported a fire is the worst lie this screen could tell.
+  const state = incident?.queuedOffline
+    ? 'queued'
+    : offDutyFallback ? 'offduty' : assigned ? 'assigned' : 'unassigned'
 
   const cfg = {
+    queued: {
+      bg: '#eff6ff', border: '#dbeafe', color: '#1d4ed8', Icon: Clock,
+      title: 'Saved on this phone — not sent yet',
+      body: 'You have no connection, so nobody at the barangay can see this yet. It sends by itself the moment you are back online. If anyone is in danger, call the numbers below now.',
+    },
     assigned: {
       bg: '#f0fdf4', border: '#dcfce7', color: '#16a34a', Icon: Shield,
       title: 'A tanod has been assigned',

@@ -15,6 +15,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Shield, ShieldOff, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { KINDS } from '@/lib/offline/outbox'
+import { enqueue } from '@/lib/offline/sync'
 
 const OFF_DUTY_BEAT_MS = 2 * 60 * 1000  // presence only
 const ON_DUTY_BEAT_MS = 60 * 1000       // presence + location point
@@ -105,9 +107,22 @@ export default function DutyToggle({ profile, onStatusChange }) {
 
     setSaving(false)
     if (error) {
-      setOnDuty(!next)
-      toast.error('Could not update your duty status. Please try again.')
-      console.error('duty toggle failed:', error)
+      // Going on duty from a dead spot is a real case — a tanod starting a
+      // shift somewhere with no bars. Hold it rather than snapping the
+      // switch back and losing what they meant.
+      const queued = await enqueue(KINDS.DUTY,
+        { userId: profile.id, onDuty: next }, { userId: profile.id })
+      if (!queued) {
+        setOnDuty(!next)
+        toast.error('Could not update your duty status. Please try again.')
+        console.error('duty toggle failed:', error)
+        return
+      }
+      toast(next
+        ? 'No signal — you will show as on duty once you reconnect.'
+        : 'No signal — you will show as off duty once you reconnect.',
+        { icon: '📡', duration: 6000 })
+      onStatusChange?.(next)
       return
     }
 
