@@ -1,11 +1,17 @@
-const CACHE_NAME = 'bh360-v3'
-const STATIC_CACHE = 'bh360-static-v3'
+const CACHE_NAME = 'bh360-v4'
+const STATIC_CACHE = 'bh360-static-v4'
+
+// The runtime cache grew without limit before: every page a person visited
+// stayed forever. A phone with little free space is exactly the device this
+// app is installed on.
+const RUNTIME_MAX = 60
 
 // Files to cache for offline use
 const STATIC_FILES = [
   '/',
   '/login',
   '/register',
+  '/offline',
   '/logo.png',
   '/manifest.json',
   '/icon-192.png',
@@ -26,7 +32,13 @@ self.addEventListener('install', (event) => {
       })
     })
   )
-  self.skipWaiting()
+  // No skipWaiting() here. Taking over mid-session lets a new worker serve
+  // assets the running page was not built against. The new worker waits for
+  // the next load, unless a page explicitly asks it to take over.
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting()
 })
 
 // Activate event - clean up old caches
@@ -66,8 +78,14 @@ self.addEventListener('fetch', (event) => {
         // Cache successful responses
         if (response.status === 200) {
           const responseClone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone)
+          caches.open(CACHE_NAME).then(async (cache) => {
+            await cache.put(request, responseClone)
+            // Oldest out first once the cache is full. Crude, but it keeps
+            // an installed app from quietly eating a phone's storage.
+            const keys = await cache.keys()
+            if (keys.length > RUNTIME_MAX) {
+              await Promise.all(keys.slice(0, keys.length - RUNTIME_MAX).map(k => cache.delete(k)))
+            }
           })
         }
         return response
@@ -76,9 +94,10 @@ self.addEventListener('fetch', (event) => {
         // Network failed - try cache
         return caches.match(request).then((cached) => {
           if (cached) return cached
-          // Fallback to offline page (or just the home page)
+          // A page we cannot serve should say so, not drop someone onto
+          // the landing screen with no explanation.
           if (request.mode === 'navigate') {
-            return caches.match('/')
+            return caches.match('/offline').then(page => page || caches.match('/'))
           }
         })
       })
