@@ -11,8 +11,10 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
-import { useNotificationReads, unreadCount } from '@/lib/notificationReads'
+import { useNotificationReads, unreadCount, notifKey } from '@/lib/notificationReads'
 import RecordCard, { RecordGroup, Chip, PriorityChip } from '@/components/RecordCard'
+import { HomeSummary, ActivityTile } from '@/components/HomeSummary'
+import { greeting, activityCounts, summarySentence, mostPressing } from '@/lib/homeSummary'
 import { isSettled, toneFor, progressOf, partitionByLiveness } from '@/lib/recordState'
 import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
 import { notify } from '@/components/Toast'
@@ -721,6 +723,91 @@ export default function ResidentDashboard() {
   // opened — there was nothing for reading one to change.
   const unreadAnnouncementCount = unreadCount(announcementNotifs, readKeys)
 
+  // Everything the home screen says, derived once. The counts are of what
+  // is outstanding, never of how many rows exist — the old tiles read "15"
+  // when 13 of them were resolved, which answers nothing.
+  const counts = useMemo(
+    () => activityCounts({
+      incidents, tickets, documentRequests, blotterCases,
+      unreadAnnouncements: unreadAnnouncementCount,
+      isCaseOpen: caseIsOpen,
+    }),
+    [incidents, tickets, documentRequests, blotterCases, unreadAnnouncementCount]
+  )
+
+  const homeSummary = useMemo(
+    () => summarySentence(counts, { barangayName: profile?.barangays?.name }),
+    [counts, profile]
+  )
+
+  const pressing = useMemo(
+    () => mostPressing({ incidents, documentRequests }),
+    [incidents, documentRequests]
+  )
+
+  // The nearest RA 11032 deadline still running, for the tile caption.
+  const nextDocumentDue = useMemo(() => {
+    const open = documentRequests
+      .filter(d => !['released', 'denied'].includes(d.status) && d.due_at)
+      .sort((a, b) => new Date(a.due_at) - new Date(b.due_at))[0]
+    if (!open) return null
+    const state = deadlineState(open)
+    return state.label || `due ${formatDeadline(open.due_at)}`
+  }, [documentRequests])
+
+  // The tiles the home screen shows. Blotter only appears once a case
+  // exists — "0 blotter cases, none filed" is noise for the overwhelming
+  // majority of residents, and a lone fifth tile rebuilds the ragged grid
+  // this change set out to remove.
+  const homeTiles = useMemo(() => {
+    const tiles = [
+      {
+        key: 'incidents', icon: <AlertTriangle size={17} />, tone: 'waiting',
+        count: counts.incidents.open, quiet: counts.incidents.open === 0,
+        label: counts.incidents.open === 1 ? 'Report open' : 'Reports open',
+        caption: counts.incidents.total
+          ? `${counts.incidents.total - counts.incidents.open} resolved`
+          : 'none filed yet',
+        onClick: () => navClick('incidents'),
+      },
+      {
+        key: 'documents', icon: <FileCheck2 size={17} />, tone: 'active',
+        count: counts.documents.open, quiet: counts.documents.open === 0,
+        label: counts.documents.open === 1 ? 'Document pending' : 'Documents pending',
+        caption: nextDocumentDue || (counts.documents.total
+          ? `${counts.documents.total} requested`
+          : 'none requested yet'),
+        onClick: () => navClick('documents'),
+      },
+      {
+        key: 'tickets', icon: <FileText size={17} />, tone: 'active',
+        count: counts.tickets.open, quiet: counts.tickets.open === 0,
+        label: counts.tickets.open === 1 ? 'Ticket open' : 'Tickets open',
+        caption: counts.tickets.total ? `${counts.tickets.total} in total` : 'none opened yet',
+        onClick: () => navClick('tickets'),
+      },
+      {
+        key: 'announcements', icon: <Bell size={17} />, tone: 'info',
+        count: unreadAnnouncementCount, quiet: unreadAnnouncementCount === 0,
+        label: 'Unread',
+        caption: `${announcements.length} announcement${announcements.length === 1 ? '' : 's'}`,
+        onClick: () => navClick('announcements'),
+      },
+    ]
+    if (counts.cases.total > 0) {
+      tiles.push({
+        key: 'blotter', icon: <Gavel size={17} />, tone: 'waiting',
+        count: counts.cases.open, quiet: counts.cases.open === 0,
+        label: counts.cases.open === 1 ? 'Blotter case' : 'Blotter cases',
+        caption: `${counts.cases.total} in total`,
+        onClick: () => navClick('blotter'),
+      })
+    }
+    return tiles
+  }, [counts, nextDocumentDue, unreadAnnouncementCount, announcements.length, navClick])
+
+
+
   // Opening the section is what marks them read, which is what finally
   // clears the badge.
   useEffect(() => {
@@ -838,16 +925,18 @@ export default function ResidentDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'home' && (
             <div className="space-y-6 fade-up max-w-4xl mx-auto">
-              <div className="white-card p-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>Welcome back</p>
-                  <h2 className="text-2xl font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }}>{profile?.full_name?.split(' ')[0]} 👋</h2>
-                  <p className="text-gray-400 text-sm mt-1">Here's what's happening in {profile?.barangays?.name || 'your barangay'}.</p>
-                </div>
-                <div className="hidden sm:block w-16 h-16 relative">
-                  <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain opacity-20" />
-                </div>
-              </div>
+              <HomeSummary
+                greeting={greeting()}
+                name={profile?.full_name?.split(' ')[0]}
+                summary={homeSummary.text}
+                pressing={pressing}
+                allClearNote={
+                  unreadAnnouncementCount > 0
+                    ? `${unreadAnnouncementCount} announcement${unreadAnnouncementCount === 1 ? '' : 's'} went up since you last looked`
+                    : 'Everything you have filed has been dealt with'
+                }
+                onOpen={() => pressing?.href && router.push(pressing.href)}
+              />
 
               {/* Account verification. Shown on Home rather than as a blocking
                   interstitial: an unverified resident can still do everything
@@ -885,41 +974,62 @@ export default function ResidentDashboard() {
               })()}
 
               <div className="fade-up-1">
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Your Activity</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Announcements', value: announcements.length, icon: Bell, section: 'announcements' },
-                    { label: 'My Incidents', value: incidents.length, icon: AlertTriangle, section: 'incidents' },
-                    { label: 'My Tickets', value: tickets.length, icon: FileText, section: 'tickets' },
-                  ].map(({ label, value, icon: Icon, section }) => (
-                    <button key={label} onClick={() => navClick(section)} className="glass-card p-5 text-left">
-                      <Icon size={20} className="mb-3 text-white opacity-80" />
-                      <p className="text-3xl font-bold text-white">{value}</p>
-                      <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>{label}</p>
-                    </button>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
+                  {homeSummary.allClear ? 'Your activity' : 'Needs you'}
+                </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {homeTiles.map((tile, i) => (
+                    <ActivityTile key={tile.key} {...tile}
+                      className={homeTiles.length % 2 === 1 && i === homeTiles.length - 1
+                        ? 'col-span-2 lg:col-span-1' : ''} />
                   ))}
                 </div>
               </div>
 
               <div className="fade-up-2">
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Quick Actions</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
+                {/* Reporting an emergency used to look exactly like asking the
+                    AI a question. It is the primary now — in BH360 purple, not
+                    red: red on this screen is reserved for the thing that is
+                    actually wrong, or it stops meaning anything. */}
+                <button onClick={() => router.push('/resident/report')}
+                  className="white-card relative w-full text-left p-4 pl-[22px] flex items-center gap-3.5
+                    cursor-pointer focus:outline-none focus-visible:ring-2"
+                  style={{ '--tw-ring-color': '#ffffff' }}>
+                  <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
+                    style={{ background: '#5B54E8' }} aria-hidden="true" />
+                  <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
+                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                    <AlertTriangle size={20} className="text-white" />
+                  </span>
+                  <span className="flex-1 min-w-0 block">
+                    <span className="block text-[15px] font-extrabold text-gray-800">Report an incident</span>
+                    <span className="block text-xs mt-0.5" style={{ color: '#6b7280' }}>
+                      Fire, flood, injury, crime — the barangay is told at once
+                    </span>
+                  </span>
+                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                </button>
+
+                {/* AI Assistant and Announcements were here too, but they are
+                    sidebar destinations rather than things you do. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   {[
-                    { label: 'Report Incident', desc: 'Notify the barangay', icon: AlertTriangle, action: () => router.push('/resident/report') },
-                    { label: 'Request Document', desc: 'Clearance, indigency, ID', icon: FileCheck2, action: () => router.push('/resident/documents/new') },
-                    { label: 'New Ticket', desc: 'Request assistance', icon: FileText, action: () => router.push('/resident/ticket/new') },
-                    { label: 'AI Assistant', desc: 'Ask anything', icon: MessageCircle, action: () => navClick('ai') },
-                    { label: 'Announcements', desc: 'View latest news', icon: Bell, action: () => navClick('announcements') },
+                    { label: 'Request a document', desc: 'Clearance, indigency, ID', icon: FileCheck2, action: () => router.push('/resident/documents/new') },
+                    { label: 'Open a ticket', desc: 'Ask the barangay for help', icon: FileText, action: () => router.push('/resident/ticket/new') },
                   ].map(({ label, desc, icon: Icon, action }) => (
-                    <button key={label} onClick={action} className="white-card p-4 flex items-center gap-3 text-left">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                    <button key={label} onClick={action}
+                      className="white-card p-4 flex items-center gap-3 text-left cursor-pointer
+                        focus:outline-none focus-visible:ring-2"
+                      style={{ '--tw-ring-color': '#5B54E8' }}>
+                      <span className="w-10 h-10 rounded-2xl grid place-items-center flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
                         <Icon size={18} className="text-white" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{label}</p>
-                        <p className="text-xs text-gray-400">{desc}</p>
-                      </div>
+                      </span>
+                      <span className="block min-w-0">
+                        <span className="block text-[13.5px] font-semibold text-gray-800">{label}</span>
+                        <span className="block text-[11.5px]" style={{ color: '#9ca3af' }}>{desc}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -928,24 +1038,49 @@ export default function ResidentDashboard() {
               {announcements.length > 0 && (
                 <div className="fade-up-3">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Latest Announcements</p>
-                    <button onClick={() => navClick('announcements')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/85">Latest announcements</p>
+                    <button onClick={() => navClick('announcements')}
+                      className="text-xs font-semibold text-white/75 hover:text-white transition-colors">
+                      View all →
+                    </button>
                   </div>
-                  <div className="space-y-2">
-                    {announcements.slice(0, 2).map(a => (
-                      <button key={a.id} onClick={() => navClick('announcements')}
-                        className="white-card px-4 py-3 flex items-center gap-3 w-full text-left">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-                          <Bell size={14} className="text-white" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
-                          <p className="text-xs text-gray-400 truncate">{a.content}</p>
-                        </div>
-                        <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
-                      </button>
-                    ))}
+                  <div className="space-y-2.5">
+                    {announcementNotifs.slice(0, 3).map(n => {
+                      // Two posts sharing a title were indistinguishable before
+                      // — there was no date on the card at all, and no sign of
+                      // which you had already read.
+                      const unread = !readKeys.has(notifKey(n))
+                      return (
+                        <button key={n.id} onClick={() => navClick('announcements')}
+                          className="white-card px-4 py-3 flex items-center gap-3 w-full text-left cursor-pointer
+                            focus:outline-none focus-visible:ring-2"
+                          style={{ '--tw-ring-color': '#5B54E8' }}>
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ background: unread ? '#5B54E8' : 'transparent' }}
+                            aria-hidden="true" />
+                          <span className="w-8 h-8 rounded-xl grid place-items-center flex-shrink-0"
+                            style={{ background: unread
+                              ? 'linear-gradient(135deg, #5B54E8, #7C75F0)'
+                              : '#e5e7eb' }} aria-hidden="true">
+                            <Bell size={14} className={unread ? 'text-white' : 'text-gray-500'} />
+                          </span>
+                          <span className="flex-1 min-w-0 block">
+                            <span className={`block text-[13.5px] truncate ${unread ? 'font-semibold text-gray-800' : 'font-medium text-gray-600'}`}>
+                              {n.title}
+                            </span>
+                            <span className="block text-xs text-gray-500 truncate">
+                              {n.data.content}
+                            </span>
+                            <span className="block text-[11px] mt-0.5" style={{ color: '#9ca3af' }}
+                              title={fullDate(n.created_at)}>
+                              {timeAgoLong(n.created_at)}
+                            </span>
+                          </span>
+                          <ChevronRight size={14} className="text-gray-300 flex-shrink-0" aria-hidden="true" />
+                          <span className="sr-only">{unread ? 'Unread' : 'Read'}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               )}
