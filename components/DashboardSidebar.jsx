@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
+import { useOnline } from '@/lib/useOnline'
 import Image from 'next/image'
 import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
@@ -40,7 +41,7 @@ export default function DashboardSidebar({
   const [avatarFailed, setAvatarFailed] = useState(false)
   // The footer status dot used to be hardcoded green — it now reflects
   // the real connection state so "online" actually means online.
-  const [online, setOnline] = useState(true)
+  const online = useOnline()
 
   // Pins are stored per-user so accounts on a shared device don't
   // inherit each other's shortcuts.
@@ -56,18 +57,6 @@ export default function DashboardSidebar({
   }, [pinKey])
 
   useEffect(() => { setAvatarFailed(false) }, [profile?.avatar_url])
-
-  useEffect(() => {
-    setOnline(navigator.onLine)
-    const goOnline = () => setOnline(true)
-    const goOffline = () => setOnline(false)
-    window.addEventListener('online', goOnline)
-    window.addEventListener('offline', goOffline)
-    return () => {
-      window.removeEventListener('online', goOnline)
-      window.removeEventListener('offline', goOffline)
-    }
-  }, [])
 
   // Escape closes the sidebar on mobile (matches the overlay tap)
   useEffect(() => {

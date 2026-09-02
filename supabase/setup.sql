@@ -121,6 +121,13 @@ create table if not exists incidents (
   acknowledged_at timestamptz,
   acknowledged_by uuid references profiles(id),
 
+  -- What the DEVICE said the time was when an acknowledgement was queued
+  -- offline. acknowledged_at stays the server's own clock, so the response
+  -- metric cannot be set by a phone; this only records what the tanod's
+  -- device claimed, so a genuinely fast response made with no signal is
+  -- still visible next to the later sync time.
+  acknowledged_offline_at timestamptz,
+
   -- When the tanod reached the scene. With acknowledged_at this separates
   -- the two halves of a response: how long before anyone saw the report,
   -- and how long the travel took. Neither was measurable before — the
@@ -281,6 +288,7 @@ alter table incidents        add column if not exists priority_overridden_at tim
 alter table incidents        add column if not exists acknowledged_at timestamptz;
 alter table incidents        add column if not exists acknowledged_by uuid references profiles(id);
 alter table incidents        add column if not exists arrived_at timestamptz;
+alter table incidents        add column if not exists acknowledged_offline_at timestamptz;
 alter table incidents        add column if not exists assignment_method text;
 alter table incidents        add column if not exists auto_assigned_at timestamptz;
 
@@ -1030,7 +1038,19 @@ begin
   if new.acknowledged_at is not null and old.acknowledged_at is null then
     new.acknowledged_at := now();
     new.acknowledged_by := coalesce(auth.uid(), new.acknowledged_by);
+
+    -- A device may say when it queued this while offline, but only
+    -- backwards: a claim from the future is a broken clock or a lie, and
+    -- one from before the report existed cannot be true either. The
+    -- server's own stamp above is what the metrics use regardless.
+    if new.acknowledged_offline_at is not null then
+      if new.acknowledged_offline_at > now()
+         or new.acknowledged_offline_at < new.created_at then
+        new.acknowledged_offline_at := null;
+      end if;
+    end if;
   elsif old.acknowledged_at is not null then
+    new.acknowledged_offline_at := old.acknowledged_offline_at;
     -- Already stamped. Keep both fields exactly as they were, whatever the
     -- update tried to do with them.
     new.acknowledged_at := old.acknowledged_at;
