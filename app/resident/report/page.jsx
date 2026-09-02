@@ -2,6 +2,8 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { KINDS } from '@/lib/offline/outbox'
+import { enqueue } from '@/lib/offline/sync'
 import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Scale, ShieldAlert } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
@@ -309,9 +311,16 @@ export default function ReportIncident() {
       }
 
       let imageUrl = null
+      let photoLost = false
       if (imageFile) {
         imageUrl = await uploadImage(user.id)
-        if (!imageUrl) return // uploadImage already showed a toast
+        if (!imageUrl) {
+          // The photo could not be uploaded — almost always no signal. A
+          // fire reported without a picture still gets a tanod sent; losing
+          // the whole report because the picture would not go is worse than
+          // losing the picture.
+          photoLost = true
+        }
       }
 
       // Priority comes from the category mapping, never from user input.
@@ -322,7 +331,11 @@ export default function ReportIncident() {
       // .select().single() returns the row AFTER the auto-assign trigger has
       // run, so the outcome screen can tell the resident the truth about
       // whether anyone actually picked it up.
-      const { data: created, error } = await supabase.from('incidents').insert({
+      // The id is ours, not the database's. If this ends up queued and
+      // replayed, the upsert conflicts on it rather than filing the same
+      // fire a second time.
+      const row = {
+        id: crypto.randomUUID(),
         title: form.title.trim(),
         description: form.description.trim(),
         location: form.location.trim(),
@@ -339,11 +352,31 @@ export default function ReportIncident() {
         reported_by: user.id,
         barangay_id: prof.barangay_id,
         status: 'pending',
-      }).select().single()
+      }
+
+      const { data: created, error } = await supabase.from('incidents')
+        .insert(row).select().single()
 
       if (error) {
-        toast.error('Failed to report incident. Please try again.')
+        const queued = await enqueue(KINDS.REPORT, { row }, { userId: user.id })
+        if (!queued) {
+          toast.error('Failed to report incident. Please try again.')
+          return
+        }
+        toast(photoLost
+          ? 'No signal — your report is saved and will be sent when you reconnect. The photo could not be attached.'
+          : 'No signal — your report is saved and will be sent the moment you reconnect.',
+          { icon: '📡', duration: 8000 })
+        // The outcome screen runs off the row we built. It cannot say who
+        // was dispatched, because nothing has been yet.
+        setOutcome({ ...row, queuedOffline: true })
+        window.scrollTo({ top: 0, behavior: 'smooth' })
         return
+      }
+
+      if (photoLost) {
+        toast('Your report was filed, but the photo could not be uploaded.',
+          { icon: '📷', duration: 7000 })
       }
 
       // Show the outcome instead of redirecting — the resident needs to know
