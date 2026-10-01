@@ -5,10 +5,10 @@ import { useEffect, useRef, useMemo, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap, useMapEvents, LayersControl } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MapPin, Layers as LayersIcon } from 'lucide-react'
+import { MapPin, Layers as LayersIcon, Route as RouteIcon, Clock3, ExternalLink } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import IncidentLayer, { zoomModeLabel } from '@/components/IncidentLayer'
-import { CoverageLayer, RadiusTool } from '@/components/MapLayers'
+import { CoverageLayer, HeatmapLayer, RadiusTool } from '@/components/MapLayers'
 import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 
 
@@ -23,7 +23,7 @@ const PRIORITY_STYLES = {
 // phone locked or app backgrounded. Shown amber instead of green.
 const TANOD_STALE_MS = 5 * 60 * 1000
 
-// Inject keyframes ONCE per page: marker pulse and route dash flow.
+// Inject keyframes ONCE per page for fresh Tanod marker pulses.
 if (typeof document !== 'undefined' && !document.getElementById('incident-map-styles')) {
   const style = document.createElement('style')
   style.id = 'incident-map-styles'
@@ -32,12 +32,6 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
       0% { transform: scale(0.7); opacity: 0.7; }
       70% { transform: scale(1.9); opacity: 0; }
       100% { transform: scale(0.7); opacity: 0; }
-    }
-    @keyframes route-dash {
-      to { stroke-dashoffset: -22; }
-    }
-    .route-line {
-      animation: route-dash 1.1s linear infinite;
     }
     .leaflet-container {
       font-family: Sora, sans-serif;
@@ -63,37 +57,64 @@ if (typeof document !== 'undefined' && !document.getElementById('incident-map-st
   document.head.appendChild(style)
 }
 
-// ---- Route helpers ----
-function curvedPath(from, to, curvature = 0.18, segments = 28) {
-  const midLat = (from[0] + to[0]) / 2
-  const midLng = (from[1] + to[1]) / 2
-  const dLat = to[0] - from[0]
-  const dLng = to[1] - from[1]
-  const cLat = midLat - dLng * curvature
-  const cLng = midLng + dLat * curvature
-  const pts = []
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments
-    pts.push([
-      (1 - t) * (1 - t) * from[0] + 2 * (1 - t) * t * cLat + t * t * to[0],
-      (1 - t) * (1 - t) * from[1] + 2 * (1 - t) * t * cLng + t * t * to[1],
-    ])
-  }
-  return pts
+// ---- Road-routing helpers ----
+// OSRM returns GeoJSON coordinates as [longitude, latitude]. Leaflet expects
+// [latitude, longitude], so convert the route geometry before drawing it.
+const OSRM_ROUTE_URL = process.env.NEXT_PUBLIC_OSRM_ROUTE_URL
+  || 'https://router.project-osrm.org/route/v1/driving'
+
+function routeRequestKey(from, to) {
+  // Avoid a new network request for tiny GPS fluctuations. At four decimal
+  // places this refreshes after roughly a few to ten metres in the Philippines.
+  return [...from, ...to].map(value => Number(value).toFixed(4)).join(',')
 }
 
-function distanceMeters(a, b) {
-  const R = 6371000
-  const toRad = d => d * Math.PI / 180
-  const dLat = toRad(b[0] - a[0])
-  const dLng = toRad(b[1] - a[1])
-  const s = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.sqrt(s))
+async function fetchRoadRoute(from, to, signal) {
+  const coordinates = `${from[1]},${from[0]};${to[1]},${to[0]}`
+  const url = `${OSRM_ROUTE_URL}/${coordinates}?overview=full&geometries=geojson&steps=true`
+  const response = await fetch(url, { signal })
+  if (!response.ok) throw new Error(`Routing service returned ${response.status}`)
+
+  const data = await response.json()
+  const route = data.code === 'Ok' ? data.routes?.[0] : null
+  const coordinatesOnRoad = route?.geometry?.coordinates
+  if (!coordinatesOnRoad || coordinatesOnRoad.length < 2) {
+    throw new Error(data.code || 'No road route found')
+  }
+
+  return {
+    path: coordinatesOnRoad.map(([longitude, latitude]) => [latitude, longitude]),
+    meters: route.distance,
+    seconds: route.duration,
+    steps: (route.legs || []).flatMap(leg => leg.steps || []).map(step => ({
+      name: step.name,
+      instruction: step.maneuver?.type === 'depart'
+        ? `Head toward ${step.name || 'the road'}`
+        : step.maneuver?.type === 'arrive'
+          ? 'Arrive at the incident'
+          : `${step.maneuver?.modifier || step.maneuver?.type || 'Continue'}${step.name ? ` onto ${step.name}` : ''}`,
+    })),
+  }
+}
+
+function googleMapsDirectionsUrl(from, to) {
+  const params = new URLSearchParams({
+    api: '1',
+    origin: `${from[0]},${from[1]}`,
+    destination: `${to[0]},${to[1]}`,
+    travelmode: 'driving',
+  })
+  return `https://www.google.com/maps/dir/?${params.toString()}`
 }
 
 function fmtDist(m) {
   return m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(1)}km`
+}
+
+function fmtDuration(seconds) {
+  if (!Number.isFinite(seconds)) return '—'
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
 // ---- Incident pins ----
@@ -325,7 +346,8 @@ export default function IncidentMap({
         )
         if (valid.length === 0) return null
         const latest = valid[valid.length - 1]
-        const stale = Date.now() - new Date(latest.recorded_at).getTime() > TANOD_STALE_MS
+        const recordedAt = new Date(latest.recorded_at).getTime()
+        const stale = !Number.isFinite(recordedAt) || Date.now() - recordedAt > TANOD_STALE_MS
         return { tanodId, tanod, latest, stale, firstAt: valid[0].recorded_at }
       })
       .filter(Boolean)
@@ -336,7 +358,9 @@ export default function IncidentMap({
     [tanodEntries]
   )
 
-  // Response routes: tanod → their assigned incident(s)
+  // Route requests use the newest responder location and the incident pin.
+  // The map only draws a route returned by the road router; it never invents
+  // a curved straight-line path when routing is unavailable.
   const routes = useMemo(() => {
     const out = []
     for (const entry of tanodEntries) {
@@ -350,22 +374,86 @@ export default function IncidentMap({
           key: `route-${entry.tanodId}-${inc.id}`,
           entry,
           incident: inc,
-          path: curvedPath(from, to),
-          meters: distanceMeters(from, to),
+          from,
+          to,
+          requestKey: routeRequestKey(from, to),
         })
       }
     }
     return out
   }, [tanodEntries, validIncidents])
 
+  const [roadRoutes, setRoadRoutes] = useState({})
+
+  useEffect(() => {
+    if (routes.length === 0) return undefined
+
+    const controller = new AbortController()
+    const requests = routes.filter(route => (
+      roadRoutes[route.key]?.requestKey !== route.requestKey
+    ))
+
+    if (requests.length === 0) return undefined
+
+    // Debounce live location changes so a rapid stream of GPS points does not
+    // create a burst of requests to the public routing service.
+    const timer = window.setTimeout(async () => {
+      const results = await Promise.all(requests.map(async route => {
+        if (route.entry.stale) {
+          return [route.key, {
+            requestKey: route.requestKey,
+            status: 'stale',
+            path: [],
+          }]
+        }
+
+        try {
+          const roadRoute = await fetchRoadRoute(route.from, route.to, controller.signal)
+          return [route.key, {
+            requestKey: route.requestKey,
+            status: 'ready',
+            ...roadRoute,
+          }]
+        } catch (error) {
+          if (controller.signal.aborted) return null
+          return [route.key, {
+            requestKey: route.requestKey,
+            status: 'unavailable',
+            path: [],
+            error: error instanceof Error ? error.message : 'Unable to calculate a road route',
+          }]
+        }
+      }))
+
+      if (controller.signal.aborted) return
+      const nextResults = Object.fromEntries(results.filter(Boolean))
+      setRoadRoutes(current => ({ ...current, ...nextResults }))
+    }, 350)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [routes, roadRoutes])
+
+  const routedRoutes = useMemo(() => routes.map(route => {
+    if (route.entry.stale) return { ...route, status: 'stale', path: [] }
+    const result = roadRoutes[route.key]
+    if (!result || result.requestKey !== route.requestKey) {
+      return { ...route, status: route.entry.stale ? 'stale' : 'loading', path: [] }
+    }
+    return { ...route, ...result }
+  }), [routes, roadRoutes])
+  const readyRouteCount = routedRoutes.filter(route => route.status === 'ready').length
+
   const respondingByTanod = useMemo(() => {
     const m = {}
-    for (const r of routes) {
+    for (const r of routedRoutes) {
       if (!m[r.entry.tanodId]) m[r.entry.tanodId] = []
       m[r.entry.tanodId].push(r)
     }
     return m
-  }, [routes])
+  }, [routedRoutes])
 
   const tanodNameById = useMemo(() => {
     const m = {}
@@ -435,9 +523,8 @@ export default function IncidentMap({
         <ResizeHandler />
         <ZoomReporter onZoom={setZoom} />
 
-        {/* Optional overlays. Note there is no heatmap toggle any more —
-            density is now what the map shows automatically when zoomed out,
-            rather than something the user has to know to switch on. */}
+        {/* Optional analysis overlays. */}
+        {overlays?.heatmap && <HeatmapLayer incidents={overlays.heatmap} />}
         {overlays?.coverage && (
           <CoverageLayer
             trailPoints={overlays.coverage.trailPoints}
@@ -455,29 +542,29 @@ export default function IncidentMap({
           />
         )}
 
-        {/* Response routes: white casing + animated orange dashes */}
-        {routes.map(r => (
+        {/* Only real road-network geometry is drawn; never show a guessed path. */}
+        {routedRoutes.filter(r => r.status === 'ready').map(r => (
           <Polyline
             key={`${r.key}-casing`}
             positions={r.path}
-            pathOptions={{ color: isDark ? '#0f1117' : '#ffffff', weight: 7, opacity: 0.9, lineCap: 'round' }}
+            pathOptions={{ color: isDark ? '#0f1117' : '#ffffff', weight: 9, opacity: 0.96, lineCap: 'round', lineJoin: 'round' }}
           />
         ))}
-        {routes.map(r => (
+        {routedRoutes.filter(r => r.status === 'ready').map(r => (
           <Polyline
             key={r.key}
             positions={r.path}
             pathOptions={{
               color: '#f97316',
-              weight: 4,
-              opacity: 0.9,
-              dashArray: '10 12',
+              weight: 5,
+              opacity: 0.96,
+              dashArray: '12 7',
               lineCap: 'round',
-              className: 'route-line',
+              lineJoin: 'round',
             }}
           >
             <Tooltip sticky>
-              🛡️ {r.entry.tanod?.full_name?.split(' ')[0] || 'Tanod'} → {r.incident.title} · {fmtDist(r.meters)} away
+              🛡️ {r.entry.tanod?.full_name?.split(' ')[0] || 'Tanod'} → {r.incident.title} · {fmtDist(r.meters)} road route · {fmtDuration(r.seconds)} est.
             </Tooltip>
           </Polyline>
         ))}
@@ -515,18 +602,37 @@ export default function IncidentMap({
                         : (respondingByTanod[entry.tanodId] ? '#c2410c' : '#059669'),
                     }}>
                       {entry.stale ? 'On duty · signal lost'
-                        : (respondingByTanod[entry.tanodId] ? 'Responding' : 'On duty · available')}
+                        : (respondingByTanod[entry.tanodId] ? 'Assigned to incident' : 'On duty · available')}
                     </p>
                   </div>
                 </div>
 
                 {respondingByTanod[entry.tanodId]?.map(r => (
                   <div key={r.key} style={{
-                    fontSize: '11px', color: '#9a3412', background: '#fff7ed',
-                    border: '1px solid #fed7aa', borderRadius: '8px',
-                    padding: '5px 8px', marginBottom: '6px',
+                    fontSize: '11px', color: r.status === 'ready' ? '#9a3412' : '#6b7280',
+                    background: r.status === 'ready' ? '#fff7ed' : '#f3f4f6',
+                    border: `1px solid ${r.status === 'ready' ? '#fed7aa' : '#e5e7eb'}`,
+                    borderRadius: '8px', padding: '7px 8px', marginBottom: '7px',
                   }}>
-                    ➜ {r.incident.title} · <b>{fmtDist(r.meters)}</b> away
+                    <div style={{ fontWeight: 700, marginBottom: '3px' }}>
+                      <RouteIcon size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
+                      {r.incident.title}
+                    </div>
+                    {r.status === 'ready' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                        <span>{fmtDist(r.meters)} by road</span>
+                        <span><Clock3 size={11} style={{ display: 'inline', verticalAlign: '-2px' }} /> {fmtDuration(r.seconds)} est.</span>
+                      </div>
+                    )}
+                    {r.status === 'loading' && <span>Finding a road route…</span>}
+                    {r.status === 'stale' && <span>Route paused: responder location is over 5 minutes old.</span>}
+                    {r.status === 'unavailable' && <span>No road route found. Check the pin or use navigation.</span>}
+                    {r.status !== 'stale' && (
+                      <a href={googleMapsDirectionsUrl(r.from, r.to)} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '5px', color: '#5B54E8', fontWeight: 700, textDecoration: 'none' }}>
+                        Open navigation <ExternalLink size={11} />
+                      </a>
+                    )}
                   </div>
                 ))}
 
@@ -683,7 +789,7 @@ export default function IncidentMap({
           )}
           {routes.length > 0 && (
             <span style={{ color: '#c2410c', background: '#fff7ed', padding: '1px 6px', borderRadius: '10px' }}>
-              🚨 {routes.length} responding
+              🚨 {routes.length} assigned
             </span>
           )}
         </div>
@@ -698,13 +804,18 @@ export default function IncidentMap({
             backdropFilter: 'blur(6px)',
             boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
           }}>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
+          <span className="text-[10px] font-extrabold tracking-wide" style={{ color: isDark ? '#e8eaf2' : '#374151' }}>
+            LIVE MAP
+          </span>
+          <span className="text-[10px]" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>·</span>
           <LayersIcon size={11} style={{ color: isDark ? '#8b85ff' : '#5B54E8' }} />
-          <span className="text-[11px] font-bold" style={{ color: isDark ? '#e8eaf2' : '#374151' }}>
+          <span className="text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
             {viewMode.label}
           </span>
-          {viewMode.hint && (
-            <span className="text-[10px] hidden sm:inline" style={{ color: isDark ? '#6b7280' : '#9ca3af' }}>
-              · {viewMode.hint}
+          {routes.length > 0 && (
+            <span className="text-[10px] font-bold" style={{ color: isDark ? '#fb923c' : '#c2410c' }}>
+              · {readyRouteCount}/{routes.length} routes
             </span>
           )}
         </div>
@@ -734,7 +845,7 @@ export default function IncidentMap({
           <span className="text-[11px]" aria-hidden="true">🛡️</span> Tanod
         </span>
         <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>
-          <span className="flex-shrink-0" style={{ width: '18px', borderTop: '3px dashed #f97316' }} /> En route
+          <span className="flex-shrink-0" style={{ width: '18px', borderTop: '3px dashed #f97316' }} /> Road route
         </span>
         {overlays?.coverage && (
           <span className="flex items-center gap-1.5 text-[10px] font-bold" style={{ color: isDark ? '#9aa3b8' : '#6b7280' }}>

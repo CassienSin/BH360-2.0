@@ -82,6 +82,28 @@ create table if not exists announcements (
 create index if not exists idx_announcements_barangay on announcements(barangay_id);
 create index if not exists idx_announcements_published on announcements(published_at);
 
+-- Appointments (barangay officials' schedules and reminders)
+create table if not exists appointments (
+  id uuid default gen_random_uuid() primary key,
+  barangay_id uuid not null references barangays(id) on delete cascade,
+  created_by uuid not null references profiles(id) on delete cascade,
+  title text not null check (char_length(trim(title)) between 1 and 120),
+  participant_name text check (participant_name is null or char_length(participant_name) <= 120),
+  notes text check (notes is null or char_length(notes) <= 1000),
+  starts_at timestamptz not null,
+  remind_at timestamptz not null,
+  reminder_sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint appointments_reminder_before_start check (remind_at < starts_at)
+);
+create index if not exists appointments_barangay_starts_at_idx
+  on appointments(barangay_id, starts_at);
+create index if not exists appointments_due_reminders_idx
+  on appointments(barangay_id, remind_at)
+  where reminder_sent_at is null;
+comment on table appointments is
+  'Appointments recorded by barangay officials, with a scheduled reminder time.';
+
 -- Incidents
 -- legal_basis / response_mode / auto_escalated: captured AT REPORT TIME
 -- from lib/legalBasis.js — frozen at creation so the audit trail doesn't
@@ -442,6 +464,46 @@ drop policy if exists "announcements: officials delete own barangay" on announce
 create policy "announcements: officials delete own barangay"
   on announcements for delete
   using (public.my_role() = 'official' and barangay_id = public.my_barangay_id());
+
+-- APPOINTMENTS — officials manage schedules only for their own barangay.
+alter table appointments enable row level security;
+
+drop policy if exists "appointments: officials read own barangay" on appointments;
+create policy "appointments: officials read own barangay"
+  on appointments for select
+  using (
+    public.my_role() = 'official'
+    and barangay_id = public.my_barangay_id()
+  );
+
+drop policy if exists "appointments: officials create own barangay" on appointments;
+create policy "appointments: officials create own barangay"
+  on appointments for insert
+  with check (
+    public.my_role() = 'official'
+    and barangay_id = public.my_barangay_id()
+    and created_by = auth.uid()
+  );
+
+drop policy if exists "appointments: officials update own barangay" on appointments;
+create policy "appointments: officials update own barangay"
+  on appointments for update
+  using (
+    public.my_role() = 'official'
+    and barangay_id = public.my_barangay_id()
+  )
+  with check (
+    public.my_role() = 'official'
+    and barangay_id = public.my_barangay_id()
+  );
+
+drop policy if exists "appointments: officials delete own barangay" on appointments;
+create policy "appointments: officials delete own barangay"
+  on appointments for delete
+  using (
+    public.my_role() = 'official'
+    and barangay_id = public.my_barangay_id()
+  );
 
 -- INCIDENTS
 drop policy if exists "incidents: read same barangay or super admin" on incidents;
@@ -1183,6 +1245,7 @@ create trigger stamp_incident_response_trigger
 -- ============================================================================
 alter table incidents       replica identity full;
 alter table tickets         replica identity full;
+alter table appointments    replica identity full;
 alter table ticket_messages replica identity full;
 alter table announcements   replica identity full;
 -- profiles is in the publication because both dashboards depend on it: the
@@ -1195,6 +1258,7 @@ alter table tanod_locations replica identity full;
 
 do $$ begin alter publication supabase_realtime add table incidents;       exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table tickets;         exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table appointments;    exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table ticket_messages; exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table announcements;   exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table profiles;        exception when duplicate_object then null; end $$;

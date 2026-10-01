@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { Rectangle, Circle, CircleMarker, Tooltip, useMapEvents } from 'react-leaflet'
 import { coverageGrid, boundsOf, distanceMeters, formatDistance } from '@/lib/geo'
 
@@ -107,6 +107,11 @@ export function HeatmapLayer({ incidents = [], radiusMeters = 120 }) {
 ======================================================================== */
 export function RadiusTool({ active, radius = 200, incidents = [], tanodPositions = [], onResult }) {
   const [center, setCenter] = useState(null)
+  const onResultRef = useRef(onResult)
+
+  useEffect(() => {
+    onResultRef.current = onResult
+  }, [onResult])
 
   useMapEvents({
     click(e) {
@@ -128,7 +133,21 @@ export function RadiusTool({ active, radius = 200, incidents = [], tanodPosition
     return { incidents: inc, tanods: tan }
   }, [center, radius, incidents, tanodPositions])
 
-  useEffect(() => { onResult?.(inside) }, [inside]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Parent renders may recreate incident/position arrays even when their
+  // contents are unchanged. Report only when the measured result changes, or
+  // the callback's setState can trigger an update loop.
+  const resultSignature = inside
+    ? JSON.stringify({
+        center,
+        radius,
+        incidents: inside.incidents.map(i => i.id),
+        tanods: inside.tanods.map(t => t.tanodId),
+      })
+    : 'no-measurement'
+
+  useEffect(() => {
+    onResultRef.current?.(inside)
+  }, [resultSignature]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!active || !center) return null
 

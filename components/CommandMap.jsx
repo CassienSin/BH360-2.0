@@ -2,12 +2,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import {
-  Activity, Shield, Clock, AlertTriangle, Radar, Sun, Moon, Layers,
+  Activity, Shield, AlertTriangle, Radar, Sun, Moon, Layers,
   Crosshair, History, Play, Pause, X, Send, Phone, MapPin, Navigation, Flame,
+  Search, Map as MapIcon, List, FileText,
 } from 'lucide-react'
-import { timeAgo, fullDate } from '@/lib/timeAgo'
+import { timeAgo } from '@/lib/timeAgo'
 import { rankResponders, formatDistance, formatEta } from '@/lib/geo'
-import { useCoverageStats, stateAtTime } from '@/lib/mapStats'
+import { stateAtTime } from '@/lib/mapStats'
 import { LEGAL_BASIS } from '@/lib/legalBasis'
 
 const IncidentMap = dynamic(() => import('@/components/IncidentMap'), {
@@ -70,6 +71,8 @@ export default function CommandMap({
   const [playing, setPlaying] = useState(false)
   const [dispatching, setDispatching] = useState(null)
   const [focusGroup, setFocusGroup] = useState(null)
+  const [mobilePane, setMobilePane] = useState('map')
+  const [queueSearch, setQueueSearch] = useState('')
 
   const t = THEME[theme]
 
@@ -140,19 +143,10 @@ export default function CommandMap({
     return c
   }, [incidents])
 
-  const coverage = useCoverageStats(allTrailPoints, validIncidents, 6)
-
   const stats = useMemo(() => {
     const active = incidents.filter(i => i.status !== 'resolved')
     const critical = active.filter(i => i.priority === 'Critical')
     const onDuty = livePositions.filter(p => p.tanod?.on_duty && !p.stale)
-    const resolved = incidents.filter(i => i.resolved_at && i.created_at)
-    const avgMin = resolved.length
-      ? Math.round(
-          resolved.reduce((s, i) =>
-            s + (new Date(i.resolved_at) - new Date(i.created_at)) / 60000, 0) / resolved.length
-        )
-      : null
     const overdue = active.filter(i => {
       const age = Date.now() - new Date(i.created_at).getTime()
       const window = i.priority === 'Critical' ? 15 * 60000
@@ -160,7 +154,7 @@ export default function CommandMap({
         : i.priority === 'Medium' ? 24 * 3600000 : 72 * 3600000
       return i.status === 'pending' && age > window
     }).length
-    return { active: active.length, critical: critical.length, onDuty: onDuty.length, avgMin, overdue }
+    return { active: active.length, critical: critical.length, onDuty: onDuty.length, overdue }
   }, [incidents, livePositions])
 
   const selected = useMemo(
@@ -182,12 +176,15 @@ export default function CommandMap({
 
     const order = { pending: 1, assigned: 2, resolved: 3 }
     const rank = { Critical: 4, High: 3, Medium: 2, Low: 1 }
-    return [...base].sort((a, b) =>
+    const query = queueSearch.trim().toLocaleLowerCase()
+    const matching = query ? base.filter(i => [i.title, i.location, i.category, i.priority, i.status]
+      .some(value => String(value || '').toLocaleLowerCase().includes(query))) : base
+    return [...matching].sort((a, b) =>
       (order[a.status] || 4) - (order[b.status] || 4) ||
       (rank[b.priority] || 2) - (rank[a.priority] || 2) ||
       new Date(a.created_at) - new Date(b.created_at)
     )
-  }, [shownIncidents, focusGroup])
+  }, [shownIncidents, focusGroup, queueSearch])
 
   const handleDispatch = useCallback(async (tanodId) => {
     if (!selected) return
@@ -218,16 +215,7 @@ export default function CommandMap({
         <Stat icon={Flame} label="Critical" value={stats.critical} color="#dc2626" t={t}
           blink={stats.critical > 0} />
         <Stat icon={Shield} label="On duty" value={stats.onDuty} color="#22c55e" t={t} />
-        <Stat icon={Clock} label="Avg resolve" color="#3b82f6" t={t}
-          value={stats.avgMin == null ? '—'
-            : stats.avgMin < 60 ? `${stats.avgMin} min`
-            : stats.avgMin < 1440 ? `${Math.floor(stats.avgMin / 60)}h ${stats.avgMin % 60}m`
-            : `${Math.round(stats.avgMin / 1440)}d`} />
         <Stat icon={AlertTriangle} label="Overdue" value={stats.overdue} color="#f97316" t={t} />
-        {coverage && (
-          <Stat icon={Radar} label="6h coverage" value={`${coverage.pct}%`}
-            color={coverage.pct < 40 ? '#dc2626' : coverage.pct < 70 ? '#f97316' : '#22c55e'} t={t} />
-        )}
 
         <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
           <IconToggle active={showCoverage} onClick={() => setShowCoverage(v => !v)} t={t}
@@ -274,16 +262,39 @@ export default function CommandMap({
         </div>
       )}
 
+      {/* Mobile pane switcher: keeps all three tools available without squeezing them together. */}
+      <div className="grid grid-cols-3 gap-1.5 p-2 lg:hidden"
+        style={{ background: t.raised, borderBottom: `1px solid ${t.border}` }} role="tablist" aria-label="Incident map panels">
+        {[
+          ['map', MapIcon, 'Map'], ['queue', List, `Queue (${queue.length})`], ['incident', FileText, 'Incident'],
+        ].map(([key, Icon, label]) => (
+          <button key={key} role="tab" aria-selected={mobilePane === key} onClick={() => setMobilePane(key)}
+            className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-bold"
+            style={{ background: mobilePane === key ? t.accent : t.panel, color: mobilePane === key ? '#fff' : t.sub,
+              border: `1px solid ${mobilePane === key ? t.accent : t.border}` }}>
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
       {/* ================= THREE PANES ================= */}
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_300px]" style={{ height: 'min(70vh, 640px)' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)_320px]" style={{ height: 'min(76vh, 760px)', minHeight: 520 }}>
 
         {/* LEFT — live queue */}
-        <div className="hidden lg:flex flex-col overflow-hidden"
+        <div className={`${mobilePane === 'queue' ? 'flex' : 'hidden'} lg:flex flex-col overflow-hidden min-h-0`}
           style={{ background: t.panel, borderRight: `1px solid ${t.border}` }}>
-          <div className="px-3 py-2 flex-shrink-0" style={{ borderBottom: `1px solid ${t.border}` }}>
-            <p style={{ fontSize: 10, color: t.dim }} className="font-black uppercase tracking-wider">
-              Queue · {queue.length}
-            </p>
+          <div className="px-3 py-2.5 flex-shrink-0 space-y-2" style={{ borderBottom: `1px solid ${t.border}` }}>
+            <div className="flex items-center justify-between">
+              <p style={{ fontSize: 10, color: t.dim }} className="font-black uppercase tracking-wider">Incident queue</p>
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: t.raised, color: t.sub }}>{queue.length}</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl px-2.5 h-9" style={{ background: t.raised, border: `1px solid ${t.border}` }}>
+              <Search size={14} style={{ color: t.dim }} />
+              <input value={queueSearch} onChange={e => setQueueSearch(e.target.value)} placeholder="Search title or location"
+                aria-label="Search incidents by title or location" className="min-w-0 flex-1 bg-transparent outline-none text-xs"
+                style={{ color: t.text }} />
+              {queueSearch && <button onClick={() => setQueueSearch('')} aria-label="Clear search" style={{ color: t.dim }}><X size={13} /></button>}
+            </div>
           </div>
           {focusGroup && (
             <button onClick={() => setFocusGroup(null)}
@@ -298,14 +309,14 @@ export default function CommandMap({
           <div className="overflow-y-auto cmd-scroll flex-1">
             {queue.length === 0 && (
               <p style={{ fontSize: 12, color: t.dim }} className="px-3 py-8 text-center">
-                Nothing on the map.
+                {queueSearch ? 'No incidents match your search.' : 'Nothing on the map.'}
               </p>
             )}
             {queue.map(inc => {
               const sel = inc.id === selectedId
               const color = PRIORITY_COLOR[inc.priority] || '#3b82f6'
               return (
-                <button key={inc.id} onClick={() => setSelectedId(inc.id)}
+                <button key={inc.id} onClick={() => { setSelectedId(inc.id); setMobilePane('incident') }}
                   className="cmd-row w-full text-left px-3 py-2.5 flex items-start gap-2"
                   style={{
                     background: sel ? (theme === 'dark' ? '#232a3d' : '#f0effe') : 'transparent',
@@ -319,9 +330,12 @@ export default function CommandMap({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p style={{ fontSize: 12, color: t.text }} className="font-bold truncate">{inc.title}</p>
-                    <div className="flex items-center gap-1 mt-0.5">
+                    {inc.location && <p style={{ fontSize: 10, color: t.dim }} className="truncate mt-0.5">📍 {inc.location}</p>}
+                    <div className="flex items-center gap-1 mt-1">
                       <span style={{ fontSize: 9, background: `${color}22`, color }}
                         className="px-1 py-0.5 rounded font-black">{inc.priority}</span>
+                      <span style={{ fontSize: 9, background: t.raised, color: t.sub }}
+                        className="px-1 py-0.5 rounded font-bold capitalize">{inc.status}</span>
                       <span style={{ fontSize: 9, color: t.dim }}>{timeAgo(inc.created_at)}</span>
                     </div>
                   </div>
@@ -332,7 +346,7 @@ export default function CommandMap({
         </div>
 
         {/* CENTER — map */}
-        <div className="relative" style={{ minHeight: 320 }}>
+        <div className={`${mobilePane === 'map' ? 'block' : 'hidden'} lg:block relative min-h-[360px]`}>
           <IncidentMap
             incidents={shownIncidents}
             tanodTrails={timeMachine ? {} : tanodTrails}
@@ -362,7 +376,7 @@ export default function CommandMap({
         </div>
 
         {/* RIGHT — dispatch console */}
-        <div className="flex flex-col overflow-hidden"
+        <div className={`${mobilePane === 'incident' ? 'flex' : 'hidden'} lg:flex flex-col overflow-hidden min-h-0`}
           style={{ background: t.panel, borderLeft: `1px solid ${t.border}` }}>
           {!selected ? (
             <div className="flex-1 flex flex-col items-center justify-center px-5 text-center">
@@ -419,6 +433,9 @@ export default function CommandMap({
                 <div>
                   <p style={{ fontSize: 10, color: t.dim }} className="font-black uppercase tracking-wider mb-1.5">
                     Closest responders
+                  </p>
+                  <p style={{ fontSize: 10, color: t.dim }} className="-mt-1 mb-2">
+                    Approximate distance and travel time from current GPS
                   </p>
                   {responders.length === 0 && (
                     <p style={{ fontSize: 11, color: t.dim }}>

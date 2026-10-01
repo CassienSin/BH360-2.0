@@ -11,6 +11,7 @@ import TanodRoster from '@/components/TanodRoster'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
+import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
 import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
 import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
@@ -177,6 +178,7 @@ export default function OfficialDashboard() {
     profile, ticketHref, onOpen: openTicket,
   })
   const [announcements, setAnnouncements] = useState([])
+  const [appointments, setAppointments] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [tanods, setTanods] = useState([])
@@ -237,7 +239,7 @@ export default function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes, docs, blotter] = await Promise.all([
+    const [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -265,7 +267,9 @@ export default function OfficialDashboard() {
         .order('created_at', { ascending: false })
         .limit(USER_LIMIT),
       supabase.from('invite_codes')
-        .select('*, profiles(full_name)')
+        // used_by intentionally references auth.users, not profiles: the
+        // invite is claimed before the profile row exists during signup.
+        .select('*')
         .eq('barangay_id', bid)
         .order('created_at', { ascending: false })
         .limit(INVITE_CODE_LIMIT),
@@ -278,9 +282,14 @@ export default function OfficialDashboard() {
         .eq('barangay_id', bid)
         .order('filed_at', { ascending: false })
         .limit(BLOTTER_LIMIT),
+      supabase.from('appointments')
+        .select('*')
+        .eq('barangay_id', bid)
+        .order('starts_at', { ascending: true })
+        .limit(200),
     ])
     const loadError = firstRealError(
-      [inc, tix, ann, tan, allUsers, codes, docs, blotter], 'the official dashboard')
+      [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts], 'the official dashboard')
     if (loadError) {
       console.error('Barangay data load failed:', loadError)
       toast.error('Some of the dashboard could not load. Try refreshing.')
@@ -296,6 +305,7 @@ export default function OfficialDashboard() {
     setInviteCodes(codes.data || [])
     setDocumentRequests(docs.data || [])
     setBlotterCases(blotter.data || [])
+    setAppointments(appts.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -454,6 +464,26 @@ export default function OfficialDashboard() {
       })
       .subscribe()
 
+    const appointmentChannel = supabase
+      .channel('official-appointments')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'appointments',
+        filter: `barangay_id=eq.${bid}`,
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          setAppointments(prev => (prev.some(a => a.id === payload.new.id) ? prev : [...prev, payload.new]))
+        }
+        if (payload.eventType === 'UPDATE') {
+          setAppointments(prev => prev.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a))
+        }
+        if (payload.eventType === 'DELETE') {
+          setAppointments(prev => prev.filter(a => a.id !== payload.old.id))
+        }
+      })
+      .subscribe()
+
     // Profile changes: keeps the dispatch dropdown, tanod list, AND the
     // user directory live. The old handler only patched existing tanods —
     // a newly registered user/tanod never appeared until a full reload.
@@ -536,6 +566,7 @@ export default function OfficialDashboard() {
       supabase.removeChannel(incidentChannel)
       supabase.removeChannel(ticketChannel)
       supabase.removeChannel(announcementChannel)
+      supabase.removeChannel(appointmentChannel)
       supabase.removeChannel(profileChannel)
       supabase.removeChannel(documentChannel)
     }
@@ -1099,6 +1130,19 @@ export default function OfficialDashboard() {
               subtitle: `Open ticket from ${t.profiles?.full_name || 'a resident'}`,
               created_at: t.created_at,
               data: t,
+            })),
+            ...appointments.filter(a => a.created_by === profile?.id && new Date(a.starts_at) > new Date()).map(a => ({
+              id: a.id,
+              type: 'appointment',
+              icon: '📅',
+              color: '#f0effe',
+              title: `Appointment: ${a.title}`,
+              subtitle: `Reminder ${a.reminder_sent_at ? 'sent' : 'scheduled'} · ${a.participant_name || 'No participant listed'}`,
+              created_at: a.reminder_sent_at || a.remind_at,
+              starts_at: a.starts_at,
+              remind_at: a.remind_at,
+              reminder_sent_at: a.reminder_sent_at,
+              data: a,
             }))
           ]}
           searchData={{
@@ -1110,6 +1154,7 @@ export default function OfficialDashboard() {
             if (notif.type === 'incident') setActiveSection('incidents')
             if (notif.type === 'ticket') router.push(`/official/ticket/${notif.id}`)
             if (notif.type === 'ticket-message') router.push(`/official/ticket/${notif.data.ticket_id}`)
+            if (notif.type === 'appointment') router.push('/official/calendar/appointments')
           }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') setActiveSection('incidents')
@@ -1120,6 +1165,7 @@ export default function OfficialDashboard() {
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
            <NotificationBanner />
+           <AppointmentReminderWatcher profile={profile} />
 
           {loading && (
             <div className="fade-up">
@@ -1603,7 +1649,9 @@ export default function OfficialDashboard() {
 
                 <div className="space-y-2">
                   {inviteCodes.length === 0 && <p className="text-gray-400 text-sm text-center py-4">No invite codes yet.</p>}
-                  {inviteCodes.map(code => (
+                  {inviteCodes.map(code => {
+                    const usedBy = users.find(user => user.id === code.used_by)
+                    return (
                     <div key={code.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl"
                       style={{background: code.used ? '#f9fafb' : '#f0effe', border: `1px solid ${code.used ? '#e5e7eb' : '#e8e3ff'}`}}>
                       <div className="flex-1 min-w-0">
@@ -1616,8 +1664,8 @@ export default function OfficialDashboard() {
                           }`}>{code.role}</span>
                           {code.used && <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">used</span>}
                         </div>
-                        {code.used && code.profiles && (
-                          <p className="text-xs text-gray-400 mt-0.5">Used by {code.profiles.full_name}</p>
+                        {code.used && usedBy && (
+                          <p className="text-xs text-gray-400 mt-0.5">Used by {usedBy.full_name}</p>
                         )}
                       </div>
                       {!code.used && (
@@ -1628,7 +1676,8 @@ export default function OfficialDashboard() {
                         </button>
                       )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
 

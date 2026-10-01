@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
@@ -74,10 +74,12 @@ function generateSecureCode(prefix) {
 // spot what is going wrong across barangays, not to be a second copy of
 // every barangay's queue.
 const INCIDENT_FEED_LIMIT = 300
+const INCIDENT_ANALYTICS_PAGE_SIZE = 500
 
 // Applications were unbounded, which meant relying on Supabase's silent
 // 1,000-row cap to stop the query — a limit that truncates without saying so.
 const APPLICATION_LIMIT = 300
+const BARANGAY_PAGE_SIZE = 20
 
 const INCIDENT_STATUS_STYLE = {
   pending:  { label: 'Pending',  color: '#f97316', bg: '#fff7ed' },
@@ -100,6 +102,10 @@ export default function AdminPanel() {
   const [applications, setApplications] = useState([])
   const [barangayResults, setBarangayResults] = useState([])
   const [barangaySearch, setBarangaySearch] = useState('')
+  const [barangayCitySearch, setBarangayCitySearch] = useState('')
+  const [barangayProvinceSearch, setBarangayProvinceSearch] = useState('')
+  const [barangayPage, setBarangayPage] = useState(1)
+  const [barangayHasMore, setBarangayHasMore] = useState(false)
   const [searchingBarangays, setSearchingBarangays] = useState(false)
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
@@ -109,6 +115,11 @@ export default function AdminPanel() {
   const [incidentStatusFilter, setIncidentStatusFilter] = useState('all')
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
   const [incidentBarangayFilter, setIncidentBarangayFilter] = useState('all')
+  const [incidentView, setIncidentView] = useState('list')
+  const [analyticsIncidents, setAnalyticsIncidents] = useState(null)
+  const [analyticsBarangays, setAnalyticsBarangays] = useState(null)
+  const [loadingIncidentAnalytics, setLoadingIncidentAnalytics] = useState(false)
+  const [incidentAnalyticsError, setIncidentAnalyticsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('applications')
   const [statusFilter, setStatusFilter] = useState('pending')
@@ -160,27 +171,87 @@ export default function AdminPanel() {
     setIncidents(incidentsRes.data || [])
   }, [supabase])
 
-  // Debounced server-side barangay search. This scales to any table size —
-  // we never try to load every barangay into the browser (Supabase caps
-  // selects at 1,000 rows anyway). Empty search shows the first 20 by name.
+  // Analytics are loaded only when requested. Unlike the live incident feed,
+  // this query pages through the full table so its totals are not limited to
+  // the newest 300 reports.
+  const loadIncidentAnalytics = useCallback(async (forceRefresh = false) => {
+    if (loadingIncidentAnalytics || (analyticsIncidents && !forceRefresh)) return
+    setLoadingIncidentAnalytics(true)
+    setIncidentAnalyticsError('')
+    try {
+      const allRows = []
+      for (let from = 0; ; from += INCIDENT_ANALYTICS_PAGE_SIZE) {
+        const { data, error } = await supabase.from('incidents')
+          .select('id, barangay_id, status, priority, category, created_at, barangays(name, city, province)')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + INCIDENT_ANALYTICS_PAGE_SIZE - 1)
+        if (error) throw error
+        const page = data || []
+        allRows.push(...page)
+        if (page.length < INCIDENT_ANALYTICS_PAGE_SIZE) break
+      }
+      const allBarangays = []
+      for (let from = 0; ; from += INCIDENT_ANALYTICS_PAGE_SIZE) {
+        const { data, error } = await supabase.from('barangays')
+          .select('id, name, city, province')
+          .order('name')
+          .order('province')
+          .order('city')
+          .order('id')
+          .range(from, from + INCIDENT_ANALYTICS_PAGE_SIZE - 1)
+        if (error) throw error
+        const page = data || []
+        allBarangays.push(...page)
+        if (page.length < INCIDENT_ANALYTICS_PAGE_SIZE) break
+      }
+      setAnalyticsIncidents(allRows)
+      setAnalyticsBarangays(allBarangays)
+    } catch (error) {
+      console.error('Incident analytics load failed:', error)
+      setIncidentAnalyticsError(error.message || 'Could not load incident analytics.')
+      toast.error('Could not load all incident analytics. Try again.')
+    } finally {
+      setLoadingIncidentAnalytics(false)
+    }
+  }, [supabase, loadingIncidentAnalytics, analyticsIncidents])
+
+  // Debounced, paginated server-side barangay search. This scales to any
+  // table size — we never try to load every barangay into the browser.
   useEffect(() => {
     if (loading) return
-    // Strip characters that would break the PostgREST .or() filter syntax
-    const q = barangaySearch.trim().replace(/[,()%]/g, '')
+    const nameQuery = barangaySearch.trim()
+    const cityQuery = barangayCitySearch.trim()
+    const provinceQuery = barangayProvinceSearch.trim()
     setSearchingBarangays(true)
+    let cancelled = false
     const t = setTimeout(async () => {
+      const start = (barangayPage - 1) * BARANGAY_PAGE_SIZE
       let query = supabase.from('barangays')
         .select('id, name, city, province')
         .order('name')
-        .limit(20)
-      if (q) query = query.or(`name.ilike.%${q}%,city.ilike.%${q}%,province.ilike.%${q}%`)
-      const { data, error } = await query
+        .order('province')
+        .order('city')
+        .order('id')
+      // Filled fields are combined with AND, so common barangay names can
+      // be narrowed by their city/municipality and province.
+      if (nameQuery) query = query.ilike('name', `%${nameQuery}%`)
+      if (cityQuery) query = query.ilike('city', `%${cityQuery}%`)
+      if (provinceQuery) query = query.ilike('province', `%${provinceQuery}%`)
+      // Fetch one extra row to know whether a Next page exists.
+      const { data, error } = await query.range(start, start + BARANGAY_PAGE_SIZE)
+      if (cancelled) return
       if (error) toast.error('Barangay search failed: ' + error.message)
-      setBarangayResults(data || [])
+      const matches = data || []
+      setBarangayResults(matches.slice(0, BARANGAY_PAGE_SIZE))
+      setBarangayHasMore(matches.length > BARANGAY_PAGE_SIZE)
       setSearchingBarangays(false)
     }, 300)
-    return () => clearTimeout(t)
-  }, [barangaySearch, loading, supabase])
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [barangaySearch, barangayCitySearch, barangayProvinceSearch, barangayPage, loading, supabase])
 
   useEffect(() => {
     let cancelled = false
@@ -467,6 +538,76 @@ export default function AdminPanel() {
     overdue: incidents.filter(i => computeStanding(i).aged).length,
   }), [incidents])
 
+  const incidentAnalytics = useMemo(() => {
+    if (!analyticsIncidents) return null
+    const barangays = new Map((analyticsBarangays || []).map(barangay => [barangay.id, {
+      id: barangay.id,
+      name: barangay.name || 'Unnamed barangay',
+      city: barangay.city || '',
+      province: barangay.province || '',
+      total: 0,
+      open: 0,
+      critical: 0,
+    }]))
+    const categories = new Map()
+    const statuses = { pending: 0, assigned: 0, resolved: 0 }
+    const monthly = new Map()
+
+    for (const incident of analyticsIncidents) {
+      const barangayKey = incident.barangay_id || 'unassigned'
+      const place = incident.barangays || {}
+      const barangay = barangays.get(barangayKey) || {
+        id: barangayKey,
+        name: place.name || 'Unassigned barangay',
+        city: place.city || '',
+        province: place.province || '',
+        total: 0,
+        open: 0,
+        critical: 0,
+      }
+      barangay.total += 1
+      if (incident.status !== 'resolved') barangay.open += 1
+      if (incident.priority === 'Critical' && incident.status !== 'resolved') barangay.critical += 1
+      barangays.set(barangayKey, barangay)
+
+      const status = (incident.status || 'pending').toLowerCase()
+      statuses[status] = (statuses[status] || 0) + 1
+      const category = incident.category || 'Uncategorized'
+      categories.set(category, (categories.get(category) || 0) + 1)
+
+      if (incident.created_at) {
+        const date = new Date(incident.created_at)
+        if (!Number.isNaN(date.getTime())) {
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+          monthly.set(monthKey, (monthly.get(monthKey) || 0) + 1)
+        }
+      }
+    }
+
+    const lastSixMonths = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date()
+      date.setDate(1)
+      date.setMonth(date.getMonth() - (5 - index))
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      return {
+        key,
+        label: date.toLocaleDateString('en-PH', { month: 'short', year: '2-digit' }),
+        total: monthly.get(key) || 0,
+      }
+    })
+
+    return {
+      total: analyticsIncidents.length,
+      open: analyticsIncidents.filter(i => i.status !== 'resolved').length,
+      resolved: statuses.resolved || 0,
+      critical: analyticsIncidents.filter(i => i.priority === 'Critical' && i.status !== 'resolved').length,
+      barangays: [...barangays.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)),
+      categories: [...categories.entries()].map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total),
+      statuses,
+      monthly: lastSixMonths,
+    }
+  }, [analyticsIncidents, analyticsBarangays])
+
   const totalBarangaysWithUsers = useMemo(
     () => new Set(users.map(u => u.barangay_id).filter(Boolean)).size,
     [users]
@@ -578,7 +719,7 @@ export default function AdminPanel() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-hidden px-4 py-6 space-y-6">
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -655,11 +796,11 @@ export default function AdminPanel() {
         <div className="flex gap-2 overflow-x-auto pb-1">
           {[
             { value: 'applications', label: 'Applications', icon: Inbox, count: pendingCount },
-            { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical },
+            { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical, countLabel: 'critical open' },
             { value: 'codes', label: 'Invite Codes', icon: KeyRound },
             { value: 'barangays', label: 'Barangays', icon: Building2 },
             { value: 'users', label: 'Users', icon: Users },
-          ].map(({ value, label, icon: Icon, count }) => (
+          ].map(({ value, label, icon: Icon, count, countLabel }) => (
             <button key={value} onClick={() => setActiveTab(value)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap"
               style={{
@@ -674,7 +815,7 @@ export default function AdminPanel() {
                     background: activeTab === value ? '#5B54E8' : 'rgba(255,255,255,0.25)',
                     color: 'white',
                   }}>
-                  {count}
+                  {count}{countLabel ? ` ${countLabel}` : ''}
                 </span>
               )}
             </button>
@@ -683,9 +824,9 @@ export default function AdminPanel() {
 
         {/* APPLICATIONS TAB */}
         {activeTab === 'applications' && (
-          <div className="space-y-3 fade-up">
+          <div className="w-full min-w-0 space-y-3 fade-up">
             {/* Filters */}
-            <div className="white-card p-4">
+            <div className="white-card w-full min-w-0 overflow-hidden p-4">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -722,7 +863,7 @@ export default function AdminPanel() {
               </div>
             ) : (
               filteredApps.map(app => (
-                <div key={app.id} className="white-card p-5">
+                <div key={app.id} className="white-card w-full min-w-0 overflow-hidden p-5">
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
@@ -762,7 +903,7 @@ export default function AdminPanel() {
                     <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
                       style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
                       <MapPin size={12} style={{ color: '#5B54E8' }} className="flex-shrink-0" />
-                      <span className="font-semibold" style={{ color: '#5B54E8' }}>
+                      <span className="min-w-0 break-words font-semibold" style={{ color: '#5B54E8' }}>
                         {app.barangays?.name}, {app.barangays?.city}, {app.barangays?.province}
                       </span>
                     </div>
@@ -831,7 +972,25 @@ export default function AdminPanel() {
             that spans them, so it leads with the cross-barangay numbers
             (which barangays are affected, and who is falling behind). */}
         {activeTab === 'incidents' && (
-          <div className="space-y-3 fade-up">
+          <div className="w-full min-w-0 space-y-3 fade-up">
+
+            <div className="white-card flex w-full min-w-0 flex-wrap gap-2 p-2" role="tablist" aria-label="Incident views">
+              <button role="tab" aria-selected={incidentView === 'list'} onClick={() => setIncidentView('list')}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
+                style={{ background: incidentView === 'list' ? '#5B54E8' : '#fafaff', color: incidentView === 'list' ? 'white' : '#6b7280' }}>
+                <AlertTriangle size={14} /> Incident List
+              </button>
+              <button role="tab" aria-selected={incidentView === 'analytics'} onClick={() => {
+                setIncidentView('analytics')
+                loadIncidentAnalytics()
+              }}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
+                style={{ background: incidentView === 'analytics' ? '#5B54E8' : '#fafaff', color: incidentView === 'analytics' ? 'white' : '#6b7280' }}>
+                <BarChart3 size={14} /> Barangay Analytics
+              </button>
+            </div>
+
+            {incidentView === 'list' ? <>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
@@ -1018,6 +1177,128 @@ export default function AdminPanel() {
                 </div>
               </>
             )}
+            </> : (
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Incident analytics</h2>
+                    <p className="text-xs text-white/75">Platform-wide summary grouped by barangay, category, and month.</p>
+                  </div>
+                  <button onClick={() => loadIncidentAnalytics(true)} disabled={loadingIncidentAnalytics}
+                    className="inline-flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold disabled:opacity-60"
+                    style={{ color: '#5B54E8' }}>
+                    <RefreshCw size={13} className={loadingIncidentAnalytics ? 'animate-spin' : ''} />
+                    Refresh analytics
+                  </button>
+                </div>
+
+                {loadingIncidentAnalytics ? (
+                  <div className="white-card flex items-center justify-center gap-3 p-12 text-sm text-gray-500">
+                    <Loader2 size={18} className="animate-spin" style={{ color: '#5B54E8' }} />
+                    Loading all incident records…
+                  </div>
+                ) : incidentAnalyticsError ? (
+                  <div className="white-card p-8 text-center">
+                    <AlertTriangle size={28} className="mx-auto mb-2 text-red-500" />
+                    <p className="text-sm font-semibold text-gray-700">Analytics could not be loaded</p>
+                    <p className="mt-1 text-xs text-gray-500">{incidentAnalyticsError}</p>
+                    <button onClick={() => loadIncidentAnalytics(true)} className="mt-3 rounded-xl px-4 py-2 text-xs font-bold text-white" style={{ background: '#5B54E8' }}>
+                      Try again
+                    </button>
+                  </div>
+                ) : incidentAnalytics ? (
+                  <>
+                    <p className="px-1 text-xs text-white/75">All {incidentAnalytics.total} incident records loaded across {incidentAnalytics.barangays.length} registered barangays.</p>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      {[
+                        { label: 'All reports', value: incidentAnalytics.total, color: '#5B54E8' },
+                        { label: 'Open reports', value: incidentAnalytics.open, color: '#f97316' },
+                        { label: 'Resolved', value: incidentAnalytics.resolved, color: '#22c55e' },
+                        { label: 'Critical open', value: incidentAnalytics.critical, color: '#dc2626' },
+                      ].map(stat => (
+                        <div key={stat.label} className="white-card min-w-0 p-4">
+                          <p className="text-xs text-gray-400">{stat.label}</p>
+                          <p className="mt-1 text-2xl font-black" style={{ color: stat.color }}>{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+                      <section className="white-card min-w-0 p-5">
+                        <h3 className="font-bold text-gray-800">Reports by month</h3>
+                        <p className="mb-4 mt-1 text-xs text-gray-400">Created during the latest six calendar months</p>
+                        <div className="flex h-36 items-end gap-2" role="img" aria-label="Incident reports by month for the latest six months">
+                          {incidentAnalytics.monthly.map(month => {
+                            const maximum = Math.max(1, ...incidentAnalytics.monthly.map(item => item.total))
+                            const height = month.total ? Math.max(8, (month.total / maximum) * 100) : 3
+                            return (
+                              <div key={month.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+                                <span className="text-[10px] font-semibold text-gray-500">{month.total}</span>
+                                <div className="w-full rounded-t-lg" style={{ height: `${height}%`, minHeight: 3, background: 'linear-gradient(180deg, #7c75f0, #5B54E8)' }} />
+                                <span className="text-center text-[9px] text-gray-400">{month.label}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </section>
+
+                      <section className="white-card min-w-0 p-5">
+                        <h3 className="font-bold text-gray-800">Reports by category</h3>
+                        <p className="mb-4 mt-1 text-xs text-gray-400">All reported incident categories</p>
+                        {incidentAnalytics.categories.length === 0 ? <p className="text-sm text-gray-400">No category data yet.</p> : (
+                          <div className="space-y-3">
+                            {incidentAnalytics.categories.slice(0, 8).map(category => (
+                              <div key={category.name}>
+                                <div className="mb-1 flex justify-between gap-3 text-xs">
+                                  <span className="min-w-0 truncate text-gray-600">{category.name}</span>
+                                  <span className="font-bold text-gray-700">{category.total}</span>
+                                </div>
+                                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                                  <div className="h-full rounded-full" style={{ width: `${Math.max(3, (category.total / incidentAnalytics.total) * 100)}%`, background: '#5B54E8' }} />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    </div>
+
+                    <section className="white-card min-w-0 overflow-hidden p-5">
+                      <h3 className="font-bold text-gray-800">Incident reports by barangay</h3>
+                      <p className="mb-4 mt-1 text-xs text-gray-400">Every registered barangay, including those with no reports, ranked by total reports</p>
+                      {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-400">No incident reports yet.</p> : (
+                        <div className="max-h-[480px] overflow-auto">
+                          <table className="w-full min-w-[600px] text-left text-xs">
+                            <thead className="sticky top-0 bg-white text-gray-400">
+                              <tr>
+                                <th className="py-2 pr-3 font-semibold">Barangay</th>
+                                <th className="py-2 pr-3 font-semibold">City / Municipality</th>
+                                <th className="py-2 pr-3 text-right font-semibold">Reports</th>
+                                <th className="py-2 pr-3 text-right font-semibold">Open</th>
+                                <th className="py-2 text-right font-semibold">Critical open</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {incidentAnalytics.barangays.map(barangay => (
+                                <tr key={barangay.id} className="border-t border-gray-100">
+                                  <td className="py-3 pr-3 font-semibold text-gray-700">{barangay.name}</td>
+                                  <td className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
+                                  <td className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
+                                  <td className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
+                                  <td className="py-3 text-right text-red-600">{barangay.critical}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </section>
+                  </>
+                ) : (
+                  <div className="white-card p-8 text-center text-sm text-gray-500">Open this view to load analytics for all incidents.</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1036,15 +1317,53 @@ export default function AdminPanel() {
                 </div>
               </div>
 
-              {/* Search — results come from the database, not a preloaded list */}
-              <div className="relative mb-3">
-                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input value={barangaySearch} onChange={e => setBarangaySearch(e.target.value)}
-                  placeholder="Search barangay, city, or province..."
-                  className="input-field w-full rounded-2xl pl-10 pr-10 py-2.5 text-sm text-gray-800" />
-                {searchingBarangays && (
-                  <Loader2 size={15} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
-                )}
+              {/* Search by barangay name, then narrow by location. */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
+                <label className="block">
+                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">Barangay name</span>
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input value={barangaySearch} onChange={e => {
+                      setBarangaySearch(e.target.value)
+                      setBarangayPage(1)
+                      setBarangayResults([])
+                      setBarangayHasMore(false)
+                    }}
+                      aria-label="Search by barangay name"
+                      placeholder="e.g. Poblacion"
+                      className="input-field w-full rounded-2xl pl-10 pr-4 py-2.5 text-sm text-gray-800" />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">City / Municipality</span>
+                  <input value={barangayCitySearch} onChange={e => {
+                    setBarangayCitySearch(e.target.value)
+                    setBarangayPage(1)
+                    setBarangayResults([])
+                    setBarangayHasMore(false)
+                  }}
+                    aria-label="Filter by city or municipality"
+                    placeholder="e.g. Toledo"
+                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800" />
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">Province</span>
+                  <input value={barangayProvinceSearch} onChange={e => {
+                    setBarangayProvinceSearch(e.target.value)
+                    setBarangayPage(1)
+                    setBarangayResults([])
+                    setBarangayHasMore(false)
+                  }}
+                    aria-label="Filter by province"
+                    placeholder="Optional, e.g. Cebu"
+                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800" />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-3 mb-3 min-h-5">
+                <p className="text-xs text-gray-400">
+                  Fill in multiple fields to narrow the results. For example: Poblacion + Toledo + Cebu.
+                </p>
+                {searchingBarangays && <Loader2 size={15} className="text-gray-400 animate-spin flex-shrink-0" aria-label="Searching barangays" />}
               </div>
 
               <div className="space-y-2">
@@ -1052,7 +1371,9 @@ export default function AdminPanel() {
                   <div className="text-center py-6">
                     <Building2 size={28} className="mx-auto text-gray-300 mb-2" />
                     <p className="text-xs text-gray-400">
-                      {barangaySearch ? `No barangays match "${barangaySearch}"` : 'No barangays found'}
+                      {barangaySearch || barangayCitySearch || barangayProvinceSearch
+                        ? 'No barangays match these filters. Try removing a filter or checking the spelling.'
+                        : 'No barangays found'}
                     </p>
                   </div>
                 )}
@@ -1065,12 +1386,12 @@ export default function AdminPanel() {
                       <p className="text-xs text-gray-400 truncate">{b.city}, {b.province}</p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
-                      <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing}
+                      <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
                         className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
                         + Official
                       </button>
-                      <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing}
+                      <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing || searchingBarangays}
                         className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
                         + Tanod
@@ -1078,10 +1399,24 @@ export default function AdminPanel() {
                     </div>
                   </div>
                 ))}
-                {barangayResults.length === 20 && (
-                  <p className="text-xs text-gray-400 text-center pt-2">
-                    Showing first 20 matches — refine your search to narrow down
-                  </p>
+                {(barangayPage > 1 || barangayHasMore) && (
+                  <div className="flex items-center justify-between gap-3 pt-3">
+                    <button onClick={() => setBarangayPage(page => Math.max(1, page - 1))}
+                      disabled={barangayPage === 1 || searchingBarangays}
+                      className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
+                      style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                      ← Previous
+                    </button>
+                    <p className="text-xs text-gray-400" aria-live="polite">
+                      Page {barangayPage}{searchingBarangays ? ' · Loading…' : ''}
+                    </p>
+                    <button onClick={() => setBarangayPage(page => page + 1)}
+                      disabled={!barangayHasMore || searchingBarangays}
+                      className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
+                      style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                      Next →
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Filter, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, Calendar as CalendarIcon, ClipboardList, ChevronLeft, ChevronRight, Filter, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 
@@ -279,7 +279,7 @@ export default function CalendarView() {
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/official')}
           aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0"
         >
@@ -305,6 +305,13 @@ export default function CalendarView() {
           style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}
         >
           Today
+        </button>
+        <button
+          onClick={() => router.push('/official/calendar/appointments')}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors hover:bg-gray-100"
+          style={{ color: '#5B54E8', border: '1px solid #e8e3ff' }}
+        >
+          <ClipboardList size={14} /> <span className="hidden sm:inline">Appointments</span>
         </button>
       </header>
 
@@ -428,7 +435,7 @@ export default function CalendarView() {
               const today = isToday(day)
               const selected = isSelected(day)
 
-              const dotColors = dayIncidents.slice(0, 4).map(inc => {
+              const dotColors = dayIncidents.slice(0, 3).map(inc => {
                 const config = colorBy === 'category'
                   ? (CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other)
                   : (PRIORITY_CONFIG[inc.priority] || PRIORITY_CONFIG.Medium)
@@ -463,8 +470,9 @@ export default function CalendarView() {
                     </span>
                     {dayIncidents.length > 0 && (
                       <span
-                        className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                        className="absolute bottom-1 right-1 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
                         style={{ background: selected ? 'rgba(255,255,255,0.25)' : '#5B54E8', color: 'white' }}
+                        title={`${dayIncidents.length} incident${dayIncidents.length === 1 ? '' : 's'}`}
                       >
                         {dayIncidents.length}
                       </span>
@@ -473,13 +481,13 @@ export default function CalendarView() {
 
                   {/* Dots */}
                   {dotColors.length > 0 && (
-                    <div className="flex gap-0.5 mt-auto flex-wrap">
+                    <div className="hidden gap-0.5 pr-6 sm:flex sm:flex-wrap sm:mt-auto">
                       {dotColors.map((color, i) => (
                         <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: selected ? 'white' : color }} />
                       ))}
-                      {dayIncidents.length > 4 && (
+                      {dayIncidents.length > 3 && (
                         <span className="text-[8px] font-bold" style={{ color: selected ? 'white' : '#9ca3af' }}>
-                          +{dayIncidents.length - 4}
+                          +{dayIncidents.length - 3}
                         </span>
                       )}
                     </div>
@@ -487,7 +495,7 @@ export default function CalendarView() {
 
                   {/* Announcement indicator */}
                   {dayAnnouncements.length > 0 && (
-                    <div className="absolute top-1 right-1">
+                    <div className="absolute right-1 top-1 z-10 rounded-full bg-white/90 px-0.5">
                       <span className="text-[10px]" aria-hidden="true">📢</span>
                     </div>
                   )}

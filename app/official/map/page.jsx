@@ -496,7 +496,7 @@ export default function MapView() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <main className="relative z-10 w-full max-w-[1600px] mx-auto px-3 sm:px-5 xl:px-8 py-5 sm:py-6 space-y-4">
 
         {/* Controls: one compact card, two clearly separated concerns —
             INCIDENT FILTERS (left) and the TANOD LAYER toggle (right). */}

@@ -86,26 +86,9 @@ export default function LandingPage() {
     const supabase = createClient()
     let cancelled = false
 
-    // Instant, synchronous check — no network. Supabase (supabase-js
-    // default) stores its session under an `sb-...-auth-token` key in
-    // localStorage. If there's no token, this visitor is logged out:
-    // show the landing page immediately instead of a pointless splash.
-    // Logged-out users never see the splash at all.
-    let hasToken = false
-    try {
-      hasToken = Object.keys(localStorage).some(
-        k => k.startsWith('sb-') && k.includes('auth-token')
-      )
-    } catch {
-      // localStorage unavailable (private mode edge cases) — fall through
-      // to the network check with the splash showing briefly.
-    }
-
-    if (!hasToken) setReady(true)
-
-    // Full check runs either way — belt and suspenders. It covers
-    // cookie-based sessions the localStorage sniff can't see, and it
-    // catches stale tokens (token present but session expired).
+    // Wait for Supabase to verify the session before showing the landing
+    // page. Auth storage may be cookie-backed, so a localStorage check can
+    // incorrectly report a signed-in user as logged out.
     async function checkSession() {
       const { data: { user } } = await supabase.auth.getUser()
       if (cancelled) return
@@ -165,10 +148,8 @@ export default function LandingPage() {
     { name: 'Tanod Reyes', role: 'Field Officer', text: 'I always know where I need to go. The dashboard is a game-changer for the field.', rating: 5 },
   ]
 
-  // Branded splash — shown only while a token exists and the session
-  // check / redirect is in flight. Logged-in PWA launches see this
-  // (reads as a native app launch screen) instead of a landing-page
-  // flash. Logged-out visitors skip it entirely.
+  // Keep the branded splash visible while Supabase checks the session and
+  // while a signed-in user is redirected to their dashboard.
   if (!ready) {
     return (
       <div className="min-h-screen bg-brand flex flex-col items-center justify-center gap-6">

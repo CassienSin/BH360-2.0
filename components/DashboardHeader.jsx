@@ -70,9 +70,24 @@ export default function DashboardHeader({
   // question, so they must not keep separate answers.
   const { readKeys, isRead, markRead } = useNotificationReads(profile?.id)
 
+  const [notificationNow, setNotificationNow] = useState(() => Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setNotificationNow(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Appointment entries join the bell only when their reminder is due, and
+  // leave after the appointment has passed. Other notification types are
+  // supplied already filtered by their owning dashboard.
+  const visibleNotifications = useMemo(() => notifications.filter(n => {
+    if (n.type !== 'appointment') return true
+    return new Date(n.starts_at) > notificationNow &&
+      (Boolean(n.reminder_sent_at) || new Date(n.remind_at) <= notificationNow)
+  }), [notifications, notificationNow])
+
   const markAllRead = useCallback(
-    () => markRead(notifications),
-    [markRead, notifications]
+    () => markRead(visibleNotifications),
+    [markRead, visibleNotifications]
   )
 
   const [searchOpen, setSearchOpen] = useState(false)
@@ -236,16 +251,16 @@ export default function DashboardHeader({
   }
 
   const unread = useMemo(
-    () => countUnread(notifications, readKeys),
-    [notifications, readKeys]
+    () => countUnread(visibleNotifications, readKeys),
+    [visibleNotifications, readKeys]
   )
   // Unread first, then read; newest first within each group
   const sortedNotifications = useMemo(() => {
     const byTime = (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    const fresh = notifications.filter(n => !readKeys.has(notifKey(n))).sort(byTime)
-    const seen = notifications.filter(n => readKeys.has(notifKey(n))).sort(byTime)
+    const fresh = visibleNotifications.filter(n => !readKeys.has(notifKey(n))).sort(byTime)
+    const seen = visibleNotifications.filter(n => readKeys.has(notifKey(n))).sort(byTime)
     return [...fresh, ...seen]
-  }, [notifications, readKeys])
+  }, [visibleNotifications, readKeys])
 
   const rc = roleConfig[profile?.role] || roleConfig.resident
 
@@ -380,7 +395,7 @@ export default function DashboardHeader({
                 </div>
 
                 <div className="max-h-80 overflow-y-auto">
-                  {notifications.length === 0 ? (
+                  {visibleNotifications.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"
                         style={{ background: '#f0fdf4' }}>
@@ -426,7 +441,7 @@ export default function DashboardHeader({
                   )}
                 </div>
 
-                {notifications.length > 0 && (
+                {visibleNotifications.length > 0 && (
                   <div className="px-4 py-2 border-t border-gray-100" style={{ background: '#fafaff' }}>
                     <p className="text-[10px] text-gray-400 text-center">
                       {sortedNotifications.length > 10
