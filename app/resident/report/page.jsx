@@ -11,6 +11,7 @@ import imageCompression from 'browser-image-compression'
 import { CATEGORY_LIST, getPriority, getBasis, citationDetail, PRIORITY_STYLE } from '@/lib/legalBasis'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { AvailabilityStrip, EmergencyContacts, ReportOutcome } from '@/components/ResponderAvailability'
+import styles from './report.module.css'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -89,6 +90,57 @@ function validateForm(form) {
   if (location.length < LOCATION_MIN) return 'Please provide a more specific location.'
   if (location.length > LOCATION_MAX) return `Location must be under ${LOCATION_MAX} characters.`
   return null
+}
+
+function PriorityGuidance({ basis }) {
+  return (
+                <div className="px-4 py-3" style={{ background: 'white' }}>
+                  {basis.law && (
+                    <div className="flex items-start gap-2 mb-2">
+                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed text-gray-700">
+                          <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
+                          {basis.sections && (
+                            <span className="font-semibold" style={{ color: '#5B54E8' }}>{', '}{basis.sections}</span>
+                          )}
+                          {' — '}{basis.lawTitle}
+                        </p>
+                        {/* What the cited provision actually says. Without
+                            this the citation is decoration — residents (and
+                            officials on review) can check the claim. */}
+                        {basis.provision && (
+                          <p className="text-[11px] text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
+                        )}
+                        {basis.source && (
+                          <a
+                            href={basis.source}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-[11px] font-semibold mt-1 underline"
+                            style={{ color: '#5B54E8' }}
+                          >
+                            Read the law
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-500 leading-relaxed">{basis.reason}</p>
+
+                  {basis.responseMode === 'refer_to_agency' && basis.agency && (
+                    <div
+                      className="mt-2.5 px-3 py-2 rounded-xl flex items-start gap-2"
+                      style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
+                    >
+                      <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
+                      <p className="text-[11px] text-orange-800 leading-relaxed">
+                        This will be referred to <strong>{basis.agency}</strong>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+  )
 }
 
 export default function ReportIncident() {
@@ -406,7 +458,7 @@ export default function ReportIncident() {
       </div>
 
       <header
-        className="bg-white relative z-10 px-6 py-4 flex items-center gap-3"
+        className={`bg-white relative z-10 px-6 py-4 flex items-center gap-3 ${styles.header}`}
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
@@ -426,10 +478,10 @@ export default function ReportIncident() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-8">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-8 ${!outcome ? styles.main : ''}`}>
         {!outcome && (
           <>
-            <div className="glass-card p-4 mb-4 flex items-start gap-3">
+            <div className={`glass-card p-4 mb-4 flex items-start gap-3 ${styles.introBanner}`}>
               <div
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: 'rgba(255,255,255,0.2)' }}
@@ -448,13 +500,13 @@ export default function ReportIncident() {
                 this says "nobody" — that is deliberate. A resident who
                 knows nobody is on duty calls 911 in seconds; one who
                 assumes a tanod is coming waits twenty minutes. */}
-            <div className="mb-6">
+            <div className={`mb-6 ${styles.availability}`}>
               <AvailabilityStrip availability={availability} />
             </div>
           </>
         )}
 
-        <div className="white-card p-6">
+        <div className={`white-card p-6 ${!outcome ? styles.card : ''}`}>
           {outcome ? (
             <ReportOutcome
               incident={outcome}
@@ -463,14 +515,34 @@ export default function ReportIncident() {
               onDone={() => router.replace('/resident')}
             />
           ) : (
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className={`space-y-5 ${styles.form}`}>
+            <div className={`space-y-5 ${styles.column}`}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionIcon}><FileText size={19} aria-hidden="true" /></span>
+                <div>
+                  <h2>Incident details</h2>
+                  <p>Choose a category and tell us what happened.</p>
+                </div>
+              </div>
 
+            <div className={`space-y-5 ${styles.selectionGroup}`}>
             {/* Category Selection — this alone determines priority */}
             <fieldset>
               <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Tag size={11} /> What happened? <span className="text-red-500">*</span>
               </legend>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <select
+                aria-label="Incident category"
+                value={form.category}
+                onChange={event => setForm(prev => ({ ...prev, category: event.target.value }))}
+                className={`input-field w-full rounded-2xl px-3 py-2 text-sm text-gray-800 ${styles.desktopCategory}`}
+              >
+                <option value="" disabled>Select what happened...</option>
+                {CATEGORIES.map(cat => (
+                  <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
+                ))}
+              </select>
+              <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 ${styles.categoryGrid}`}>
                 {CATEGORIES.map(cat => {
                   const selected = form.category === cat.value
                   return (
@@ -479,7 +551,7 @@ export default function ReportIncident() {
                       type="button"
                       aria-pressed={selected}
                       onClick={() => setForm(prev => ({ ...prev, category: cat.value }))}
-                      className="p-3 rounded-2xl flex flex-col items-center gap-1.5 text-center transition-all hover:scale-105"
+                      className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 text-center transition-all hover:scale-105 ${styles.categoryButton}`}
                       style={{
                         background: selected ? cat.bg : '#fafaff',
                         border: `2px solid ${selected ? cat.color : '#f0effe'}`,
@@ -502,12 +574,12 @@ export default function ReportIncident() {
                 and (for referral categories) which agency handles it. */}
             {basis && priorityStyle && (
               <div
-                className="rounded-2xl overflow-hidden fade-up"
+                className={`rounded-2xl overflow-hidden fade-up ${styles.priority}`}
                 style={{ border: `2px solid ${priorityStyle.color}30` }}
                 role="status"
                 aria-live="polite"
               >
-                <div className="px-4 py-3 flex items-center gap-3" style={{ background: priorityStyle.bg }}>
+                <div className={`px-4 py-3 flex items-center gap-3 ${styles.priorityHeader}`} style={{ background: priorityStyle.bg }}>
                   <span className="text-2xl" aria-hidden="true">{priorityStyle.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: priorityStyle.color }}>
@@ -520,62 +592,27 @@ export default function ReportIncident() {
                   </div>
                 </div>
 
-                <div className="px-4 py-3" style={{ background: 'white' }}>
-                  {basis.law && (
-                    <div className="flex items-start gap-2 mb-2">
-                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
-                      <div className="min-w-0">
-                        <p className="text-xs leading-relaxed text-gray-700">
-                          <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
-                          {basis.sections && (
-                            <span className="font-semibold" style={{ color: '#5B54E8' }}>{', '}{basis.sections}</span>
-                          )}
-                          {' — '}{basis.lawTitle}
-                        </p>
-                        {/* What the cited provision actually says. Without
-                            this the citation is decoration — residents (and
-                            officials on review) can check the claim. */}
-                        {basis.provision && (
-                          <p className="text-[11px] text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
-                        )}
-                        {basis.source && (
-                          <a
-                            href={basis.source}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block text-[11px] font-semibold mt-1 underline"
-                            style={{ color: '#5B54E8' }}
-                          >
-                            Read the law
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-[11px] text-gray-500 leading-relaxed">{basis.reason}</p>
-
-                  {basis.responseMode === 'refer_to_agency' && basis.agency && (
-                    <div
-                      className="mt-2.5 px-3 py-2 rounded-xl flex items-start gap-2"
-                      style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
-                    >
-                      <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
-                      <p className="text-[11px] text-orange-800 leading-relaxed">
-                        This will be referred to <strong>{basis.agency}</strong>.
-                      </p>
-                    </div>
-                  )}
+                <div className={styles.mobileGuidance}>
+                  <PriorityGuidance basis={basis} />
                 </div>
+                <details className={styles.desktopGuidance}>
+                  <summary>Why this priority? View response guidance</summary>
+                  <PriorityGuidance basis={basis} />
+                </details>
               </div>
             )}
 
+            </div>
+
             {/* Emergency numbers — shown when the barangay legally cannot
                 handle this (fire, medical) or when nobody is on duty */}
-            <EmergencyContacts
-              category={form.category}
-              availability={availability}
-              barangayPhone={barangayPhone}
-            />
+            <div className={styles.emergency}>
+              <EmergencyContacts
+                category={form.category}
+                availability={availability}
+                barangayPhone={barangayPhone}
+              />
+            </div>
 
             {/* Title */}
             <div>
@@ -619,6 +656,17 @@ export default function ReportIncident() {
               <p className="text-xs text-gray-400 text-right mt-1">{form.description.length}/{DESC_MAX}</p>
             </div>
 
+            </div>
+
+            <div className={`space-y-5 ${styles.column} ${styles.locationColumn}`}>
+              <div className={styles.sectionHeading}>
+                <span className={styles.sectionIcon}><MapPin size={19} aria-hidden="true" /></span>
+                <div>
+                  <h2>Location &amp; photo</h2>
+                  <p>Help responders find and understand the scene.</p>
+                </div>
+              </div>
+
             {/* Location */}
             <div>
               <label htmlFor="incident-location" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
@@ -640,7 +688,7 @@ export default function ReportIncident() {
             </div>
 
             {/* Map Picker */}
-            <div>
+            <div className={styles.mapSection}>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <MapPin size={11} /> Pin on Map <span className="text-gray-300 font-normal">(Optional but helpful)</span>
               </p>
@@ -668,7 +716,9 @@ export default function ReportIncident() {
                 )}
               </div>
 
-              <MapPicker coords={coords} setCoords={setCoords} />
+              <div className={styles.mapFrame}>
+                <MapPicker coords={coords} setCoords={setCoords} height="var(--report-map-height, 280px)" />
+              </div>
 
               {coords && (
                 <div className="mt-2 flex items-center justify-between flex-wrap gap-2 fade-up">
@@ -691,14 +741,14 @@ export default function ReportIncident() {
             </div>
 
             {/* Image Upload */}
-            <div>
+            <div className={styles.photoSection}>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                 <Camera size={11} /> Photo Evidence <span className="text-gray-300 font-normal">(Optional)</span>
               </p>
 
               {compressing ? (
                 <div
-                  className="rounded-2xl p-8 text-center"
+                  className={`rounded-2xl p-8 text-center ${styles.uploadPanel}`}
                   style={{ background: '#fafaff', border: '2px dashed #e8e3ff' }}
                   role="status"
                 >
@@ -714,7 +764,7 @@ export default function ReportIncident() {
               ) : !imagePreview ? (
                 <label className="block cursor-pointer">
                   <div
-                    className="rounded-2xl p-8 text-center transition-all hover:scale-[1.01]"
+                    className={`rounded-2xl p-8 text-center transition-all hover:scale-[1.01] ${styles.uploadPanel}`}
                     style={{ background: '#fafaff', border: '2px dashed #e8e3ff' }}
                   >
                     <div
@@ -737,7 +787,7 @@ export default function ReportIncident() {
                 </label>
               ) : (
                 <div className="relative rounded-2xl overflow-hidden group fade-up" style={{ border: '2px solid #e8e3ff' }}>
-                  <img src={imagePreview} alt="Selected photo preview" className="w-full max-h-80 object-cover" />
+                  <img src={imagePreview} alt="Selected photo preview" className={`w-full max-h-80 object-cover ${styles.photoPreview}`} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute top-3 right-3 flex gap-2">
                     <button
@@ -778,10 +828,12 @@ export default function ReportIncident() {
               )}
             </div>
 
+            </div>
+
             <button
               type="submit"
               disabled={loading || compressing || !form.category}
-              className="btn-primary w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`btn-primary w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed ${styles.submit}`}
             >
               {loading ? (
                 <span className="flex items-center gap-2">
