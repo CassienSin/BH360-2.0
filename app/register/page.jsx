@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -239,7 +240,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-6 bg-brand relative overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center py-12 px-6 bg-brand relative overflow-hidden ${desktop.registrationRoot}`}>
 
       {/* Animated background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -263,10 +264,10 @@ export default function RegisterPage() {
         ))}
       </div>
 
-      <div className="relative z-10 w-full max-w-lg">
+      <div className={`relative z-10 w-full max-w-lg ${desktop.registration}`}>
 
         {/* Header */}
-        <div className="text-center mb-6 fade-up">
+        <div className={`text-center mb-6 fade-up ${desktop.registrationHeading}`}>
           <div className="w-16 h-16 mx-auto mb-4 relative" style={{ animation: 'float 6s ease-in-out infinite' }}>
             <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
           </div>
@@ -290,7 +291,7 @@ export default function RegisterPage() {
 
         {/* Step indicators */}
         {!awaitingConfirmation && (
-          <div className="flex items-center justify-center gap-2 mb-6 fade-up">
+          <div className={`flex items-center justify-center gap-2 mb-6 fade-up ${desktop.registrationSteps}`}>
             {[1, 2].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
@@ -308,7 +309,7 @@ export default function RegisterPage() {
           </div>
         )}
 
-        <div className="rounded-3xl p-4 sm:p-6 md:p-8 fade-up-1"
+        <div className={`rounded-3xl p-4 sm:p-6 md:p-8 fade-up-1 ${desktop.registrationCard}`}
           style={{
             background: 'rgba(255,255,255,0.95)',
             backdropFilter: 'blur(20px)',
@@ -478,7 +479,7 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              <form onSubmit={handleRegister} className="space-y-4">
+              <form onSubmit={handleRegister} className={`space-y-4 ${desktop.registrationForm}`}>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -619,7 +620,7 @@ export default function RegisterPage() {
 
                 {/* Location dropdowns — only for residents */}
                 {selectedRole === 'resident' && (
-                  <div className="space-y-3 pt-2">
+                  <div className={`space-y-3 pt-2 ${desktop.registrationLocation}`}>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Your Barangay</p>
 
                     <SearchSelect

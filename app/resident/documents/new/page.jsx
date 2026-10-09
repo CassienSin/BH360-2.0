@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -140,7 +141,7 @@ export default function NewDocumentRequest() {
     <div className="min-h-dvh bg-brand relative overflow-hidden">
       <AnimatedDots />
 
-      <header className="bg-white sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+      <header className={`bg-white sticky top-0 z-30 px-4 py-3 flex items-center gap-3 ${desktop.header}`}
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
         <button onClick={() => router.back()} aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
@@ -156,7 +157,7 @@ export default function NewDocumentRequest() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.documentPage}`}>
 
         {/* ── Filed successfully ─────────────────────────────────────── */}
         {created ? (
@@ -231,8 +232,8 @@ export default function NewDocumentRequest() {
             )}
 
             {/* ── The Citizen's Charter (RA 11032 Sec. 6) ────────────── */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="white-card p-5 fade-up">
+            <form onSubmit={handleSubmit} className={`space-y-4 ${desktop.documentForm}`}>
+              <div className={`white-card p-5 fade-up ${desktop.documentTypes}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <FileText size={15} style={{ color: '#5B54E8' }} />
                   <h2 className="font-bold text-gray-800 text-sm">What do you need?</h2>
@@ -271,7 +272,7 @@ export default function NewDocumentRequest() {
 
               {/* ── What the law promises for this document ──────────── */}
               {doc && (
-                <div className="rounded-2xl overflow-hidden fade-up"
+                <div className={`rounded-2xl overflow-hidden fade-up ${desktop.documentGuidance}`}
                   style={{ border: `2px solid ${doc.color}30` }} role="status" aria-live="polite">
                   <div className="px-4 py-3 flex items-center gap-3" style={{ background: doc.bg }}>
                     <Clock size={20} style={{ color: doc.color }} aria-hidden="true" />
@@ -335,7 +336,7 @@ export default function NewDocumentRequest() {
                 </div>
               )}
 
-              <div className="white-card p-5 space-y-4 fade-up">
+              <div className={`white-card p-5 space-y-4 fade-up ${desktop.documentFields}`}>
                 <div>
                   <label htmlFor="purpose" className="text-xs font-bold text-gray-700">
                     What is it for? <span className="text-red-500">*</span>

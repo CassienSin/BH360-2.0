@@ -1,0 +1,124 @@
+/* Every layout override is desktop-only; mobile keeps the existing utilities. */
+.emptyPreview { display: none; }
+.wide:empty { display: none; }
+
+@media (min-width: 1024px) {
+  .header { padding: 10px max(24px, calc((100% - 1272px) / 2)); }
+  .ticketPage, .documentPage, .accessPage, .profilePage, .settingsPage,
+  .helpPage, .incidentPage {
+    max-width: 1320px;
+    padding: 18px 24px 24px;
+    margin-inline: auto;
+  }
+  .ticketPage, .profilePage, .settingsPage, .helpPage, .incidentPage {
+    display: grid;
+    gap: 18px;
+    align-items: start;
+  }
+  .ticketPage > *, .profilePage > *, .settingsPage > *, .helpPage > *, .incidentPage > *,
+  .ticketForm > *, .documentForm > *, .accessForm > *, .registrationForm > * {
+    min-width: 0;
+    margin-block: 0;
+  }
+  .wide { grid-column: 1 / -1; }
+  .ticketPage { grid-template-columns: 252px minmax(0, 1fr); }
+  .ticketPage > .wide { padding: 12px 16px; align-items: center; }
+  .examples { grid-column: 1; }
+  .examples > div { grid-template-columns: minmax(0, 1fr); }
+  .examples button { padding: 12px; border-radius: 14px; min-height: 48px; }
+  .examples button span:last-child { white-space: normal; }
+  .nextSteps { grid-column: 1; padding: 18px; }
+  .ticketCard { grid-column: 2; grid-row: span 2; padding: 22px; }
+  .ticketCard:hover, .nextSteps:hover { transform: none; }
+  .ticketForm { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px 22px; }
+  .ticketCategory { grid-column: 1; grid-row: 1; }
+  .ticketCategory button { padding: 10px; }
+  .ticketSubject { grid-column: 1; grid-row: 2; }
+  .ticketDescription { grid-column: 1; grid-row: 3; }
+  .ticketDescription textarea { height: 130px; min-height: 110px; resize: vertical; }
+  .ticketTip { grid-column: 2; grid-row: 1; }
+  .ticketPreview { display: block; grid-column: 2; grid-row: 2 / 4; align-self: stretch; min-height: 210px; }
+  .ticketPreview p { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ticketPreview p[class*='line-clamp'] { display: block; -webkit-line-clamp: unset; }
+  .ticketSubmit { grid-column: 2; grid-row: 4; min-height: 44px; padding-block: 11px; }
+  .ticketNote { grid-column: 1; grid-row: 4; text-align: left; align-self: center; line-height: 1.6; }
+  .ticketForm input { padding-block: 10px; }
+
+  .documentPage > :not(form):only-child { max-width: 760px; margin-inline: auto; }
+  .documentForm { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  .documentTypes { grid-column: 1; grid-row: 1 / 3; }
+  .documentTypes button { padding: 10px 12px; }
+  .documentGuidance { grid-column: 2; grid-row: 1; }
+  .documentFields { grid-column: 2; grid-row: 2; }
+  .documentForm:not(:has(.documentGuidance)) .documentFields { grid-row: 1; }
+  .documentFields > :not(:last-child) { margin-bottom: 12px; }
+  .documentFields textarea { min-height: 80px; }
+
+  .accessPage { max-width: 1180px; }
+  .accessPage > :first-child { margin-bottom: 16px; padding: 14px 18px; }
+  .accessForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+  .accessLocation { grid-column: 2; grid-row: 2 / 4; }
+  .accessMessage { grid-column: 1; grid-row: 3; }
+  .accessForm > button { grid-column: 2; grid-row: 4; }
+  .accessForm > p { grid-column: 1; grid-row: 4; align-self: center; }
+
+  .registration { max-width: 1160px; display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 18px 40px; align-items: start; }
+  .registration > * { min-width: 0; margin-block: 0; }
+  .registrationHeading { grid-column: 1; grid-row: 1; padding-top: 50px; }
+  .registrationSteps { grid-column: 1; grid-row: 2; }
+  .registrationCard { grid-column: 2; grid-row: 1 / 5; padding: 24px; }
+  .registration > :not(.registrationCard) { grid-column: 1; }
+  .registrationForm { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+  .registrationForm > :first-child, .registrationForm > :nth-child(2),
+  .registrationForm > :nth-child(n+5) { grid-column: 1 / -1; }
+
+  .profilePage { grid-template-columns: 350px minmax(0, 1fr); }
+  .profileCard { grid-column: 1; grid-row: 1 / 3; }
+  .profileTabs { grid-column: 2; }
+  .profilePage > :nth-child(n+3) { grid-column: 2; }
+  .personalFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .personalFields > * { margin-block: 0; min-width: 0; overflow-wrap: anywhere; }
+
+  .settingsPage { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .settingsPage > :first-child { grid-row: span 2; }
+  .settingsPage > :last-child { grid-column: 1 / -1; padding-block: 4px; }
+  .settingsPage > * { padding: 18px; }
+
+  .helpPage { grid-template-columns: 218px minmax(0, 1fr); }
+  .helpTabs { grid-column: 1; }
+  .helpTabs [role='tablist'] { grid-template-columns: 1fr; gap: 6px; }
+  .helpTabs [role='tab'] { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 14px; }
+  .helpTabs [role='tab'] span { font-size: 12px; }
+  .helpPage > :not(.wide):not(.helpTabs) { grid-column: 2; }
+  .faqGrid, .helpGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .faqGrid > *, .helpGrid > * { min-width: 0; margin-block: 0; }
+  .helpGrid > :first-child, .helpGrid > p { grid-column: 1 / -1; }
+
+  .incidentPage { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+  .incidentReport, .incidentBasis { grid-column: 1; }
+  .incidentProgress { grid-column: 2; grid-row: 3 / 5; }
+  .incidentPage:not(:has(.wide:nth-child(2):not(:empty))) .incidentProgress { grid-row: 2 / 4; }
+  .incidentPage > :not(.wide):not(.incidentReport):not(.incidentBasis):not(.incidentProgress) { grid-column: 2; }
+
+  .chatPage, .aiPage { max-width: 1152px; padding-inline: 24px; min-height: 0; }
+  .chatDetails { width: 100%; max-width: 1104px; margin-inline: auto; border-radius: 16px; }
+  .aiWelcome { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); align-items: center; gap: 24px; }
+  .aiWelcome > * { margin-block: 0; min-width: 0; }
+}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .ticketPage, .documentPage, .accessPage, .profilePage, .settingsPage, .helpPage, .incidentPage { padding-block: 12px 16px; gap: 14px 18px; }
+  .ticketCard { padding: 18px; }
+  .ticketForm { row-gap: 12px; }
+}
+
+@media (min-width: 1024px) {
+  .registrationRoot { padding-block: 24px; }
+  .registrationLocation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .registrationLocation > * { min-width: 0; margin-block: 0; }
+  .registrationLocation > p { grid-column: 1 / -1; }
+  .registrationCard > :last-child { margin-top: 16px; padding-top: 14px; }
+  .registrationForm input { padding-block: 9px; }
+  .registrationForm > button { padding-block: 12px; }
+}
+

@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -245,7 +246,7 @@ export default function TicketChat() {
 
       {/* Header */}
       <header
-        className="bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0"
+        className={`bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
@@ -302,7 +303,7 @@ export default function TicketChat() {
 
       {/* Details panel (collapsible) */}
       {showDetails && ticket && (
-        <div className="bg-white relative z-10 px-4 sm:px-6 py-3 fade-up" style={{ borderBottom: '1px solid #f0effe' }}>
+        <div className={`bg-white relative z-10 px-4 sm:px-6 py-3 fade-up ${desktop.chatDetails}`} style={{ borderBottom: '1px solid #f0effe' }}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Description</p>
           <p className="text-sm text-gray-700 leading-relaxed">{ticket.description}</p>
           <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
@@ -320,7 +321,7 @@ export default function TicketChat() {
       {ticket?.status === 'in_progress' && (
         <div className="relative z-10 px-4 py-2 fade-up">
           <div
-            className="max-w-2xl mx-auto rounded-xl px-3 py-2 flex items-center gap-2"
+            className={`max-w-2xl mx-auto rounded-xl px-3 py-2 flex items-center gap-2 ${desktop.chatDetails}`}
             style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', backdropFilter: 'blur(10px)' }}
           >
             <Shield size={12} className="text-white flex-shrink-0" />
@@ -330,7 +331,7 @@ export default function TicketChat() {
       )}
 
       {/* Messages */}
-      <main className="flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden">
+      <main className={`flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden ${desktop.chatPage}`}>
         <div className="flex-1 space-y-3 overflow-y-auto pb-4 px-1" role="log" aria-live="polite" aria-label="Ticket messages">
           {messages.length === 0 && (
             <div className="text-center mt-12">
@@ -395,7 +396,7 @@ export default function TicketChat() {
                   {!isMe && !showSender && <div className="w-7 flex-shrink-0" />}
 
                   <div
-                    className={`max-w-[75%] sm:max-w-md px-4 py-2.5 rounded-2xl text-sm ${
+                    className={`max-w-[75%] sm:max-w-md lg:max-w-2xl px-4 py-2.5 rounded-2xl text-sm ${
                       isMe ? 'text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md'
                     }`}
                     style={

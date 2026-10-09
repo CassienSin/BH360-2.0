@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -241,7 +242,7 @@ export default function SettingsPage() {
           style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
       </div>
 
-      <header className="bg-white z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0"
+      <header className={`bg-white z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
         <button onClick={() => router.back()} aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
@@ -262,7 +263,7 @@ export default function SettingsPage() {
         </button>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
 
         {/* Notifications */}
         <div className="white-card p-5 fade-up">

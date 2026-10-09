@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -347,7 +348,7 @@ export default function ProfilePage() {
           style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
-      <header className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
+      <header className={`bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3 ${desktop.header}`}
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
         <button onClick={() => router.push(getDashboardPath())} aria-label="Back to dashboard"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0">
@@ -359,10 +360,10 @@ export default function ProfilePage() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-3xl mx-auto px-4 py-8 space-y-6">
+      <main className={`relative z-10 max-w-3xl mx-auto px-4 py-8 space-y-6 ${desktop.profilePage}`}>
 
         {/* Profile Card */}
-        <div className="white-card overflow-hidden">
+        <div className={`white-card overflow-hidden ${desktop.profileCard}`}>
           {/* Cover gradient */}
           <div className="h-24 relative" style={{ background: rc.gradient }}>
             <div className="absolute inset-0 opacity-30"
@@ -462,7 +463,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className={`flex gap-2 overflow-x-auto pb-1 ${desktop.profileTabs}`}>
           {[
             { value: 'info', label: 'Info', icon: User },
             { value: 'activity', label: 'Activity', icon: Activity },
@@ -487,7 +488,7 @@ export default function ProfilePage() {
               <User size={14} style={{ color: '#5B54E8' }} /> Personal Information
             </h3>
 
-            <div className="space-y-4">
+            <div className={`space-y-4 ${desktop.personalFields}`}>
               {/* Email — read-only; it's the login identity */}
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email</label>

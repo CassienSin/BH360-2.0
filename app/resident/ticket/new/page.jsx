@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -195,7 +196,7 @@ export default function NewTicket() {
       </div>
 
       <header
-        className="bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0"
+        className={`bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
@@ -217,10 +218,10 @@ export default function NewTicket() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${desktop.ticketPage}`}>
 
         {/* Intro card */}
-        <div className="glass-card p-4 flex items-start gap-3 fade-up">
+        <div className={`glass-card p-4 flex items-start gap-3 fade-up ${desktop.wide}`}>
           <div
             className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(255,255,255,0.2)' }}
@@ -236,7 +237,7 @@ export default function NewTicket() {
         </div>
 
         {/* Examples */}
-        <div className="fade-up-1">
+        <div className={`fade-up-1 ${desktop.examples}`}>
           <p className="text-xs font-bold uppercase tracking-wider text-white opacity-60 mb-2 flex items-center gap-1.5">
             <Sparkles size={11} /> Quick Examples
           </p>
@@ -256,11 +257,11 @@ export default function NewTicket() {
         </div>
 
         {/* Main form */}
-        <div className="white-card p-5 sm:p-6 fade-up-2">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <div className={`white-card p-5 sm:p-6 fade-up-2 ${desktop.ticketCard}`}>
+          <form onSubmit={handleSubmit} className={`space-y-5 ${desktop.ticketForm}`}>
 
             {/* Category selector */}
-            <fieldset>
+            <fieldset className={desktop.ticketCategory}>
               <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Tag size={11} /> Category <span className="text-red-500">*</span>
               </legend>
@@ -295,7 +296,7 @@ export default function NewTicket() {
             </fieldset>
 
             {/* Subject/Title */}
-            <div>
+            <div className={desktop.ticketSubject}>
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="ticket-title" className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                   <FileText size={11} /> Subject <span className="text-red-500">*</span>
@@ -333,7 +334,7 @@ export default function NewTicket() {
             </div>
 
             {/* Description */}
-            <div>
+            <div className={desktop.ticketDescription}>
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="ticket-description" className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
                   <AlignLeft size={11} /> Description <span className="text-red-500">*</span>
@@ -372,7 +373,7 @@ export default function NewTicket() {
             </div>
 
             {/* Tip card */}
-            <div className="p-3 rounded-2xl flex items-start gap-2.5" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
+            <div className={`p-3 rounded-2xl flex items-start gap-2.5 ${desktop.ticketTip}`} style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
               <Lightbulb size={14} className="text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-xs font-bold text-amber-900">Pro Tip</p>
@@ -383,8 +384,7 @@ export default function NewTicket() {
             </div>
 
             {/* Preview */}
-            {(form.title || form.description) && (
-              <div className="rounded-2xl p-4 fade-up" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+            <div className={`rounded-2xl p-4 fade-up ${desktop.ticketPreview} ${!form.title && !form.description ? desktop.emptyPreview : ""}`} style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
                 <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
                   Preview
                 </p>
@@ -416,13 +416,12 @@ export default function NewTicket() {
                   </div>
                 </div>
               </div>
-            )}
 
             {/* Submit button */}
             <button
               type="submit"
               disabled={loading || !formValid}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${desktop.ticketSubmit}`}
               style={{
                 background: formValid ? 'linear-gradient(135deg, #5B54E8, #7C75F0)' : '#9ca3af',
                 boxShadow: formValid ? '0 8px 32px rgba(91,84,232,0.4)' : 'none',
@@ -441,14 +440,14 @@ export default function NewTicket() {
             </button>
 
             {/* Helper text */}
-            <p className="text-xs text-gray-400 text-center">
+            <p className={`text-xs text-gray-400 text-center ${desktop.ticketNote}`}>
               By submitting, your ticket will be visible to barangay officials only
             </p>
           </form>
         </div>
 
         {/* What happens next */}
-        <div className="white-card p-5 fade-up-3">
+        <div className={`white-card p-5 fade-up-3 ${desktop.nextSteps}`}>
           <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
             <HelpCircle size={14} style={{ color: '#5B54E8' }} /> What happens next?
           </h3>

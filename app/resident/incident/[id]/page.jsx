@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -295,7 +296,7 @@ export default function ResidentIncidentDetail() {
         }
       `}</style>
 
-      <header className="bg-white sticky top-0 z-30 px-4 py-3 flex items-center gap-3"
+      <header className={`bg-white sticky top-0 z-30 px-4 py-3 flex items-center gap-3 ${desktop.header}`}
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
         <button onClick={() => router.back()} aria-label="Go back"
           className="rid-press w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 flex-shrink-0">
@@ -311,10 +312,10 @@ export default function ResidentIncidentDetail() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+      <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
 
         {/* The answer they came for, first thing on the page */}
-        <div className="rounded-2xl px-4 py-4 flex items-start gap-3"
+        <div className={`rounded-2xl px-4 py-4 flex items-start gap-3 ${desktop.wide}`}
           style={{ background: panel.tone.bg, border: `1px solid ${panel.tone.border}` }}
           role="status">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -340,15 +341,15 @@ export default function ResidentIncidentDetail() {
 
         {/* Emergency numbers stay reachable for as long as it's unresolved */}
         {incident.status !== 'resolved' && (
-          <EmergencyContacts
+          <div className={desktop.wide}><EmergencyContacts
             category={incident.category}
             availability={availability}
             barangayPhone={barangayPhone}
-          />
+          /></div>
         )}
 
         {/* What they reported */}
-        <div className="white-card p-5">
+        <div className={`white-card p-5 ${desktop.incidentReport}`}>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[10px] px-2 py-1 rounded-lg font-black flex items-center gap-1"
               style={{ background: pri.bg, color: pri.color }}>
@@ -379,7 +380,7 @@ export default function ResidentIncidentDetail() {
         {/* Why it was classified this way — residents can't set priority,
             so they deserve to see the reasoning rather than just the label */}
         {basis?.law && (
-          <div className="white-card p-4">
+          <div className={`white-card p-4 ${desktop.incidentBasis}`}>
             <div className="flex items-start gap-2">
               <Scale size={14} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
               <div>
@@ -403,7 +404,7 @@ export default function ResidentIncidentDetail() {
         )}
 
         {/* Progress */}
-        <div className="white-card p-5">
+        <div className={`white-card p-5 ${desktop.incidentProgress}`}>
           <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-4">Progress</p>
           <div className="space-y-4">
             {timeline.map((e, i) => {

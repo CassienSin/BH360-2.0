@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Send, Bot, Lightbulb, FileText, Bell, MessageCircle, Trash2 } from 'lucide-react'
@@ -180,7 +181,7 @@ export default function AIAssistant() {
 
       {/* Header */}
       <header
-        className="fixed top-0 left-0 right-0 z-20 px-4 sm:px-6 py-4 flex items-center gap-3 flex-shrink-0 transition-all duration-300"
+        className={`fixed top-0 left-0 right-0 z-20 px-4 sm:px-6 py-4 flex items-center gap-3 flex-shrink-0 transition-all duration-300 ${desktop.header}`}
         style={{
           background: scrolled ? 'rgba(255,255,255,0.85)' : 'white',
           backdropFilter: scrolled ? 'blur(20px)' : 'none',
@@ -227,11 +228,11 @@ export default function AIAssistant() {
       </header>
 
       {/* Messages */}
-      <main className="flex-1 relative z-10 flex flex-col max-w-3xl w-full mx-auto px-4 py-6 overflow-hidden pt-24">
+      <main className={`flex-1 relative z-10 flex flex-col max-w-3xl w-full mx-auto px-4 py-6 overflow-hidden pt-24 ${desktop.aiPage}`}>
         <div className="flex-1 space-y-4 overflow-y-auto pb-4 pr-1" role="log" aria-live="polite" aria-label="Chat messages">
           {/* Welcome with quick questions */}
           {showWelcome && (
-            <div className="fade-up space-y-5 mb-6">
+            <div className={`fade-up space-y-5 mb-6 ${desktop.aiWelcome}`}>
               <div className="white-card p-6 text-center">
                 <div className="relative w-24 h-24 mx-auto mb-4" style={{ animation: 'float 4s ease-in-out infinite' }}>
                   <Image src="/logo.png" alt="" fill sizes="96px" className="object-contain" />
@@ -279,7 +280,7 @@ export default function AIAssistant() {
               )}
 
               <div
-                className={`max-w-[85%] sm:max-w-md px-4 py-3 rounded-2xl text-sm shadow-sm ${
+                className={`max-w-[85%] sm:max-w-md lg:max-w-2xl px-4 py-3 rounded-2xl text-sm shadow-sm ${
                   msg.role === 'user' ? 'text-white' : 'bg-white text-gray-800'
                 }`}
                 style={

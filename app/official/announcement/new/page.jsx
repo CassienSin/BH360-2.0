@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Bell, AlignLeft, CheckCircle, Sparkles, Megaphone, Info, AlertTriangle, Lightbulb, Users, Eye, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
+import styles from './announcement.module.css'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 150
@@ -335,7 +336,7 @@ export default function NewAnnouncement() {
       </div>
 
       <header
-        className="bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0"
+        className={`bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${styles.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
       >
         <button
@@ -357,10 +358,10 @@ export default function NewAnnouncement() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${styles.main}`}>
 
         {/* Intro card */}
-        <div className="glass-card p-4 flex items-start gap-3 fade-up">
+        <div className={`glass-card p-4 flex items-start gap-3 fade-up ${styles.intro}`}>
           <div
             className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(255,255,255,0.2)' }}
@@ -378,7 +379,7 @@ export default function NewAnnouncement() {
         {/* Draft restored notice */}
         {draftRestored && (
           <div
-            className="rounded-2xl px-4 py-2.5 flex items-center gap-2 fade-up"
+            className={`rounded-2xl px-4 py-2.5 flex items-center gap-2 fade-up ${styles.draftNotice}`}
             style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(10px)' }}
           >
             <Info size={13} className="text-white flex-shrink-0" />
@@ -394,11 +395,11 @@ export default function NewAnnouncement() {
         )}
 
         {/* Templates */}
-        <div className="fade-up-1">
+        <div className={`fade-up-1 ${styles.templates}`}>
           <p className="text-xs font-bold uppercase tracking-wider text-white opacity-60 mb-2 flex items-center gap-1.5">
             <Sparkles size={11} /> Quick Templates
           </p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className={`grid grid-cols-2 gap-2 ${styles.templateGrid}`}>
             {TEMPLATES.map((tmpl, i) => (
               <button
                 key={i}
@@ -414,8 +415,13 @@ export default function NewAnnouncement() {
         </div>
 
         {/* Main form */}
-        <div className="white-card p-5 sm:p-6 fade-up-2">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <div className={`white-card p-5 sm:p-6 fade-up-2 ${styles.formCard}`}>
+          <form onSubmit={handleSubmit} className={`space-y-5 ${styles.form}`}>
+            <div className={`space-y-5 ${styles.editor}`}>
+              <div className={styles.editorHeading}>
+                <h2>Write your announcement</h2>
+                <p>Share the details residents need to know.</p>
+              </div>
 
             {/* Title */}
             <div>
@@ -495,7 +501,7 @@ export default function NewAnnouncement() {
             </div>
 
             {/* Pro tip */}
-            <div className="p-3 rounded-2xl flex items-start gap-2.5" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
+            <div className={`p-3 rounded-2xl flex items-start gap-2.5 ${styles.tip}`} style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
               <Lightbulb size={14} className="text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <div>
                 <p className="text-xs font-bold text-amber-900">Pro Tip</p>
@@ -505,16 +511,17 @@ export default function NewAnnouncement() {
               </div>
             </div>
 
-            {/* Live Preview */}
-            {isDirty && (
-              <div className="fade-up">
+            </div>
+
+            {/* Keep the empty preview visible only on desktop. */}
+              <div className={`fade-up ${styles.preview} ${!isDirty ? styles.emptyPreview : ""}`}>
                 <div className="flex items-center gap-2 mb-2">
                   <Eye size={11} style={{ color: '#5B54E8' }} />
                   <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>
                     Preview (as residents will see)
                   </p>
                 </div>
-                <div className="rounded-2xl p-4" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                <div className={`rounded-2xl p-4 ${styles.previewCard}`} style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
                   <div className="flex items-start gap-3">
                     <div
                       className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -536,13 +543,12 @@ export default function NewAnnouncement() {
                   </div>
                 </div>
               </div>
-            )}
 
             {/* Submit button */}
             <button
               type="submit"
               disabled={loading || !formValid}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
+              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${styles.submit}`}
               style={{
                 background: formValid ? 'linear-gradient(135deg, #5B54E8, #7C75F0)' : '#9ca3af',
                 boxShadow: formValid ? '0 8px 32px rgba(91,84,232,0.4)' : 'none',
@@ -560,14 +566,14 @@ export default function NewAnnouncement() {
               )}
             </button>
 
-            <p className="text-xs text-gray-400 text-center">
-              📢 All residents in your barangay will see this immediately
+            <p className={`text-xs text-gray-400 text-center ${styles.publishNote}`}>
+              📢 Residents will see this after the 60-second undo window.
             </p>
           </form>
         </div>
 
         {/* Best practices */}
-        <div className="white-card p-5 fade-up-3">
+        <div className={`white-card p-5 fade-up-3 ${styles.practices}`}>
           <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
             <Info size={14} style={{ color: '#5B54E8' }} /> Best Practices
           </h3>

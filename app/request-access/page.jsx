@@ -1,4 +1,5 @@
 'use client'
+import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -193,7 +194,7 @@ export default function RequestAccess() {
           style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
-      <header className="bg-white relative z-10 px-6 py-4 flex items-center gap-3"
+      <header className={`bg-white relative z-10 px-6 py-4 flex items-center gap-3 ${desktop.header}`}
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
         <button onClick={() => router.push('/')} aria-label="Back to home"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100">
@@ -210,7 +211,7 @@ export default function RequestAccess() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-2xl mx-auto px-4 py-8">
+      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-8 ${desktop.accessPage}`}>
         <div className="glass-card p-4 mb-6 flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(255,255,255,0.2)' }}>
@@ -225,7 +226,7 @@ export default function RequestAccess() {
         </div>
 
         <div className="white-card p-6">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className={`space-y-5 ${desktop.accessForm}`}>
             {/* Full Name */}
             <div>
               <label htmlFor="ra-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
@@ -284,7 +285,7 @@ export default function RequestAccess() {
             </div>
 
             {/* Location */}
-            <div>
+            <div className={desktop.accessLocation}>
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
                 <MapPin size={11} className="inline mr-1" />
                 Your Barangay <span className="text-red-500">*</span>
@@ -327,7 +328,7 @@ export default function RequestAccess() {
             </div>
 
             {/* Message */}
-            <div>
+            <div className={desktop.accessMessage}>
               <label htmlFor="ra-message" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
                 Additional Message <span className="text-gray-300 font-normal">(Optional)</span>
               </label>
