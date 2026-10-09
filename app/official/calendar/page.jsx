@@ -1,646 +1,157 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Calendar as CalendarIcon, ClipboardList, ChevronLeft, ChevronRight, Filter, X, Loader2 } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
+import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
+import styles from './calendar.module.css'
 
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
-
-const PRIORITY_CONFIG = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
-}
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: '#087f8c' }, incidents: { label: 'Incidents', singular: 'Incident', color: '#d97706' }, announcements: { label: 'Announcements', singular: 'Announcement', color: '#6554dc' } }
+const PRIORITIES = { Low: '#15803d', Medium: '#2563eb', High: '#c2410c', Critical: '#dc2626' }
+const EMPTY = { appointments: [], incidents: [], announcements: [] }
+const formatTime = value => new Date(value).toLocaleTimeString('en-PH', { timeZone: TIME_ZONE, hour: 'numeric', minute: '2-digit' })
+const formatDay = key => new Date(`${key}T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, weekday: 'long', month: 'long', day: 'numeric' })
 
 export default function CalendarView() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
+  const [today, setToday] = useState(() => dateKey(new Date()))
+  const [month, setMonth] = useState(() => dateKey(new Date()).slice(0, 7))
+  const [selected, setSelected] = useState(() => dateKey(new Date()))
   const [profile, setProfile] = useState(null)
-  const [incidents, setIncidents] = useState([])
-  const [announcements, setAnnouncements] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date()) // default to today so the panel isn't empty
-  const [colorBy, setColorBy] = useState('category') // 'category' or 'priority'
-  const [showAnnouncements, setShowAnnouncements] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [snapshot, setSnapshot] = useState({ month: '', data: EMPTY, errors: [] })
+  const [pending, setPending] = useState(true)
+  const [refresh, setRefresh] = useState(0)
+  const [visible, setVisible] = useState({ appointments: true, incidents: true, announcements: true })
+  const [colorBy, setColorBy] = useState('category')
+  const request = useRef(0)
+  const dayButtons = useRef(new Map())
 
   useEffect(() => {
     let cancelled = false
-
-    async function loadData() {
+    async function authenticate() {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError || !user) {
-          router.push('/login')
-          return
-        }
-
-        const { data: prof, error: profError } = await supabase
-          .from('profiles')
-          .select('*, barangays(name)')
-          .eq('id', user.id)
-          .single()
-
+        const { data: { user }, error } = await supabase.auth.getUser()
         if (cancelled) return
-      // A failed query is not the same as being the wrong role. Sending
-      // someone to the login page for a network blip signs them out of a
-      // session that is perfectly valid.
-        if (profError) {
-          console.error('Could not load your profile:', profError)
-          toast.error('Could not load the calendar. Please refresh.')
-          setLoading(false)
-          return
-        }
-        if (prof?.role !== 'official' || !prof?.barangay_id) {
-          router.push('/login')
-          return
-        }
-        setProfile(prof)
-
-        const [{ data: inc }, { data: ann }] = await Promise.all([
-          supabase.from('incidents')
-            .select('*, profiles!incidents_reported_by_fkey(full_name)')
-            .eq('barangay_id', prof.barangay_id)
-            .order('created_at', { ascending: false }),
-          supabase.from('announcements')
-            .select('*')
-            .eq('barangay_id', prof.barangay_id)
-            .order('created_at', { ascending: false }),
-        ])
-
+        if (error) throw error
+        if (!user) { router.replace('/login'); return }
+        const { data: official, error: profileError } = await supabase.from('profiles').select('id, role, barangay_id, barangays(name)').eq('id', user.id).single()
         if (cancelled) return
-        setIncidents(inc || [])
-        setAnnouncements(ann || [])
-      } catch (err) {
-        console.error('Failed to load calendar data:', err)
-        if (!cancelled) toast.error('Failed to load data. Please refresh.')
-      } finally {
-        if (!cancelled) setLoading(false)
+        if (profileError) throw profileError
+        if (official?.role !== 'official' || !official?.barangay_id) { router.replace('/login'); return }
+        setProfile(official)
+      } catch {
+        if (!cancelled) setAuthError('Could not load your calendar access. Refresh this page to try again.')
       }
     }
-    loadData()
-
+    authenticate()
     return () => { cancelled = true }
-  }, [supabase, router])
+  }, [router, supabase])
 
-  // Calendar frame
-  const year = currentDate.getFullYear()
-  const month = currentDate.getMonth()
-  const startDay = new Date(year, month, 1).getDay() // 0 = Sunday
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-
-  // Bucket items by day for the visible month — O(n) once, instead of
-  // filtering the whole array for every calendar cell on every render
-  const incidentsByDay = useMemo(() => {
-    const map = new Map()
-    incidents.forEach(inc => {
-      const d = new Date(inc.created_at)
-      if (d.getFullYear() === year && d.getMonth() === month) {
-        const day = d.getDate()
-        if (!map.has(day)) map.set(day, [])
-        map.get(day).push(inc)
+  useEffect(() => {
+    if (!profile?.barangay_id) return
+    let cancelled = false
+    let debounce
+    async function reload() {
+      const id = ++request.current
+      setPending(true)
+      const result = await loadMonth(supabase, profile.barangay_id, month)
+      if (!cancelled && request.current === id) {
+        setSnapshot({ month, ...result })
+        setPending(false)
       }
-    })
-    return map
-  }, [incidents, year, month])
-
-  const announcementsByDay = useMemo(() => {
-    const map = new Map()
-    announcements.forEach(a => {
-      const d = new Date(a.created_at)
-      if (d.getFullYear() === year && d.getMonth() === month) {
-        const day = d.getDate()
-        if (!map.has(day)) map.set(day, [])
-        map.get(day).push(a)
-      }
-    })
-    return map
-  }, [announcements, year, month])
-
-  // Monthly stats
-  const monthlyStats = useMemo(() => {
-    const monthly = [...incidentsByDay.values()].flat()
-    return {
-      total: monthly.length,
-      resolved: monthly.filter(i => i.status === 'resolved').length,
-      pending: monthly.filter(i => i.status === 'pending').length,
-      critical: monthly.filter(i => i.priority === 'Critical').length,
     }
-  }, [incidentsByDay])
+    function scheduleReload() { clearTimeout(debounce); debounce = setTimeout(reload, 150) }
+    reload()
+    const channel = supabase.channel(`calendar-${profile.barangay_id}`)
+    for (const table of Object.keys(TYPES)) channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `barangay_id=eq.${profile.barangay_id}` }, scheduleReload)
+    channel.subscribe()
+    function onFocus() { setToday(dateKey(new Date())); scheduleReload() }
+    window.addEventListener('focus', onFocus)
+    return () => { cancelled = true; clearTimeout(debounce); window.removeEventListener('focus', onFocus); supabase.removeChannel(channel) }
+  }, [supabase, profile?.barangay_id, month, refresh])
 
-  // Legend: only show categories/priorities that actually occur this month
-  const legendEntries = useMemo(() => {
-    const monthly = [...incidentsByDay.values()].flat()
-    if (colorBy === 'category') {
-      const present = new Set(monthly.map(i => i.category || 'Other'))
-      return Object.entries(CATEGORY_CONFIG).filter(([cat]) => present.has(cat))
-    }
-    const present = new Set(monthly.map(i => i.priority || 'Medium'))
-    return Object.entries(PRIORITY_CONFIG).filter(([p]) => present.has(p))
-  }, [incidentsByDay, colorBy])
+  const data = snapshot.month === month ? snapshot.data : EMPTY
+  const errors = snapshot.month === month ? snapshot.errors : []
+  const loading = !authError && (!profile || pending || snapshot.month !== month)
+  const byDay = useMemo(() => groupEvents(data, visible), [data, visible])
+  const cells = useMemo(() => monthCells(month), [month])
+  const events = byDay.get(selected) || []
+  const monthTitle = new Date(`${month}-01T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, month: 'long', year: 'numeric' })
+  const color = item => item.type !== 'incidents' ? TYPES[item.type].color : colorBy === 'priority' ? PRIORITIES[item.priority] || '#64748b' : CATEGORY_CONFIG[item.category]?.color || '#64748b'
 
-  function prevMonth() {
-    setCurrentDate(new Date(year, month - 1, 1))
-    setSelectedDate(null)
-  }
-  function nextMonth() {
-    setCurrentDate(new Date(year, month + 1, 1))
-    setSelectedDate(null)
-  }
-  function goToToday() {
-    setCurrentDate(new Date())
-    setSelectedDate(new Date())
-  }
-
-  function isToday(day) {
-    const today = new Date()
-    return today.getFullYear() === year && today.getMonth() === month && today.getDate() === day
-  }
-
-  function isSelected(day) {
-    if (!selectedDate) return false
-    return selectedDate.getFullYear() === year &&
-           selectedDate.getMonth() === month &&
-           selectedDate.getDate() === day
+  function navigate(offset) { const next = shiftMonth(month, offset); setMonth(next); setSelected(`${next}-01`) }
+  function goToday() { const key = dateKey(new Date()); setToday(key); setMonth(key.slice(0, 7)); setSelected(key) }
+  function moveFocus(event, key) {
+    const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
+    if (!(event.key in offsets)) return
+    event.preventDefault()
+    const date = new Date(`${key}T12:00:00+08:00`)
+    date.setTime(date.getTime() + offsets[event.key] * 86400000)
+    const next = dateKey(date)
+    setMonth(next.slice(0, 7)); setSelected(next)
+    requestAnimationFrame(() => dayButtons.current.get(next)?.focus())
   }
 
-  function handleDayClick(day) {
-    // Clicking the selected day again deselects it
-    if (isSelected(day)) {
-      setSelectedDate(null)
-    } else {
-      setSelectedDate(new Date(year, month, day))
-    }
-  }
-
-  // Build calendar grid
-  const calendarCells = useMemo(() => {
-    const cells = []
-    for (let i = 0; i < startDay; i++) cells.push(null)
-    for (let day = 1; day <= daysInMonth; day++) cells.push(day)
-    while (cells.length % 7 !== 0) cells.push(null)
-    return cells
-  }, [startDay, daysInMonth])
-
-  // Selected day items (in this month only — selection resets on month change)
-  const selectedInThisMonth = selectedDate && selectedDate.getFullYear() === year && selectedDate.getMonth() === month
-  const selectedIncidents = selectedInThisMonth ? (incidentsByDay.get(selectedDate.getDate()) || []) : []
-  const selectedAnnouncements = selectedInThisMonth && showAnnouncements
-    ? (announcementsByDay.get(selectedDate.getDate()) || [])
-    : []
-
-  // ---- Loading skeleton ----
-  if (loading) {
-    return (
-      <div className="min-h-screen relative overflow-hidden bg-brand">
-        <AnimatedDots />
-        <header
-          className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
-          style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-        >
-          <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
-          <div className="flex-1 space-y-2">
-            <div className="skeleton-shimmer h-4 w-32 rounded-lg" />
-            <div className="skeleton-shimmer h-3 w-48 rounded-lg" />
-          </div>
-        </header>
-        <main className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="white-card p-4 space-y-2">
-                <div className="skeleton-shimmer h-3 w-16 rounded-lg" />
-                <div className="skeleton-shimmer h-7 w-10 rounded-lg" />
-                <div className="skeleton-shimmer h-3 w-20 rounded-lg" />
-              </div>
-            ))}
-          </div>
-          <div className="white-card p-5">
-            <div className="flex items-center justify-center py-24 gap-3 text-gray-400">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm">Loading calendar...</span>
-            </div>
-          </div>
-        </main>
+  return <div className={styles.page}>
+    <header className={styles.header}>
+      <button className={styles.iconButton} onClick={() => router.push('/official')} aria-label="Back to dashboard"><ArrowLeft size={19} /></button>
+      <span className={styles.logo}><CalendarDays size={21} /></span>
+      <div className={styles.heading}><h1>Barangay calendar</h1><p>{profile?.barangays?.name || 'Schedule and activity'} · Philippine time</p></div>
+      <div className={styles.headerActions}>
+        <button className={styles.secondary} aria-label="View appointments" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={16} /><span>Appointments</span></button>
+        <button className={styles.primary} aria-label="New appointment" onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} /><span>New appointment</span></button>
       </div>
-    )
-  }
+    </header>
 
-  return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-      </div>
-
-      <header
-        className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-      >
-        <button
-          onClick={() => router.push('/official')}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0"
-        >
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
-          >
-            <CalendarIcon size={16} className="text-white" />
+    <main className={styles.main}>
+      <div className={styles.intro}><div><p className={styles.eyebrow}>MONTHLY OVERVIEW</p><h2>Plan the day. Keep track of your barangay.</h2></div><p>Appointments, reported incidents, and posted announcements in one place.</p></div>
+      {authError && <div className={styles.error} role="alert">{authError}</div>}
+      <section className={styles.stats} aria-label="Monthly totals">
+        {[['Appointments', data.appointments.length, 'Scheduled this month', '#087f8c'], ['Incidents', data.incidents.length, 'Reported this month', '#b45309'], ['Pending incidents', data.incidents.filter(i => i.status === 'pending').length, 'Awaiting assignment', '#c2410c'], ['Announcements', data.announcements.length, 'Posted this month', '#6554dc']].map(([label, count, note, tint]) => <div className={styles.stat} key={label}><span className={styles.statMarker} style={{ background: tint }} /><div><p>{label}</p><strong>{loading || authError || errors.some(e => e.includes(label === 'Pending incidents' ? 'incidents' : label.toLowerCase())) ? '—' : count}</strong><small>{note}</small></div></div>)}
+      </section>
+      <div className={styles.workspace}>
+        <section className={styles.calendar} aria-label="Month calendar" aria-busy={loading}>
+          <div className={styles.toolbar}><div><h2 aria-live="polite">{monthTitle}</h2><p>Select a day to see its schedule.</p></div><div className={styles.navigation}><button className={styles.secondary} onClick={goToday}>Today</button><button className={styles.iconButton} aria-label="Previous month" onClick={() => navigate(-1)}><ChevronLeft size={19} /></button><button className={styles.iconButton} aria-label="Next month" onClick={() => navigate(1)}><ChevronRight size={19} /></button></div></div>
+          <div className={styles.filters} aria-label="Calendar filters">
+            <div className={styles.typeFilters}>{Object.entries(TYPES).map(([type, config]) => <button key={type} aria-pressed={visible[type]} onClick={() => setVisible(prev => ({ ...prev, [type]: !prev[type] }))} className={`${styles.filter} ${visible[type] ? styles.filterActive : ''}`}><span style={{ background: config.color }} />{config.label}</button>)}</div>
+            <label className={styles.colorFilter}>Incident color<select value={colorBy} onChange={e => setColorBy(e.target.value)}><option value="category">Category</option><option value="priority">Priority</option></select></label>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-base font-bold text-gray-800 truncate">Calendar View</h1>
-            <p className="text-xs text-gray-400 truncate">
-              Incidents & events by date{profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={goToToday}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-          style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}
-        >
-          Today
-        </button>
-        <button
-          onClick={() => router.push('/official/calendar/appointments')}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors hover:bg-gray-100"
-          style={{ color: '#5B54E8', border: '1px solid #e8e3ff' }}
-        >
-          <ClipboardList size={14} /> <span className="hidden sm:inline">Appointments</span>
-        </button>
-      </header>
-
-      <main className="relative z-10 max-w-7xl mx-auto px-4 py-6 space-y-4">
-
-        {/* Monthly Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="white-card p-4">
-            <p className="text-xs text-gray-400">This Month</p>
-            <p className="text-2xl font-black mt-1" style={{ color: '#5B54E8' }}>{monthlyStats.total}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Total Incidents</p>
-          </div>
-          <div className="white-card p-4">
-            <p className="text-xs text-gray-400">Pending</p>
-            <p className="text-2xl font-black mt-1" style={{ color: '#f97316' }}>{monthlyStats.pending}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Need attention</p>
-          </div>
-          <div className="white-card p-4">
-            <p className="text-xs text-gray-400">Resolved</p>
-            <p className="text-2xl font-black mt-1" style={{ color: '#22c55e' }}>{monthlyStats.resolved}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Completed</p>
-          </div>
-          <div className="white-card p-4">
-            <p className="text-xs text-gray-400">Critical</p>
-            <p className="text-2xl font-black mt-1" style={{ color: '#dc2626' }}>{monthlyStats.critical}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Urgent cases</p>
-          </div>
-        </div>
-
-        {/* Filter toggles */}
-        <div className="white-card p-3 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter size={12} style={{ color: '#5B54E8' }} />
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>View</p>
-          </div>
-
-          <div className="flex gap-1" role="group" aria-label="Color dots by">
-            <button
-              onClick={() => setColorBy('category')}
-              aria-pressed={colorBy === 'category'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
-              style={{
-                background: colorBy === 'category' ? '#5B54E8' : '#fafaff',
-                color: colorBy === 'category' ? 'white' : '#6b7280',
-                border: colorBy === 'category' ? '1px solid #5B54E8' : '1px solid #f0effe',
-              }}
-            >
-              By Category
-            </button>
-            <button
-              onClick={() => setColorBy('priority')}
-              aria-pressed={colorBy === 'priority'}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
-              style={{
-                background: colorBy === 'priority' ? '#5B54E8' : '#fafaff',
-                color: colorBy === 'priority' ? 'white' : '#6b7280',
-                border: colorBy === 'priority' ? '1px solid #5B54E8' : '1px solid #f0effe',
-              }}
-            >
-              By Priority
-            </button>
-          </div>
-
-          <div className="w-px h-6 bg-gray-200 hidden sm:block" />
-
-          <button
-            onClick={() => setShowAnnouncements(v => !v)}
-            aria-pressed={showAnnouncements}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
-            style={{
-              background: showAnnouncements ? '#f0effe' : '#fafaff',
-              color: showAnnouncements ? '#5B54E8' : '#9ca3af',
-              border: '1px solid #f0effe',
-            }}
-          >
-            📢 Announcements
-          </button>
-        </div>
-
-        {/* Calendar */}
-        <div className="white-card p-5">
-          <div className="flex items-center justify-between mb-5">
-            <button
-              onClick={prevMonth}
-              aria-label="Previous month"
-              className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 transition-colors"
-            >
-              <ChevronLeft size={16} className="text-gray-600" />
-            </button>
-            <h2 className="text-lg font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }} aria-live="polite">
-              {MONTH_NAMES[month]} {year}
-            </h2>
-            <button
-              onClick={nextMonth}
-              aria-label="Next month"
-              className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 transition-colors"
-            >
-              <ChevronRight size={16} className="text-gray-600" />
-            </button>
-          </div>
-
-          {/* Day labels */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {DAY_LABELS.map(d => (
-              <div key={d} className="text-center text-[10px] font-bold uppercase tracking-wider text-gray-400 py-2">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarCells.map((day, idx) => {
-              if (day === null) {
-                return <div key={idx} className="aspect-square" aria-hidden="true" />
-              }
-
-              const dayIncidents = incidentsByDay.get(day) || []
-              const dayAnnouncements = showAnnouncements ? (announcementsByDay.get(day) || []) : []
-              const hasItems = dayIncidents.length > 0 || dayAnnouncements.length > 0
-              const today = isToday(day)
-              const selected = isSelected(day)
-
-              const dotColors = dayIncidents.slice(0, 3).map(inc => {
-                const config = colorBy === 'category'
-                  ? (CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other)
-                  : (PRIORITY_CONFIG[inc.priority] || PRIORITY_CONFIG.Medium)
-                return config.color
-              })
-
-              return (
-                <button
-                  key={idx}
-                  onClick={() => handleDayClick(day)}
-                  aria-label={`${MONTH_NAMES[month]} ${day}: ${dayIncidents.length} incident${dayIncidents.length === 1 ? '' : 's'}${dayAnnouncements.length ? `, ${dayAnnouncements.length} announcement${dayAnnouncements.length === 1 ? '' : 's'}` : ''}`}
-                  aria-pressed={selected}
-                  className="aspect-square rounded-2xl p-1.5 sm:p-2 flex flex-col items-start justify-start transition-all hover:scale-105 relative overflow-hidden"
-                  style={{
-                    background: selected
-                      ? 'linear-gradient(135deg, #5B54E8, #7C75F0)'
-                      : today
-                      ? '#f0effe'
-                      : hasItems
-                      ? '#fafaff'
-                      : 'white',
-                    border: selected ? '2px solid transparent' : today ? '2px solid #5B54E8' : '1px solid #f0effe',
-                    boxShadow: selected ? '0 8px 24px rgba(91,84,232,0.4)' : 'none',
-                  }}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span
-                      className="text-xs sm:text-sm font-bold"
-                      style={{ color: selected ? 'white' : today ? '#5B54E8' : '#374151' }}
-                    >
-                      {day}
-                    </span>
-                    {dayIncidents.length > 0 && (
-                      <span
-                        className="absolute bottom-1 right-1 z-10 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                        style={{ background: selected ? 'rgba(255,255,255,0.25)' : '#5B54E8', color: 'white' }}
-                        title={`${dayIncidents.length} incident${dayIncidents.length === 1 ? '' : 's'}`}
-                      >
-                        {dayIncidents.length}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Dots */}
-                  {dotColors.length > 0 && (
-                    <div className="hidden gap-0.5 pr-6 sm:flex sm:flex-wrap sm:mt-auto">
-                      {dotColors.map((color, i) => (
-                        <div key={i} className="w-1.5 h-1.5 rounded-full" style={{ background: selected ? 'white' : color }} />
-                      ))}
-                      {dayIncidents.length > 3 && (
-                        <span className="text-[8px] font-bold" style={{ color: selected ? 'white' : '#9ca3af' }}>
-                          +{dayIncidents.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Announcement indicator */}
-                  {dayAnnouncements.length > 0 && (
-                    <div className="absolute right-1 top-1 z-10 rounded-full bg-white/90 px-0.5">
-                      <span className="text-[10px]" aria-hidden="true">📢</span>
-                    </div>
-                  )}
-                </button>
-              )
+          {errors.length > 0 && <div className={styles.error} role="alert">{errors.join(' ')} <button onClick={() => setRefresh(v => v + 1)}>Retry</button></div>}
+          <div className={styles.weekdays}>{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <span key={day}>{day}</span>)}</div>
+          <div className={styles.grid}>
+            {cells.map((key, index) => {
+              if (!key) return <div key={`empty-${index}`} className={styles.blank} aria-hidden="true" />
+              const dayEvents = byDay.get(key) || []
+              // Put appointments first in the compact preview; the day panel is chronological.
+              const previews = [...dayEvents.filter(e => e.type === 'appointments'), ...dayEvents.filter(e => e.type !== 'appointments')]
+              return <button key={key} ref={el => { if (el) dayButtons.current.set(key, el); else dayButtons.current.delete(key) }} className={`${styles.day} ${selected === key ? styles.selected : ''} ${today === key ? styles.today : ''}`} onClick={() => setSelected(key)} onKeyDown={e => moveFocus(e, key)} aria-pressed={selected === key} aria-current={today === key ? 'date' : undefined} aria-label={`${formatDay(key)}. ${loading ? 'Loading events' : Object.entries(TYPES).map(([type, conf]) => `${dayEvents.filter(e => e.type === type).length} ${conf.label.toLowerCase()}`).join(', ')}`}>
+                <span className={styles.dayTop}><span className={styles.dayNumber}>{Number(key.slice(-2))}</span>{dayEvents.length > 0 && <span className={styles.dayCount}>{dayEvents.length}</span>}</span>
+                <span className={styles.cellEvents}>{previews.slice(0, 2).map(item => <span key={`${item.type}-${item.id}`} className={styles.cellEvent} style={{ borderLeftColor: color(item) }}>{item.type === 'appointments' ? `${formatTime(item.time)} · ` : ''}{item.title}</span>)}{dayEvents.length > 2 && <span className={styles.more}>+{dayEvents.length - 2} more</span>}</span>
+                <span className={styles.mobileDots}>{Object.keys(TYPES).filter(type => dayEvents.some(e => e.type === type)).map(type => <span key={type} style={{ background: TYPES[type].color }} />)}</span>
+              </button>
             })}
           </div>
-        </div>
+          <div className={styles.footer}><span>{loading ? 'Loading calendar…' : 'Appointments use their scheduled date. Incidents and announcements use their creation date.'}</span><button className={styles.refresh} aria-label="Refresh calendar" disabled={loading} onClick={() => setRefresh(v => v + 1)}><RefreshCw size={14} />Refresh</button></div>
+        </section>
 
-        {/* Selected day details */}
-        {selectedDate && selectedInThisMonth && (
-          <div className="white-card p-5 fade-up">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#5B54E8' }}>Selected Day</p>
-                <h3 className="text-lg font-bold text-gray-800 mt-0.5" style={{ letterSpacing: '-0.5px' }}>
-                  {selectedDate.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                </h3>
-              </div>
-              <button
-                onClick={() => setSelectedDate(null)}
-                aria-label="Close day details"
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {selectedIncidents.length === 0 && selectedAnnouncements.length === 0 ? (
-              <div className="text-center py-8">
-                <CalendarIcon size={32} className="mx-auto text-gray-300 mb-2" />
-                <p className="text-sm text-gray-400">No activity on this day</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {selectedAnnouncements.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                      Announcements ({selectedAnnouncements.length})
-                    </p>
-                    <div className="space-y-2">
-                      {selectedAnnouncements.map(a => (
-                        <div
-                          key={a.id}
-                          className="flex items-start gap-3 px-3 py-2.5 rounded-xl"
-                          style={{ background: '#fafaff', border: '1px solid #f0effe' }}
-                        >
-                          <div
-                            className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
-                          >
-                            📢
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-gray-800 truncate">{a.title}</p>
-                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{a.content}</p>
-                            <p className="text-[10px] text-gray-400 mt-1">
-                              {new Date(a.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedIncidents.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
-                      Incidents ({selectedIncidents.length})
-                    </p>
-                    <div className="space-y-2">
-                      {selectedIncidents.map(inc => {
-                        const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                        const prio = PRIORITY_CONFIG[inc.priority]
-                        return (
-                          <div
-                            key={inc.id}
-                            className="flex items-start gap-3 px-3 py-2.5 rounded-xl"
-                            style={{ background: '#fafaff', border: '1px solid #f0effe' }}
-                          >
-                            <div
-                              className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 text-base"
-                              style={{ background: cat.bg }}
-                            >
-                              {cat.icon}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-bold text-gray-800 truncate">{inc.title}</p>
-                                {prio && (
-                                  <span
-                                    className="text-[9px] px-1.5 py-0.5 rounded-md font-bold flex items-center gap-0.5"
-                                    style={{ background: prio.bg, color: prio.color }}
-                                    title={`${inc.priority} priority`}
-                                  >
-                                    {prio.icon} {inc.priority}
-                                  </span>
-                                )}
-                                <span
-                                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                                    inc.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                                    inc.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                                    'bg-emerald-100 text-emerald-700'
-                                  }`}
-                                >
-                                  {inc.status}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
-                                📍 {inc.location}{inc.profiles?.full_name ? ` · ${inc.profiles.full_name}` : ''}
-                              </p>
-                              <p className="text-[10px] text-gray-400 mt-1">
-                                {new Date(inc.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+        <aside className={styles.agenda} aria-label="Selected day details">
+          <div className={styles.agendaHeading}><p className={styles.eyebrow}>SELECTED DAY</p><h2>{formatDay(selected)}</h2><p aria-live="polite">{loading ? 'Loading schedule…' : `${events.length} visible ${events.length === 1 ? 'item' : 'items'}`}</p></div>
+          <div className={styles.agendaBody}>
+            {loading ? <p className={styles.empty} role="status">Loading your schedule…</p> : authError ? <p className={styles.empty}>Calendar access is unavailable.</p> : events.length === 0 ? <div className={styles.empty}><CalendarDays size={30} /><h3>{errors.length ? 'Some records could not be loaded' : Object.values(visible).some(Boolean) ? 'Nothing to show for this day' : 'All event types are hidden'}</h3><p>{errors.length ? 'Use Retry above to reload missing records.' : 'Choose another date or adjust the filters above.'}</p></div> : events.map(item => <article key={`${item.type}-${item.id}`} className={styles.event} style={{ borderLeftColor: color(item) }}>
+              <div className={styles.eventMeta}><span style={{ color: TYPES[item.type].color }}>{TYPES[item.type].singular}</span><time dateTime={item.time}><Clock3 size={12} />{formatTime(item.time)}</time></div>
+              <h3>{item.title}</h3>
+              {item.type === 'appointments' && <>{item.participant_name && <p className={styles.detail}><UserRound size={14} />{item.participant_name}</p>}{item.notes && <p className={styles.notes}>{item.notes}</p>}<small>Reminder: {item.remind_at ? new Date(item.remind_at).toLocaleString('en-PH', { timeZone: TIME_ZONE, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Not set'}</small></>}
+              {item.type === 'incidents' && <><div className={styles.badges}><span>{item.category || 'Other'}</span><span>{item.priority || 'Unspecified'} priority</span><span>{String(item.status || 'Unknown').replaceAll('_', ' ')}</span></div>{item.location && <p className={styles.detail}><MapPin size={14} />{item.location}</p>}</>}
+              {item.type === 'announcements' && <p className={styles.notes}>{item.content}</p>}
+            </article>)}
           </div>
-        )}
-
-        {/* Legend */}
-        {legendEntries.length > 0 && (
-          <div className="white-card p-4">
-            <p className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: '#5B54E8' }}>
-              Legend ({colorBy === 'category' ? 'Categories' : 'Priorities'} this month)
-            </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-2">
-              {legendEntries.map(([name, conf]) => (
-                <div key={name} className="flex items-center gap-1.5 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: conf.color }} />
-                  <span className="text-gray-600">{conf.icon} {name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-      </main>
-    </div>
-  )
+          <button className={styles.agendaAction} onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={16} />View appointment list<ChevronRight size={16} /></button>
+        </aside>
+      </div>
+    </main>
+  </div>
 }
