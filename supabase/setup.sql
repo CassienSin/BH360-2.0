@@ -2124,6 +2124,120 @@ drop function if exists private.dispatch_incident_push();
 -- ----------------------------------------------------------------------------
 
 -- ============================================================================
+-- SECTION 17 — TANOD DUTY SCHEDULE
+-- ============================================================================
+-- Planned shifts for the official Tanod Management screen. Existing duty_logs
+-- continue to record actual duty toggles; scheduling does not change on_duty.
+-- This section can also be run on its own after the base schema is installed.
+-- Re-running preserves existing schedule rows and recreates the same policy
+-- and functions. IF NOT EXISTS assumes the existing table has this schema.
+-- btree_gist provides the UUID operator class used to reject overlapping shifts.
+
+begin;
+create extension if not exists btree_gist with schema extensions;
+set local search_path = public, extensions;
+
+create table if not exists public.tanod_duty_schedules (
+  id uuid primary key default gen_random_uuid(),
+  barangay_id uuid not null references public.barangays(id),
+  tanod_id uuid not null references public.profiles(id),
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  area text not null default '' check (char_length(area) <= 160),
+  notes text not null default '' check (char_length(notes) <= 500),
+  status text not null default 'scheduled' check (status in ('scheduled', 'cancelled')),
+  created_by uuid not null references public.profiles(id),
+  updated_by uuid not null references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default clock_timestamp(),
+  constraint duty_schedule_duration check (ends_at > starts_at and ends_at <= starts_at + interval '24 hours'),
+  -- The database also rejects simultaneous overlapping writes.
+  constraint duty_schedule_no_overlap exclude using gist
+    (tanod_id with =, tstzrange(starts_at, ends_at, '[)') with &&)
+    where (status = 'scheduled')
+);
+create index if not exists tanod_duty_schedule_barangay_time on public.tanod_duty_schedules(barangay_id, starts_at);
+create index if not exists duty_logs_barangay_time on public.duty_logs(barangay_id, changed_at, id);
+alter table public.tanod_duty_schedules enable row level security;
+revoke all on public.tanod_duty_schedules from anon, authenticated;
+grant select on public.tanod_duty_schedules to authenticated;
+
+drop policy if exists "duty schedule: same barangay official or assigned tanod" on public.tanod_duty_schedules;
+create policy "duty schedule: same barangay official or assigned tanod"
+on public.tanod_duty_schedules for select to authenticated
+using (exists (
+  select 1 from public.profiles p where p.id = auth.uid()
+    and p.deactivated_at is null
+    and p.barangay_id = tanod_duty_schedules.barangay_id
+    and (p.role = 'official' or (p.role = 'tanod' and p.id = tanod_duty_schedules.tanod_id))
+));
+
+create or replace function public.save_tanod_duty_schedule(
+  p_id uuid, p_tanod_id uuid, p_starts_at timestamptz, p_ends_at timestamptz,
+  p_area text, p_notes text, p_expected_updated_at timestamptz
+) returns uuid language plpgsql security definer set search_path = public
+as $$
+declare
+  caller_barangay uuid;
+  existing public.tanod_duty_schedules%rowtype;
+  result_id uuid;
+begin
+  select barangay_id into caller_barangay from public.profiles
+    where id = auth.uid() and role = 'official' and deactivated_at is null;
+  if caller_barangay is null then raise exception 'Only active barangay officials may manage duty schedules' using errcode = '42501'; end if;
+  if p_starts_at is null or p_ends_at is null or p_starts_at <= now()
+     or p_ends_at <= p_starts_at or p_ends_at > p_starts_at + interval '24 hours' then
+    raise exception 'Choose future duty hours of up to 24 hours' using errcode = '22023';
+  end if;
+  perform 1 from public.profiles where id = p_tanod_id and role = 'tanod'
+    and barangay_id = caller_barangay and deactivated_at is null for share;
+  if not found then raise exception 'Select an active tanod in your barangay' using errcode = '42501'; end if;
+
+  if p_id is null then
+    insert into public.tanod_duty_schedules(barangay_id, tanod_id, starts_at, ends_at, area, notes, created_by, updated_by)
+    values(caller_barangay, p_tanod_id, p_starts_at, p_ends_at, trim(coalesce(p_area,'')), trim(coalesce(p_notes,'')), auth.uid(), auth.uid())
+    returning id into result_id;
+  else
+    select * into existing from public.tanod_duty_schedules where id = p_id and barangay_id = caller_barangay for update;
+    if not found then raise exception 'Shift not found or access denied' using errcode = '42501'; end if;
+    if existing.updated_at is distinct from p_expected_updated_at then raise exception 'Shift changed by another official'; end if;
+    if existing.status <> 'scheduled' or existing.starts_at <= now() then raise exception 'Only upcoming scheduled shifts can be edited'; end if;
+    update public.tanod_duty_schedules set tanod_id = p_tanod_id, starts_at = p_starts_at,
+      ends_at = p_ends_at, area = trim(coalesce(p_area,'')), notes = trim(coalesce(p_notes,'')),
+      updated_by = auth.uid(), updated_at = clock_timestamp() where id = p_id;
+    result_id := p_id;
+  end if;
+  return result_id;
+end;
+$$;
+
+create or replace function public.cancel_tanod_duty_schedule(p_id uuid, p_expected_updated_at timestamptz)
+returns uuid language plpgsql security definer set search_path = public
+as $$
+declare
+  caller_barangay uuid;
+  existing public.tanod_duty_schedules%rowtype;
+begin
+  select barangay_id into caller_barangay from public.profiles
+    where id = auth.uid() and role = 'official' and deactivated_at is null;
+  if caller_barangay is null then raise exception 'Only active barangay officials may manage duty schedules' using errcode = '42501'; end if;
+  select * into existing from public.tanod_duty_schedules where id = p_id and barangay_id = caller_barangay for update;
+  if not found then raise exception 'Shift not found or access denied' using errcode = '42501'; end if;
+  if existing.updated_at is distinct from p_expected_updated_at then raise exception 'Shift changed by another official'; end if;
+  if existing.status <> 'scheduled' or existing.starts_at <= now() then raise exception 'Only upcoming scheduled shifts can be cancelled'; end if;
+  update public.tanod_duty_schedules set status = 'cancelled', updated_by = auth.uid(), updated_at = clock_timestamp() where id = p_id;
+  return p_id;
+end;
+$$;
+
+revoke all on function public.save_tanod_duty_schedule(uuid,uuid,timestamptz,timestamptz,text,text,timestamptz) from public, anon, authenticated;
+revoke all on function public.cancel_tanod_duty_schedule(uuid,timestamptz) from public, anon, authenticated;
+grant execute on function public.save_tanod_duty_schedule(uuid,uuid,timestamptz,timestamptz,text,text,timestamptz) to authenticated;
+grant execute on function public.cancel_tanod_duty_schedule(uuid,timestamptz) to authenticated;
+notify pgrst, 'reload schema';
+commit;
+
+-- ============================================================================
 -- MANUAL STEPS AFTER RUNNING THIS SCRIPT
 -- ============================================================================
 -- 1. PSGC DATA — populate the barangays table:

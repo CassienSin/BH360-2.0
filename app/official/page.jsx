@@ -2,12 +2,13 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, Phone, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TanodRoster from '@/components/TanodRoster'
+import TanodManagement from '@/components/TanodManagement'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
@@ -571,18 +572,6 @@ export default function OfficialDashboard() {
       supabase.removeChannel(documentChannel)
     }
   }, [profile?.barangay_id, supabase, loadBarangayData, router])
-
-  // Active assignment count per tanod — shown in the dispatch dropdown so
-  // officials naturally balance the load ("Reyes · 2 active")
-  const tanodActiveCounts = useMemo(() => {
-    const counts = {}
-    incidents.forEach(i => {
-      if (i.status === 'assigned' && i.assigned_to) {
-        counts[i.assigned_to] = (counts[i.assigned_to] || 0) + 1
-      }
-    })
-    return counts
-  }, [incidents])
 
   const filteredIncidents = useMemo(() => {
     const q = incidentSearch.trim().toLowerCase()
@@ -1521,86 +1510,11 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tanods' && (
-            <div className="space-y-3 fade-up">
-              {/* Summary strip so the section opens with the number that
-                  matters: how many are patrolling right now */}
-              {tanods.length > 0 && (
-                <div className="white-card p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{background: '#f0fdf4'}}>
-                    <Shield size={18} className="text-emerald-500" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-gray-800">
-                      {tanods.filter(t => t.on_duty).length} of {tanods.length} on duty
-                    </p>
-                    <p className="text-xs text-gray-400">Duty status updates live</p>
-                  </div>
-                  <button onClick={() => navClick('users')}
-                    className="text-xs font-semibold flex-shrink-0" style={{color: '#5B54E8'}}>
-                    + Invite tanod
-                  </button>
-                </div>
-              )}
-
-              {tanods.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <Shield size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
-                  <p className="text-gray-400 text-sm">No tanods registered yet.</p>
-                  <button onClick={() => navClick('users')} className="mt-4 text-xs font-semibold" style={{color: '#5B54E8'}}>Generate invite code →</button>
-                </div>
-              )}
-
-              {/* On-duty first, then alphabetical */}
-              {[...tanods]
-                .sort((a, b) => (b.on_duty === true) - (a.on_duty === true) || (a.full_name || '').localeCompare(b.full_name || ''))
-                .map(t => {
-                  const active = tanodActiveCounts[t.id] || 0
-                  return (
-                    <div key={t.id} className="white-card p-5">
-                      <div className="flex items-center gap-4">
-                        {/* Profile photo — this list previously showed only the initial */}
-                        <Avatar
-                          src={t.avatar_url}
-                          name={t.full_name}
-                          className="w-12 h-12"
-                          textClass="text-lg"
-                          gradient={t.on_duty
-                            ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-                            : 'linear-gradient(135deg, #9ca3af, #6b7280)'}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-gray-800">{t.full_name}</p>
-                            {active > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
-                                style={{background: '#eff6ff', color: '#3b82f6'}}>
-                                {active} active
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-400 mt-0.5 truncate">
-                            {t.phone || 'No phone'} · {t.address || 'No address'}
-                            {t.last_seen_at && ` · Seen ${timeAgo(t.last_seen_at)}`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {t.phone && (
-                            <a href={`tel:${t.phone.replace(/[^0-9+]/g, '')}`}
-                              aria-label={`Call ${t.full_name}`}
-                              className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100">
-                              <Phone size={14} style={{color: '#5B54E8'}} />
-                            </a>
-                          )}
-                          <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${t.on_duty ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
-                            {t.on_duty ? 'On Duty' : 'Off Duty'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-            </div>
+            <TanodManagement
+              profile={profile}
+              onInvite={() => navClick('users')}
+              onOpenIncident={id => router.push(`/official/incident/${id}`)}
+            />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'analytics' && (
