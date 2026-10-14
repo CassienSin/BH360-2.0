@@ -1,0 +1,24 @@
+.toolbar { padding: 20px; }
+.topRow { display: flex; align-items: center; gap: 12px; }
+.search { position: relative; flex: 1; min-width: 0; }
+.search > svg { position: absolute; top: 15px; left: 14px; color: #70677d; pointer-events: none; }
+.search input { min-height: 46px; width: 100%; border: 1px solid #e8e3ff; border-radius: 14px; background: #fafaff; padding: 11px 48px 11px 42px; color: #292338; font-family: inherit; font-size: 13px; line-height: 1.7; }
+.search input::placeholder { color: #70677d; opacity: 1; }
+.search input::-webkit-search-cancel-button { appearance: none; }
+.search input:focus-visible { outline: 2px solid #5b54e8; outline-offset: 2px; }
+.search button { position: absolute; right: 2px; top: 2px; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; color: #70677d; cursor: pointer; }
+.search button:hover { background: #f0effe; }
+.actions { flex-shrink: 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.filters button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 14px; border: 1px solid #e8e3ff; border-radius: 12px; background: #fafaff; color: #62576f; font-size: 12px; font-weight: 650; line-height: 1.6; cursor: pointer; }
+.filters button:hover { background: #f0effe; }
+.filters button[aria-pressed="true"] { background: #4a43d4; border-color: #4a43d4; color: white; }
+.filters button span { min-width: 22px; padding: 0 6px; border-radius: 6px; background: #f0effe; color: #4a43d4; font-size: 11px; font-weight: 700; text-align: center; }
+.filters button[aria-pressed="true"] span { background: #ffffff26; color: white; }
+.filters button:focus-visible, .search button:focus-visible { outline: 2px solid #5b54e8; outline-offset: 2px; }
+.bottomRow { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #f0effe; padding-top: 14px; margin-top: 16px; }
+.bottomRow > div { min-width: 0; }
+.bottomRow p { margin: 0; color: #514765; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.bottomRow .hint { color: #70677d; margin-top: 2px; }
+.bottomRow > button { flex-shrink: 0; }
+@media (max-width: 600px) { .toolbar { padding: 16px; } .topRow, .bottomRow { align-items: stretch; flex-direction: column; } .actions > button { width: 100%; } .filters { gap: 6px; } .filters button { flex: 1 1 auto; padding-inline: 10px; } .search input { font-size: 16px; } }

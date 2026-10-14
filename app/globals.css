@@ -81,6 +81,10 @@
   --brand-dark: #4A43D4;
   --brand-soft: #f0effe;
   --brand-border: #e8e3ff;
+  --app-text-muted: #6b7280;
+  --app-surface: #fafaff;
+  --app-card-radius: 24px;
+  --app-card-shadow: 0 6px 24px rgba(91,84,232,0.09);
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -226,7 +230,10 @@
 .nav-item.active { background: linear-gradient(135deg, rgba(91,84,232,0.15), rgba(124,117,240,0.1)); }
 
 .white-card {
-  @apply bg-white rounded-[24px] transition-all duration-200 shadow-[0_8px_32px_rgba(91,84,232,0.12)];
+  background: white;
+  border-radius: var(--app-card-radius);
+  box-shadow: var(--app-card-shadow);
+  transition: box-shadow .2s, border-color .2s;
 }
 
 .glass-card {
@@ -237,11 +244,11 @@
    these fired on tap and stuck — cards stayed "lifted" until the next
    tap somewhere else, which reads as glitchy. */
 @media (hover: hover) {
-  .white-card:hover {
-    @apply -translate-y-0.5 shadow-[0_16px_48px_rgba(91,84,232,0.18)];
+  .white-card:is(button, a, [role='button']):hover {
+    box-shadow: 0 8px 28px rgba(91,84,232,0.15);
   }
-  .glass-card:hover {
-    @apply -translate-y-0.5 bg-white/18;
+  .glass-card:is(button, a, [role='button']):hover {
+    @apply bg-white/18;
   }
 }
 
@@ -264,15 +271,27 @@
 
 .input-field {
   @apply border-[1.5px] border-[#e8e3ff] bg-[#faf9ff] outline-none transition-all duration-200;
+  min-height: 44px;
+  line-height: 1.6;
 }
+.input-field::placeholder { color: #777184; opacity: 1; }
+.input-field[aria-invalid='true'] { border-color: #b91c1c; }
 .input-field:focus {
   @apply border-[#5B54E8] bg-white shadow-[0_0_0_4px_rgba(91,84,232,0.08)];
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #5B54E8 0%, #7C75F0 50%, #5B54E8 100%);
+  background: linear-gradient(135deg, var(--brand-dark), var(--brand));
+  min-height: 44px;
   background-size: 200% auto;
   @apply transition-all duration-300 shadow-[0_4px_24px_rgba(91,84,232,0.35)];
+}
+
+/* Secondary text on white content surfaces, without dimming text on purple. */
+.white-card .text-gray-400 { color: var(--app-text-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 
 .bg-brand {
@@ -314,7 +333,7 @@
 }
 
 @media (hover: hover) {
-  .btn-primary:hover {
+  .btn-primary:not(:disabled):hover {
     background-position: right center;
     @apply -translate-y-px shadow-[0_8px_32px_rgba(91,84,232,0.5)];
   }
@@ -330,7 +349,7 @@
 }
 
 /* ===== MOBILE RESPONSIVE ===== */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .sidebar {
     position: fixed !important;
     top: 0;
@@ -349,7 +368,7 @@
   }
 }
 
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .sidebar-overlay {
     display: none !important;
   }

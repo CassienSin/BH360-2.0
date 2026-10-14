@@ -1,8 +1,9 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { FileCheck2, Search, X, Scale, Loader2, Clock, AlertOctagon, CheckCircle2, XCircle, Timer } from 'lucide-react'
+import { FileCheck2, Scale, Loader2, Clock, AlertOctagon, CheckCircle2, XCircle, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
+import RecordListToolbar, { RecordListEmpty } from './RecordListToolbar'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import {
   DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE,
@@ -40,7 +41,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
     const q = search.trim().toLowerCase()
     const isOpen = r => !['released', 'denied'].includes(r.status)
     return requests
-      .filter(r => (tab === 'open' ? isOpen(r) : !isOpen(r)))
+      .filter(r => tab === 'all' || (tab === 'open' ? isOpen(r) : !isOpen(r)))
       .filter(r => !q ||
         r.reference_code?.toLowerCase().includes(q) ||
         r.purpose?.toLowerCase().includes(q) ||
@@ -50,8 +51,11 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
       // once it is finished.
       .sort((a, b) => (tab === 'open'
         ? new Date(a.due_at) - new Date(b.due_at)
+        : tab === 'all' ? new Date(b.created_at) - new Date(a.created_at)
         : new Date(b.released_at || b.created_at) - new Date(a.released_at || a.created_at)))
   }, [requests, tab, search])
+
+  function resetFilters() { setSearch(''); setTab('all') }
 
   async function patch(req, changes, message) {
     if (working) return
@@ -152,46 +156,14 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
         </div>
       )}
 
-      <div className="white-card p-4 space-y-3">
-        <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter requests">
-          {[
-            { value: 'open', label: 'Open', count: counts.open, color: '#f97316' },
-            { value: 'done', label: 'Completed', count: counts.done, color: '#22c55e' },
-          ].map(f => (
-            <button key={f.value} onClick={() => setTab(f.value)} aria-pressed={tab === f.value}
-              className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-              style={{
-                background: tab === f.value ? f.color : '#fafaff',
-                color: tab === f.value ? 'white' : '#6b7280',
-                border: tab === f.value ? 'none' : '1px solid #f0effe',
-              }}>
-              {f.label} <span style={{ opacity: 0.75 }}>{f.count}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            type="search" aria-label="Search document requests"
-            placeholder="Search by reference, document, requester, or purpose..."
-            className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
-          {search && (
-            <button onClick={() => setSearch('')} aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
+      <RecordListToolbar search={search} onSearchChange={setSearch} searchLabel="Search document requests"
+        placeholder="Reference, document, requester, or purpose…" noun="Document requests"
+        filters={[{ value: 'all', label: 'All', count: requests.length }, { value: 'open', label: 'Open', count: counts.open }, { value: 'done', label: 'Closed', count: counts.done }]}
+        value={tab} onFilterChange={setTab} shown={shown.length} total={requests.length} onReset={resetFilters}
+        sortHint={tab === 'open' ? 'Open requests: soonest deadline first.' : tab === 'done' ? 'Released and denied requests: most recently closed first.' : 'All requests: newest first.'} />
 
       {shown.length === 0 ? (
-        <div className="white-card p-10 text-center">
-          <FileCheck2 size={36} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-400 text-sm">
-            {tab === 'open' ? 'No open document requests.' : 'Nothing completed yet.'}
-          </p>
-        </div>
+        <RecordListEmpty total={requests.length} search={search} noun="document requests" filterLabel={tab === 'open' ? 'Open' : tab === 'done' ? 'Closed' : 'All'} icon={FileCheck2} onReset={resetFilters} description="Document requests submitted to your barangay will appear here for processing." />
       ) : (
         <div className="space-y-2">
           {shown.map(req => {

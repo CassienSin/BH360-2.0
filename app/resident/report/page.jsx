@@ -491,7 +491,7 @@ export default function ReportIncident() {
               <div>
                 <p className="text-white text-sm font-semibold">Report an incident</p>
                 <p className="text-purple-200 text-xs mt-0.5">
-                  Just describe what happened — urgency is assigned automatically based on Philippine law.
+                  Just describe what happened — priority is assigned using configured incident rules informed by relevant Philippine laws.
                 </p>
               </div>
             </div>

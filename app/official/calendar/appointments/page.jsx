@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarDays, Clock3, Loader2, Plus, UserRound } from 'lucide-react'
+import { CalendarDays, Clock3, Plus, UserRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
+import { AppButton, PageHeader, PageState, StatusBadge } from '@/components/AppUI'
 
 function formatDateTime(value) {
   if (!value) return 'Not set'
@@ -22,6 +23,8 @@ export default function AppointmentsPage() {
   const [appointments, setAppointments] = useState([])
   const [filter, setFilter] = useState('upcoming')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reload, setReload] = useState(0)
 
   const loadAppointments = useCallback(async (barangayId) => {
     const { data, error } = await supabase.from('appointments')
@@ -56,14 +59,20 @@ export default function AppointmentsPage() {
         await loadAppointments(official.barangay_id)
       } catch (error) {
         console.error('Could not load appointments:', error)
-        if (!cancelled) toast.error('Could not load appointments. Please refresh.')
+        if (!cancelled) setLoadError('Your appointments could not be loaded. Check your connection and try again.')
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [supabase, router, loadAppointments])
+  }, [supabase, router, loadAppointments, reload])
+
+  function retry() {
+    setLoadError('')
+    setLoading(true)
+    setReload(value => value + 1)
+  }
 
   useEffect(() => {
     if (!profile?.barangay_id) return
@@ -95,43 +104,24 @@ export default function AppointmentsPage() {
   })
 
   if (loading) {
-    return <div className="min-h-screen bg-brand flex items-center justify-center"><Loader2 size={30} className="animate-spin text-white" /></div>
+    return <PageState fullPage kind="loading" title="Loading appointments…" description="Getting your barangay schedule." />
   }
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-brand">
       <AppointmentReminderWatcher profile={profile} />
-      <header className="relative z-10 border-b border-[#f0effe] bg-white px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-5xl items-center gap-3">
-          <button onClick={() => router.push('/official')} aria-label="Back to dashboard"
-            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl hover:bg-gray-100">
-            <ArrowLeft size={18} className="text-gray-600" />
-          </button>
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl" style={{ background: '#f0effe' }}>
-            <CalendarDays size={18} style={{ color: '#5B54E8' }} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-bold text-gray-800">Appointments</h1>
-            <p className="truncate text-xs text-gray-400">{profile?.barangays?.name || 'Barangay'} · appointment schedule</p>
-          </div>
-          <button onClick={() => router.push('/official/calendar/appointments/new')}
-            className="flex flex-shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-white"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-            <Plus size={14} /> <span className="hidden sm:inline">New appointment</span><span className="sm:hidden">New</span>
-          </button>
-        </div>
-      </header>
+      <PageHeader title="Appointments" description={`${profile?.barangays?.name || 'Barangay'} · Appointment schedule`} icon={CalendarDays} onBack={() => router.push('/official')} backLabel="Back to dashboard" actions={<AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} />New Appointment</AppButton>} />
 
-      <main className="relative z-10 mx-auto w-full max-w-5xl space-y-4 px-4 py-6">
+      <main className="relative z-10 mx-auto w-full max-w-[1320px] space-y-4 px-4 sm:px-6 py-6">
         <section className="white-card p-4 sm:p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-bold text-gray-800">Your appointments</h2>
-              <p className="text-xs text-gray-400">{visibleAppointments.length} shown · {appointments.length} total</p>
+              <p className="text-xs text-gray-400">{loadError ? 'Appointments unavailable' : `${visibleAppointments.length} shown · ${appointments.length} total`}</p>
             </div>
             <div className="flex rounded-xl bg-[#f5f4ff] p-1" aria-label="Filter appointments">
               {[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']].map(([key, label]) => (
-                <button key={key} onClick={() => setFilter(key)}
+                <button key={key} onClick={() => setFilter(key)} aria-pressed={filter === key}
                   className={`rounded-lg px-3 py-2 text-xs font-semibold ${filter === key ? 'bg-white text-[#5B54E8] shadow-sm' : 'text-gray-500'}`}>
                   {label}
                 </button>
@@ -139,17 +129,8 @@ export default function AppointmentsPage() {
             </div>
           </div>
 
-          {visibleAppointments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#e8e3ff] px-4 py-12 text-center">
-              <CalendarDays size={30} className="mx-auto mb-2 text-gray-300" />
-              <p className="text-sm font-semibold text-gray-600">{filter === 'past' ? 'No past appointments' : 'No appointments yet'}</p>
-              <p className="mt-1 text-xs text-gray-400">Create an appointment and it will appear in this list.</p>
-              <button onClick={() => router.push('/official/calendar/appointments/new')}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-                <Plus size={14} /> Create appointment
-              </button>
-            </div>
+          {loadError ? <PageState kind="error" title="Appointments unavailable" description={loadError} actionLabel="Try again" onAction={retry} /> : visibleAppointments.length === 0 ? (
+            <PageState icon={CalendarDays} title={filter === 'past' ? 'No past appointments' : filter === 'upcoming' ? 'No upcoming appointments' : 'No appointments yet'} description={appointments.length ? 'There are no appointments in this view. Choose another filter to see your saved appointments.' : 'Create an appointment to keep your barangay activities and reminders organized.'} actionLabel={appointments.length ? 'View all appointments' : 'Create an Appointment'} onAction={() => appointments.length ? setFilter('all') : router.push('/official/calendar/appointments/new')} />
           ) : (
             <div className="space-y-3">
               {visibleAppointments.map(appointment => {
@@ -161,9 +142,9 @@ export default function AppointmentsPage() {
                         <h3 className="break-words text-sm font-bold text-gray-800">{appointment.title}</h3>
                         {appointment.participant_name && <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500"><UserRound size={12} /> {appointment.participant_name}</p>}
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${past ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>
+                      <StatusBadge tone={past ? 'neutral' : 'info'}>
                         {past ? 'Past' : 'Scheduled'}
-                      </span>
+                      </StatusBadge>
                     </div>
                     <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-700"><CalendarDays size={13} style={{ color: '#5B54E8' }} /> {formatDateTime(appointment.starts_at)}</p>
                     <p className="mt-1.5 flex items-center gap-2 text-xs text-gray-500"><Clock3 size={13} /> Reminder: {formatDateTime(appointment.remind_at)}</p>

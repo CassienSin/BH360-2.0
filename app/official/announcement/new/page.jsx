@@ -1,8 +1,10 @@
 'use client'
+import { PageHeader, AppButton } from '@/components/AppUI'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, AlignLeft, CheckCircle, Sparkles, Megaphone, Info, AlertTriangle, Lightbulb, Users, Eye, Loader2, X } from 'lucide-react'
+import { Bell, AlignLeft, CheckCircle, Sparkles, Megaphone, Info, AlertTriangle, Lightbulb, Users, Eye, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import styles from './announcement.module.css'
 
@@ -88,6 +90,7 @@ export default function NewAnnouncement() {
   const [postedId, setPostedId] = useState(null)
   const [undoSecondsLeft, setUndoSecondsLeft] = useState(UNDO_SECONDS)
   const [undoing, setUndoing] = useState(false)
+  const [pendingTemplate, setPendingTemplate] = useState(null)
 
   // Restore any saved draft on mount, and load the official's name for the preview
   useEffect(() => {
@@ -149,11 +152,17 @@ export default function NewAnnouncement() {
 
   function applyTemplate(template) {
     // Don't silently wipe out an in-progress announcement
-    if (isDirty && !window.confirm(`Replace your current draft with the "${template.label}" template?`)) {
+    if (isDirty) {
+      setPendingTemplate(template)
       return
     }
+    loadTemplate(template)
+  }
+
+  function loadTemplate(template) {
     setForm({ title: template.title, content: template.content })
     setDraftRestored(false)
+    setPendingTemplate(null)
     toast.success(`Template "${template.label}" loaded!`)
   }
 
@@ -335,28 +344,7 @@ export default function NewAnnouncement() {
         />
       </div>
 
-      <header
-        className={`bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${styles.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>New Announcement</h1>
-          <p className="text-xs text-gray-400 truncate">Reach every resident in seconds</p>
-        </div>
-        <div
-          className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-        >
-          <Megaphone size={16} className="text-white" />
-        </div>
-      </header>
+      <PageHeader title="New Announcement" description="Share an update with your barangay" icon={Megaphone} onBack={() => router.back()} />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${styles.main}`}>
 
@@ -545,26 +533,7 @@ export default function NewAnnouncement() {
               </div>
 
             {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading || !formValid}
-              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${styles.submit}`}
-              style={{
-                background: formValid ? 'linear-gradient(135deg, #5B54E8, #7C75F0)' : '#9ca3af',
-                boxShadow: formValid ? '0 8px 32px rgba(91,84,232,0.4)' : 'none',
-              }}
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Posting announcement...
-                </>
-              ) : (
-                <>
-                  <Megaphone size={14} /> Post Announcement
-                </>
-              )}
-            </button>
+            <AppButton type="submit" busy={loading} busyLabel="Posting announcement…" disabled={loading || !formValid} className={`w-full ${styles.submit}`}><Megaphone size={16} />Post Announcement</AppButton>
 
             <p className={`text-xs text-gray-400 text-center ${styles.publishNote}`}>
               📢 Residents will see this after the 60-second undo window.
@@ -590,6 +559,11 @@ export default function NewAnnouncement() {
           </div>
         </div>
       </main>
+      <ConfirmDialog open={Boolean(pendingTemplate)} onClose={() => setPendingTemplate(null)}
+        title="Replace your draft?"
+        message={`Your current title and content will be replaced with the “${pendingTemplate?.label || ''}” template.`}
+        confirmText="Replace draft" cancelText="Keep my draft" variant="warning"
+        onConfirm={() => { if (pendingTemplate) loadTemplate(pendingTemplate) }} />
     </div>
   )
 }

@@ -2,10 +2,13 @@
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
-  Scale, Search, X, Plus, Loader2, Gavel, ShieldAlert, Users, Clock,
+  Scale, X, Plus, Loader2, Gavel, ShieldAlert, Users, Clock,
   FileCheck2, ArrowRightCircle, Handshake,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import ConfirmDialog from './ConfirmDialog'
+import RecordListToolbar, { RecordListEmpty } from './RecordListToolbar'
+import { AppButton } from './AppUI'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import {
   KP_EXCLUSIONS, CATEGORY_KP_HINTS, CASE_STATUS, KP_DEADLINE_STYLE,
@@ -62,6 +65,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
   const [pending, setPending] = useState(null)   // { caseId, action }
   const [note, setNote] = useState('')
   const [filing, setFiling] = useState(false)
+  const [confirmation, setConfirmation] = useState(null)
 
   const counts = useMemo(() => {
     const open = cases.filter(isOpen)
@@ -75,7 +79,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase()
     return cases
-      .filter(c => (tab === 'open' ? isOpen(c) : !isOpen(c)))
+      .filter(c => tab === 'all' || (tab === 'open' ? isOpen(c) : !isOpen(c)))
       .filter(c => !q ||
         c.case_number?.toLowerCase().includes(q) ||
         c.complainant_name?.toLowerCase().includes(q) ||
@@ -89,16 +93,26 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
       })
   }, [cases, tab, search])
 
+  function resetFilters() { setSearch(''); setTab('all') }
+
   async function patch(kase, changes, message) {
-    if (working) return
+    if (working) return false
     setWorking(kase.id)
-    const { error } = await supabase.from('blotter_cases').update(changes).eq('id', kase.id)
-    setWorking(null)
-    if (error) { toast.error(error.message); return }
-    onChanged?.(kase.id, changes)
-    setPending(null)
-    setNote('')
-    toast.success(message)
+    try {
+      const { error } = await supabase.from('blotter_cases').update(changes).eq('id', kase.id)
+      if (error) { toast.error(error.message); return false }
+      onChanged?.(kase.id, changes)
+      setPending(null)
+      setNote('')
+      toast.success(message)
+      return true
+    } catch (error) {
+      console.error('Could not update case:', error)
+      toast.error('Could not update this case. Check its status before trying again.')
+      return false
+    } finally {
+      setWorking(null)
+    }
   }
 
   function runAction(kase, action) {
@@ -143,13 +157,28 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
 
   function startAction(kase, action) {
     const meta = ACTION_META[action]
-    if (meta.confirm && !window.confirm(meta.confirm)) return
+    if (meta.confirm) { setConfirmation({ caseId: kase.id, action }); return }
     if (meta.prompt) { setPending({ caseId: kase.id, action }); setNote(''); return }
     runAction(kase, action)
   }
 
   return (
     <div className="space-y-4">
+      <ConfirmDialog open={Boolean(confirmation)}
+        onClose={() => setConfirmation(null)}
+        title="Extend this case once?"
+        message={confirmation ? `${cases.find(item => item.id === confirmation.caseId)?.case_number || 'Selected case'}: ${ACTION_META[confirmation.action].confirm}` : ''}
+        confirmText="Confirm extension" cancelText="Keep current deadline" variant="warning"
+        loadingText="Saving extension…"
+        onConfirm={async () => {
+          const current = cases.find(item => item.id === confirmation.caseId)
+          if (!current || !availableActions(current).includes(confirmation.action)) {
+            toast.error('This case has changed. Review its current status before continuing.')
+            setConfirmation(null)
+            return
+          }
+          if (await runAction(current, confirmation.action)) setConfirmation(null)
+        }} />
 
       <div className="white-card p-4">
         <div className="flex items-start gap-3">
@@ -188,45 +217,12 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
         </div>
       )}
 
-      <div className="white-card p-4 space-y-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter cases">
-            {[
-              { value: 'open', label: 'Open', count: counts.open, color: '#f97316' },
-              { value: 'closed', label: 'Closed', count: counts.closed, color: '#22c55e' },
-            ].map(f => (
-              <button key={f.value} onClick={() => setTab(f.value)} aria-pressed={tab === f.value}
-                className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                style={{
-                  background: tab === f.value ? f.color : '#fafaff',
-                  color: tab === f.value ? 'white' : '#6b7280',
-                  border: tab === f.value ? 'none' : '1px solid #f0effe',
-                }}>
-                {f.label} <span style={{ opacity: 0.75 }}>{f.count}</span>
-              </button>
-            ))}
-          </div>
-          <button onClick={() => setFiling(v => !v)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-            <Plus size={13} /> {filing ? 'Close form' : 'Record a complaint'}
-          </button>
-        </div>
-
-        <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            type="search" aria-label="Search blotter cases"
-            placeholder="Search by case number, party, or nature..."
-            className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
-          {search && (
-            <button onClick={() => setSearch('')} aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
+      <RecordListToolbar search={search} onSearchChange={setSearch} searchLabel="Search blotter cases"
+        placeholder="Case number, party, or nature…" noun="Cases"
+        filters={[{ value: 'all', label: 'All', count: cases.length }, { value: 'open', label: 'Open', count: counts.open }, { value: 'closed', label: 'Closed', count: counts.closed }]}
+        value={tab} onFilterChange={setTab} shown={shown.length} total={cases.length} onReset={resetFilters}
+        sortHint={tab === 'open' ? 'Open cases: soonest deadline first.' : 'Most recently filed first.'}
+        actions={<AppButton onClick={() => setFiling(v => !v)} aria-expanded={filing}>{filing ? <X size={16} /> : <Plus size={16} />}{filing ? 'Close form' : 'Record a complaint'}</AppButton>} />
 
       {filing && (
         <FileComplaint
@@ -238,12 +234,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
       )}
 
       {shown.length === 0 ? (
-        <div className="white-card p-10 text-center">
-          <Gavel size={36} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-400 text-sm">
-            {tab === 'open' ? 'No cases before the Lupon.' : 'No closed cases yet.'}
-          </p>
-        </div>
+        <RecordListEmpty total={cases.length} search={search} noun="cases" filterLabel={tab === 'open' ? 'Open' : tab === 'closed' ? 'Closed' : 'All'} icon={Gavel} onReset={resetFilters} description="Recorded cases will appear here. Use Record a complaint to add the first case." />
       ) : (
         <div className="space-y-2">
           {shown.map(kase => {

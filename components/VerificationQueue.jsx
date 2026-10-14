@@ -1,8 +1,9 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { BadgeCheck, Search, X, ShieldCheck, ShieldX, Scale, Loader2, RotateCcw } from 'lucide-react'
+import { BadgeCheck, ShieldCheck, ShieldX, Scale, Loader2, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
+import RecordListToolbar, { RecordListEmpty } from './RecordListToolbar'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { verificationStyle } from '@/lib/verification'
 
@@ -39,13 +40,15 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase()
     return candidates
-      .filter(u => (u.verification_status || 'pending') === tab)
+      .filter(u => tab === 'all' || (u.verification_status || 'pending') === tab)
       .filter(u => !q ||
         u.full_name?.toLowerCase().includes(q) ||
         u.phone?.toLowerCase().includes(q) ||
         u.address?.toLowerCase().includes(q))
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // oldest waiting first
   }, [candidates, tab, search])
+
+  function resetFilters() { setSearch(''); setTab('all') }
 
   async function decide(user, status, note) {
     if (working) return
@@ -107,51 +110,14 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
         </div>
       </div>
 
-      <div className="white-card p-4 space-y-3">
-        <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by verification status">
-          {[
-            { value: 'pending', label: 'Awaiting review', count: counts.pending },
-            { value: 'verified', label: 'Verified', count: counts.verified },
-            { value: 'rejected', label: 'Rejected', count: counts.rejected },
-          ].map(f => {
-            const style = verificationStyle(f.value)
-            const active = tab === f.value
-            return (
-              <button key={f.value} onClick={() => setTab(f.value)} aria-pressed={active}
-                className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                style={{
-                  background: active ? style.color : '#fafaff',
-                  color: active ? 'white' : '#6b7280',
-                  border: active ? 'none' : '1px solid #f0effe',
-                }}>
-                {f.label} <span style={{ opacity: 0.75 }}>{f.count}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="relative">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            type="search" aria-label="Search accounts"
-            placeholder="Search by name, phone, or address..."
-            className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
-          {search && (
-            <button onClick={() => setSearch('')} aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <X size={13} />
-            </button>
-          )}
-        </div>
-      </div>
+      <RecordListToolbar search={search} onSearchChange={setSearch} searchLabel="Search accounts"
+        placeholder="Name, phone, or address…" noun="Accounts"
+        filters={[{ value: 'all', label: 'All', count: candidates.length }, { value: 'pending', label: 'Awaiting review', count: counts.pending }, { value: 'verified', label: 'Verified', count: counts.verified }, { value: 'rejected', label: 'Rejected', count: counts.rejected }]}
+        value={tab} onFilterChange={setTab} shown={shown.length} total={candidates.length} onReset={resetFilters}
+        sortHint="Oldest registrations first. Counts include accounts eligible for this review list." />
 
       {shown.length === 0 ? (
-        <div className="white-card p-10 text-center">
-          <BadgeCheck size={36} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-gray-400 text-sm">
-            {tab === 'pending' ? 'Nobody is waiting for verification.' : `No ${tab} accounts.`}
-          </p>
-        </div>
+        <RecordListEmpty total={candidates.length} search={search} noun="accounts" filterLabel={tab === 'pending' ? 'Awaiting review' : tab === 'verified' ? 'Verified' : tab === 'rejected' ? 'Rejected' : 'All'} icon={BadgeCheck} onReset={resetFilters} description="Accounts eligible for review will appear here when users join your barangay." />
       ) : (
         <div className="space-y-2">
           {shown.map(u => {

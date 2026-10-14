@@ -9,6 +9,7 @@ import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import ResolveModal from '@/components/ResolveModal'
 import DutyToggle from '@/components/DutyToggle'
+import DutyScheduleSummary from '@/components/DutyScheduleSummary'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAssignment } from '@/lib/notifications'
@@ -610,7 +611,7 @@ export default function TanodDashboard() {
           style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
 
       <DashboardSidebar
         profile={profile}
@@ -687,6 +688,8 @@ export default function TanodDashboard() {
                   : 'Go on duty so the barangay can dispatch to you'}
                 onOpen={() => navClick('active')}
               />
+
+              <DutyScheduleSummary profile={profile} />
 
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">

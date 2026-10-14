@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles, CheckCheck } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
+import ui from './app-ui.module.css'
 import { timeAgo } from '@/lib/timeAgo'
 import { useNotificationReads, notifKey, unreadCount as countUnread } from '@/lib/notificationReads'
 
@@ -287,7 +288,7 @@ export default function DashboardHeader({
 
   return (
     <>
-      <header className="bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-4"
+      <header className={`bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader}`}
         style={{
           boxShadow: '0 2px 12px rgba(91,84,232,0.06)',
           borderBottom: '1px solid #f0effe',
@@ -297,7 +298,7 @@ export default function DashboardHeader({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {!sidebarOpen && (
             <>
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar" aria-expanded={false}
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar" aria-expanded={false} aria-controls="dashboard-navigation"
                 className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
                 <Menu size={18} />
               </button>

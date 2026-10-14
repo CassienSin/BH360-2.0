@@ -1,4 +1,5 @@
 'use client'
+import { PageState } from '@/components/AppUI'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
@@ -1054,7 +1055,7 @@ export default function OfficialDashboard() {
           style={{background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite'}} />
       </div>
 
-      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
 
       <DashboardSidebar
         profile={profile}
@@ -1357,22 +1358,11 @@ export default function OfficialDashboard() {
               )}
 
               {tickets.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <FileText size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
-                  <p className="text-gray-400 text-sm">No tickets yet.</p>
-                </div>
+                <PageState icon={FileText} title="No support tickets yet" description="Resident inquiries, requests, complaints, and feedback will appear here." />
               )}
 
               {tickets.length > 0 && filteredTickets.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <Search size={36} className="mx-auto mb-3" style={{color: '#5B54E8', opacity: 0.3}} />
-                  <p className="text-gray-500 text-sm font-medium">No tickets match your search</p>
-                  <p className="text-gray-400 text-xs mt-1">Try adjusting your filters</p>
-                  <button onClick={() => { setTicketSearch(''); setTicketFilter('all') }}
-                    className="mt-4 text-xs font-semibold" style={{color: '#5B54E8'}}>
-                    Clear filters →
-                  </button>
-                </div>
+                <PageState icon={Search} title="No matching tickets" description="Try another search term or clear your filters to see all tickets." actionLabel="Clear filters" onAction={() => { setTicketSearch(''); setTicketFilter('all') }} />
               )}
 
               <RecordGroup label="Needs a reply" count={liveTickets.length}>

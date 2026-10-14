@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { timeAgo } from '@/lib/timeAgo'
 import { activityState, filterTanods, groupAssignments, loadTanodOverview } from '@/lib/tanodOverview.mjs'
 import styles from './tanod-management.module.css'
+import DutyScheduleSummary from './DutyScheduleSummary'
 
 const EMPTY = []
 const FILTERS = [['all', 'All tanods'], ['on', 'On duty'], ['off', 'Off duty'], ['assigned', 'With assignments']]
@@ -23,7 +24,7 @@ function Avatar({ tanod, large = false }) {
   </span>
 }
 
-export default function TanodManagementOverview({ profile, onInvite, onOpenIncident }) {
+export default function TanodManagementOverview({ profile, onInvite, onOpenIncident, onManageSchedule }) {
   const supabase = useMemo(() => createClient(), [])
   const [result, setResult] = useState({ barangayId: null, tanods: null, assignments: null, errors: [], loadedAt: null })
   const [loading, setLoading] = useState(true)
@@ -100,6 +101,8 @@ export default function TanodManagementOverview({ profile, onInvite, onOpenIncid
         <span className={`${styles.statIcon} ${styles[tone]}`}><Icon size={20} /></span><span><span className={styles.statLabel}>{label}</span><strong>{value == null ? '—' : value}</strong><small>{caption}</small></span>
       </button>)}
     </div>
+
+    <DutyScheduleSummary profile={profile} onManage={onManageSchedule} />
 
     {errors.length > 0 && <div className={styles.notice} role="alert"><AlertCircle size={17} /><span>{errors.join(' ')} Missing information is shown as unavailable.</span><button type="button" disabled={busy} onClick={() => setReload(v => v + 1)}>Retry</button></div>}
     {staleCount > 0 && <div className={styles.notice}><Clock3 size={16} /><span>{staleCount} on-duty {staleCount === 1 ? 'tanod has' : 'tanods have'} no recent app activity. Call to confirm availability when needed.</span></div>}

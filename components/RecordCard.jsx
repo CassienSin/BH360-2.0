@@ -1,6 +1,7 @@
 'use client'
 import { ChevronRight } from 'lucide-react'
 import { TONE_RAIL } from '@/lib/recordState'
+import { StatusBadge } from './AppUI'
 
 /**
  * One card for every list in BarangayHub — incidents, tickets, document
@@ -15,20 +16,12 @@ import { TONE_RAIL } from '@/lib/recordState'
  * same height as the two still in progress buries the two that matter.
  */
 
-/* Meta text is #9ca3af — about 4.6:1 on white. The old text-gray-300 was
-   nearer 1.6:1, which is why the location and time had effectively
-   disappeared on a phone. */
-const META = '#9ca3af'
+// Secondary text stays readable on white cards across all record lists.
+const META = '#6b7280'
 
 /** The one chip shape every list uses, so the four read as one system. */
 export function Chip({ bg, color, dot, children }) {
-  return (
-    <span className="text-[11px] font-bold rounded-full px-2.5 py-1 inline-flex items-center gap-1.5 whitespace-nowrap"
-      style={{ background: bg, color }}>
-      {dot && <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'currentColor' }} aria-hidden="true" />}
-      {children}
-    </span>
-  )
+  return <StatusBadge bg={bg} color={color} dot={dot}>{children}</StatusBadge>
 }
 
 /**
@@ -134,6 +127,7 @@ export default function RecordCard({
     tabIndex: 0,
     onClick,
     onKeyDown: (e) => {
+      if (e.target !== e.currentTarget) return
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.() }
     },
     className: shell,
@@ -151,10 +145,11 @@ export default function RecordCard({
           <span className="flex-1 min-w-0 block">
             <span className="block text-[13.5px] font-semibold text-gray-800 truncate">{title}</span>
             {meta && <span className="block text-xs mt-0.5 truncate" style={{ color: META }}>{meta}</span>}
+            {(status || badges) && <span className="flex flex-wrap gap-1.5 mt-1.5 sm:hidden">{status}{badges}</span>}
           </span>
           <span className="flex items-center gap-2 flex-shrink-0">
             {action}
-            <span className="hidden sm:contents">{badges}</span>
+            <span className="hidden sm:contents">{status}{badges}</span>
             {when && <span className="text-[11.5px] tabular-nums whitespace-nowrap" style={{ color: META }}>{when}</span>}
             <ChevronRight size={14} className="text-gray-300" aria-hidden="true" />
           </span>

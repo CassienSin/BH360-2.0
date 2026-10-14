@@ -1,0 +1,49 @@
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 17px; border: 1px solid transparent; border-radius: 14px; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.5; text-align: center; transition: background .15s,box-shadow .15s,border-color .15s; cursor: pointer; }
+.button svg { flex-shrink: 0; }
+.button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+.button:focus-visible, .back:focus-visible { outline: 3px solid #b8acf9; outline-offset: 3px; }
+.primary { background: linear-gradient(135deg,var(--brand-dark,#4A43D4),var(--brand,#5B54E8)); color: white; box-shadow: 0 4px 14px #5b54e826; }
+.secondary { background: var(--brand-soft,#f0effe); color: var(--brand-dark,#4A43D4); border-color: var(--brand-border,#e8e3ff); }
+.danger { background: #b91c1c; color: white; }
+.ghost { background: transparent; color: #514765; border-color: #e8e3ff; }
+.header { position: sticky; top: 0; z-index: 30; background: white; border-bottom: 1px solid var(--brand-border,#e8e3ff); box-shadow: 0 2px 12px #5b54e80a; }
+.headerInner { display: flex; align-items: center; gap: 12px; max-width: 1320px; margin-inline: auto; padding: 14px 24px; min-height: 76px; }
+.back { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; border: 1px solid #ede9f6; background: #fafaff; color: #62576f; flex-shrink: 0; cursor: pointer; }
+.headerIcon { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 14px; background: var(--brand-soft,#f0effe); color: var(--brand,#5B54E8); flex-shrink: 0; }
+.heading { flex: 1; min-width: 0; }
+.heading h1 { font-size: 20px; font-weight: 750; line-height: 1.35; letter-spacing: -.4px; margin: 0; color: #292338; overflow-wrap: anywhere; }
+.heading p { color: #70677d; font-size: 12px; line-height: 1.6; margin: 4px 0 0; overflow-wrap: anywhere; }
+.headerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; min-height: 26px; border-radius: 9px; font-size: 11px; font-weight: 700; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.tone_neutral { background: #f3f4f6; color: #596273; }
+.tone_pending { background: #fffbeb; color: #92400e; }
+.tone_active { background: #eff6ff; color: #1d4ed8; }
+.tone_success { background: #ecfdf5; color: #047857; }
+.tone_danger { background: #fef2f2; color: #b91c1c; }
+.tone_info { background: #f0effe; color: #4A43D4; }
+.state { padding: 36px 24px; background: white; border: 1px solid #e8e3ff; border-radius: 24px; text-align: center; color: #292338; }
+.stateIcon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 15px; background: #f0effe; color: #5B54E8; border-radius: 18px; }
+.state h2 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.5; }
+.state p { color: #70677d; font-size: 13px; line-height: 1.8; margin: 8px auto 0; max-width: 46ch; }
+.state .button { margin-top: 18px; }
+.stateError .stateIcon { background: #fff7ed; color: #9a3412; }
+.fullPage { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: linear-gradient(145deg,#4A43D4,#6B5FEE,#7C75F0); }
+.fullPage .state { width: min(100%,440px); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.dashboardHeader { min-height: 76px; }
+.dashboardHeader h1 { font-size: 20px; line-height: 1.35; }
+.dashboardHeader :global(.text-gray-400) { color: #70677d; }
+.dashboardHeader button[aria-label="Open sidebar"] { width: 44px; height: 44px; }
+@media (hover: hover) { .primary:not(:disabled):hover { box-shadow: 0 5px 18px #5b54e838; background: var(--brand-dark,#4A43D4); } .secondary:not(:disabled):hover, .back:hover { background: #e8e3ff; } }
+@media (max-width: 600px) {
+  .headerInner { padding: 12px 16px; gap: 10px; flex-wrap: wrap; min-height: 72px; }
+  .headerIcon { display: none; }
+  .heading h1, .dashboardHeader h1 { font-size: 17px; }
+  .heading p { font-size: 12px; }
+  .headerActions { flex-basis: 100%; }
+  .headerActions .button { flex: 1; }
+  .state { padding: 28px 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } .button { transition: none; } }

@@ -1,8 +1,9 @@
     'use client'
+import { PageHeader, AppButton, PageState } from '@/components/AppUI'
 
     import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useRouter } from 'next/navigation'
-    import { AlarmClock, ArrowLeft, Bell, CalendarDays, Check, Clock3, Loader2, Plus, UserRound } from 'lucide-react'
+    import { AlarmClock, Bell, CalendarDays, Check, Clock3, Plus, UserRound } from 'lucide-react'
     import toast from 'react-hot-toast'
     import { createClient } from '@/lib/supabase'
     import { getPermission, isSupported, notifyAppointmentReminder, requestPermission } from '@/lib/notifications'
@@ -211,31 +212,14 @@
     }
 
     if (loading) {
-        return <div className="min-h-screen bg-brand flex items-center justify-center"><Loader2 size={30} className="animate-spin text-white" /></div>
+        return <PageState fullPage kind="loading" title="Loading appointments…" description="Preparing your barangay schedule." />
     }
 
     return (
         <div className="min-h-screen relative overflow-hidden bg-brand">
-        <div className="relative z-10 border-b border-[#f0effe] bg-white px-4 py-4 sm:px-6">
-            <div className="mx-auto flex max-w-6xl items-center gap-3">
-            <button onClick={() => router.push('/official/calendar/appointments')} aria-label="Back to appointments"
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors hover:bg-gray-100">
-                <ArrowLeft size={18} className="text-gray-600" />
-            </button>
-            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl" style={{ background: '#f0effe' }}>
-                <CalendarDays size={18} style={{ color: '#5B54E8' }} />
-            </div>
-            <div className="min-w-0 flex-1">
-                <h1 className="truncate text-base font-bold text-gray-800">Appointments</h1>
-                <p className="truncate text-xs text-gray-400">{profile?.barangays?.name || 'Barangay'} · schedule and reminders</p>
-            </div>
-            <button onClick={() => router.push('/official/calendar/appointments')} className="rounded-xl px-3 py-2 text-xs font-bold" style={{ background: '#f0effe', color: '#5B54E8' }}>
-                Appointments list
-            </button>
-            </div>
-        </div>
+        <PageHeader title="New Appointment" description={`${profile?.barangays?.name || 'Barangay'} · Schedule and reminders`} icon={CalendarDays} onBack={() => router.push('/official/calendar/appointments')} backLabel="Back to appointments" actions={<AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}>Appointments list</AppButton>} />
 
-        <main className="relative z-10 mx-auto grid w-full max-w-6xl gap-4 px-4 py-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <main className="relative z-10 mx-auto grid w-full max-w-[1320px] gap-4 px-4 py-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <section className="white-card min-w-0 p-5 sm:p-6">
             <div className="mb-5 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: '#f0effe' }}><Plus size={18} style={{ color: '#5B54E8' }} /></div>
@@ -275,10 +259,7 @@
                 <textarea rows={3} maxLength={1000} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })}
                     placeholder="Location or details to prepare" className="input-field w-full resize-y rounded-xl px-3.5 py-3 text-sm text-gray-800" />
                 </label>
-                <button type="submit" disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-60" style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                {saving ? 'Saving…' : 'Save appointment'}
-                </button>
+                <AppButton type="submit" busy={saving} busyLabel="Saving appointment…" disabled={saving} className="w-full"><Check size={16} />Save Appointment</AppButton>
             </form>
             </section>
 

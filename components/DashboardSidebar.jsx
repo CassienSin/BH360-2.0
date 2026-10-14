@@ -1,11 +1,22 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useOnline } from '@/lib/useOnline'
 import Image from 'next/image'
-import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity } from 'lucide-react'
+import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity, X } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
 import { createPortal } from 'react-dom'
+import styles from './dashboard-sidebar.module.css'
+import { lockBodyScroll } from '@/lib/modalScrollLock'
+
+const mobileQuery = '(max-width: 767px)'
+function subscribeMobile(onChange) {
+  const media = window.matchMedia(mobileQuery)
+  media.addEventListener('change', onChange)
+  return () => media.removeEventListener('change', onChange)
+}
+const getMobile = () => window.matchMedia(mobileQuery).matches
+const getServerMobile = () => false
 
 // localStorage wrapped in try/catch because storage throws in some
 // private modes / locked-down webviews.
@@ -35,10 +46,12 @@ export default function DashboardSidebar({
   const supabase = useMemo(() => createClient(), [])
   const [search, setSearch] = useState('')
   const [pinned, setPinned] = useState([])
-  const [hoveredItem, setHoveredItem] = useState(null)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [avatarFailed, setAvatarFailed] = useState(false)
+  const sidebarRef = useRef(null)
+  const searchRef = useRef(null)
+  const isMobile = useSyncExternalStore(subscribeMobile, getMobile, getServerMobile)
   // The footer status dot used to be hardcoded green — it now reflects
   // the real connection state so "online" actually means online.
   const online = useOnline()
@@ -49,24 +62,42 @@ export default function DashboardSidebar({
 
   useEffect(() => {
     const raw = storageGet(pinKey)
-    if (!raw) return
     try {
       const saved = JSON.parse(raw)
-      if (Array.isArray(saved)) setPinned(saved)
-    } catch { /* corrupted value — start fresh */ }
+      setPinned(Array.isArray(saved) ? [...new Set(saved.filter(key => typeof key === 'string'))] : [])
+    } catch { setPinned([]) }
   }, [pinKey])
 
   useEffect(() => { setAvatarFailed(false) }, [profile?.avatar_url])
 
-  // Escape closes the sidebar on mobile (matches the overlay tap)
+  // Keep keyboard focus inside the open mobile drawer and restore it on close.
   useEffect(() => {
-    if (!sidebarOpen) return
+    if (!sidebarOpen || !isMobile) return
+    const previousFocus = document.activeElement
+    const unlock = lockBodyScroll()
+    sidebarRef.current?.querySelector('[data-close-navigation]')?.focus()
     const onKey = (e) => {
-      if (e.key === 'Escape' && window.innerWidth < 768) setSidebarOpen(false)
+      // The sign-out dialog owns the keyboard while it is open.
+      if (document.querySelector('[role="alertdialog"]')) return
+      if (e.key === 'Escape') { e.preventDefault(); setSearch(''); setSidebarOpen(false) }
+      if (e.key !== 'Tab') return
+      const controls = [...(sidebarRef.current?.querySelectorAll('button:not(:disabled), input, [tabindex="0"]') || [])]
+        .filter(element => element.tabIndex >= 0 && !element.hidden)
+      const first = controls[0], last = controls[controls.length - 1]
+      const outside = !sidebarRef.current?.contains(document.activeElement)
+      if (e.shiftKey && (document.activeElement === first || outside)) { e.preventDefault(); last?.focus() }
+      else if (!e.shiftKey && (document.activeElement === last || outside)) { e.preventDefault(); first?.focus() }
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [sidebarOpen, setSidebarOpen])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      unlock()
+      requestAnimationFrame(() => {
+        if (previousFocus?.isConnected && previousFocus !== document.body) previousFocus.focus()
+        else document.querySelector('[aria-label="Open sidebar"]')?.focus()
+      })
+    }
+  }, [sidebarOpen, isMobile, setSidebarOpen])
 
   async function confirmLogout() {
     if (signingOut) return
@@ -89,6 +120,7 @@ export default function DashboardSidebar({
   }
 
   function navClick(key) {
+    setSearch('')
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
   }
@@ -123,7 +155,10 @@ export default function DashboardSidebar({
 
   return (
     <>
-    <aside className={`sidebar flex-shrink-0 flex flex-col bg-white ${sidebarOpen ? 'w-64 open' : 'w-16'}`}
+    <aside ref={sidebarRef} id="dashboard-navigation" className={`sidebar ${styles.sidebar} flex-shrink-0 flex flex-col bg-white ${sidebarOpen ? 'w-64 open' : 'w-16'}`}
+      role={isMobile && sidebarOpen ? 'dialog' : undefined}
+      aria-modal={isMobile && sidebarOpen ? true : undefined}
+      inert={isMobile && !sidebarOpen ? true : undefined}
       aria-label="Dashboard navigation"
       style={{ boxShadow: '4px 0 24px rgba(91,84,232,0.1)', height: '100dvh', overflow: 'hidden' }}>
 
@@ -146,13 +181,14 @@ export default function DashboardSidebar({
           </div>
         )}
         {sidebarOpen && (
-          <button onClick={() => setSidebarOpen(false)} aria-label="Collapse sidebar" aria-expanded={true}
-            className="w-7 h-7 rounded-lg items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors hidden md:flex flex-shrink-0">
-            <ChevronLeft size={14} />
+          <button type="button" data-close-navigation onClick={() => { setSearch(''); setSidebarOpen(false) }} aria-label={isMobile ? 'Close navigation' : 'Collapse sidebar'} aria-expanded={true} aria-controls="dashboard-navigation"
+            className={styles.iconButton}>
+            {isMobile ? <X size={18} /> : <ChevronLeft size={18} />}
           </button>
         )}
       </div>
 
+      <div className={styles.scrollArea}>
       {/* Stats Card */}
       {sidebarOpen && stats.length > 0 && (
         <div className="px-3 py-3 border-b border-gray-100">
@@ -187,10 +223,11 @@ export default function DashboardSidebar({
           <div className="relative">
             <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
             <input
+              ref={searchRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Escape') setSearch('')
+                if (e.key === 'Escape' && search) { e.stopPropagation(); setSearch('') }
                 // Enter jumps straight to the first match — filter, hit
                 // Enter, you're there, no mouse needed
                 if (e.key === 'Enter') {
@@ -198,19 +235,20 @@ export default function DashboardSidebar({
                   if (first) { navClick(first.key); setSearch('') }
                 }
               }}
-              placeholder="Quick filter..."
+              placeholder="Find a page…"
               aria-label="Filter navigation items"
-              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl outline-none transition-all"
+              className={`w-full pl-8 pr-10 py-2 text-xs rounded-xl outline-none transition-all ${styles.search}`}
               style={{ background: '#fafaff', border: '1px solid #f0effe' }}
               onFocus={e => e.target.style.borderColor = '#5B54E8'}
               onBlur={e => e.target.style.borderColor = '#f0effe'}
             />
+            {search && <button type="button" onClick={() => { setSearch(''); searchRef.current?.focus() }} aria-label="Clear navigation filter" className={styles.clearSearch}><X size={16} /></button>}
           </div>
         </div>
       )}
 
       {/* Pinned section */}
-      {sidebarOpen && pinnedItems.length > 0 && !search && (
+      {sidebarOpen && pinnedItems.length > 0 && !q && (
         <div className="px-3 py-2 border-b border-gray-100">
           <p className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-400 flex items-center gap-1">
             <Pin size={9} aria-hidden="true" /> Pinned
@@ -249,7 +287,7 @@ export default function DashboardSidebar({
       )}
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto" aria-label="Main">
+      <nav className="px-3 py-3 space-y-4" aria-label="Main">
         {filteredNavItems.map(({ section, items }) => (
           <div key={section}>
             {sidebarOpen && (
@@ -262,23 +300,19 @@ export default function DashboardSidebar({
               {items.map(({ key, label, icon: Icon, count, hasNew, badge }) => {
                 const isActive = activeSection === key
                 const isPinned = pinned.includes(key)
-                const isHovered = hoveredItem === key
 
                 return (
-                  <div key={key} className="relative"
-                    onMouseEnter={() => setHoveredItem(key)}
-                    onMouseLeave={() => setHoveredItem(null)}>
+                  <div key={key} className={styles.navRow}>
                     {/* The pin control is a SIBLING button now, not a
                         role="button" span nested inside the nav button —
                         nested interactive controls are invalid for screen
                         readers and confused focus order. */}
                     <button
                       onClick={() => navClick(key)}
-                      onFocus={() => setHoveredItem(key)}
-                      onBlur={() => setHoveredItem(null)}
+                      title={!sidebarOpen ? `${label}${count > 0 ? ` (${count})` : ''}` : undefined}
                       aria-current={isActive ? 'page' : undefined}
                       aria-label={!sidebarOpen ? label : undefined}
-                      className={`group relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!sidebarOpen && 'justify-center'} ${sidebarOpen ? 'pr-9' : ''} ${isActive ? '' : 'hover:bg-gray-50'}`}
+                      className={`${styles.navButton} group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!sidebarOpen && 'justify-center'} ${isActive ? '' : 'hover:bg-gray-50'}`}
                       style={isActive ? {
                         background: 'linear-gradient(135deg, rgba(91,84,232,0.12), rgba(124,117,240,0.06))',
                         boxShadow: '0 2px 8px rgba(91,84,232,0.08)',
@@ -327,51 +361,23 @@ export default function DashboardSidebar({
                       )}
                     </button>
 
-                    {/* Pin toggle — revealed on hover, keyboard focus, or when
-                        already pinned */}
+                    {/* A separate, visible pin control works on touch and keyboards. */}
                     {sidebarOpen && (
                       <button
                         onClick={(e) => togglePin(key, e)}
                         aria-label={isPinned ? `Unpin ${label}` : `Pin ${label} to top`}
+                        aria-pressed={isPinned}
                         title={isPinned ? 'Unpin' : 'Pin to top'}
-                        className={`absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md flex items-center justify-center hover:bg-purple-100 transition-opacity focus:opacity-100 ${
-                          isPinned || isHovered ? 'opacity-100' : 'opacity-0'
-                        }`}>
+                        className={styles.pinButton}>
                         {isPinned ? (
-                          <PinOff size={10} style={{ color: '#5B54E8' }} />
+                          <PinOff size={14} />
                         ) : (
-                          <Pin size={10} style={{ color: '#9ca3af' }} />
+                          <Pin size={14} />
                         )}
                       </button>
                     )}
 
-                    {/* Tooltip when collapsed — now also appears on keyboard
-                        focus, not just mouse hover */}
-                    {!sidebarOpen && isHovered && (
-                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-3 py-2 rounded-xl z-50 whitespace-nowrap fade-up pointer-events-none"
-                        role="tooltip"
-                        style={{
-                          background: '#1f2937',
-                          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                        }}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-white">{label}</span>
-                          {count > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
-                              style={{ background: '#5B54E8', color: 'white' }}>
-                              {count}
-                            </span>
-                          )}
-                        </div>
-                        {/* Arrow */}
-                        <div className="absolute right-full top-1/2 -translate-y-1/2 w-0 h-0"
-                          style={{
-                            borderTop: '5px solid transparent',
-                            borderBottom: '5px solid transparent',
-                            borderRight: '5px solid #1f2937',
-                          }} />
-                      </div>
-                    )}
+
                   </div>
                 )
               })}
@@ -381,7 +387,7 @@ export default function DashboardSidebar({
 
         {sidebarOpen && search && filteredNavItems.length === 0 && (
           <div className="px-3 py-6 text-center">
-            <p className="text-xs text-gray-400">No items match "{search}"</p>
+            <p className="text-xs text-gray-500" role="status">No pages match “{search}”. Try a different name.</p>
             <button onClick={() => setSearch('')}
               className="mt-2 text-xs font-semibold" style={{ color: '#5B54E8' }}>
               Clear search
@@ -389,6 +395,7 @@ export default function DashboardSidebar({
           </div>
         )}
       </nav>
+      </div>
 
       {/* User Profile Footer */}
       <div className={`px-3 py-3 ${!sidebarOpen && 'flex justify-center'}`}
@@ -452,7 +459,7 @@ export default function DashboardSidebar({
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/30 z-30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
+          onClick={() => { setSearch(''); setSidebarOpen(false) }}
           aria-hidden="true"
         />
       )}

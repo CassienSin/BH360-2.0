@@ -13,6 +13,6 @@ export default function TanodManagement(props) {
   if (props.profile?.role !== 'official' || !props.profile?.barangay_id) return null
   return <div className={styles.root}>
     <nav className={styles.tabs} aria-label="Tanod management sections">{TABS.map(([id, label, Icon]) => <button type="button" key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}</nav>
-    {tab === 'overview' ? <TanodManagementOverview {...props} /> : <TanodDutyWorkspace key={`${props.profile.barangay_id}-${tab}`} profile={props.profile} mode={tab} />}
+    {tab === 'overview' ? <TanodManagementOverview {...props} onManageSchedule={() => setTab('schedule')} /> : <TanodDutyWorkspace key={`${props.profile.barangay_id}-${tab}`} profile={props.profile} mode={tab} />}
   </div>
 }
