@@ -362,7 +362,7 @@ export default function AIAnalytics() {
   // ---- Page loading skeleton ----
   if (pageLoading) {
     return (
-      <div className="min-h-screen relative overflow-hidden bg-brand">
+      <div className="min-h-screen relative overflow-clip bg-brand">
         <AnimatedDots />
         <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => router.back()} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
@@ -387,7 +387,7 @@ export default function AIAnalytics() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
+    <div className="min-h-screen relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div

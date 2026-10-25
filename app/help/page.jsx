@@ -196,7 +196,7 @@ export default function HelpPage() {
   ]
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
+    <div className="min-h-screen relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"

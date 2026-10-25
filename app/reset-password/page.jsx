@@ -7,8 +7,10 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Eye, EyeOff, Lock, ArrowRight, CheckCircle, KeyRound } from 'lucide-react'
+import { Eye, EyeOff, Lock, ArrowRight, ArrowLeft, CheckCircle, KeyRound, Check, X } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { PASSWORD_RULES, checkPassword } from '@/lib/passwordRules'
 import { useBrowserValue } from '@/lib/useHydrated'
 
 export default function ResetPasswordPage() {
@@ -118,13 +120,15 @@ export default function ResetPasswordPage() {
     }
   }, [supabase, linkRejected])
 
+  const { checks } = checkPassword(password)
+
   async function handleReset(e) {
     e.preventDefault()
     if (loading) return
     setError('')
 
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters long.')
+    if (!checkPassword(password).ok) {
+      setError('Your new password doesn’t meet all the requirements below.')
       return
     }
     if (password !== confirm) {
@@ -156,6 +160,10 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand relative overflow-hidden px-6 py-12">
 
+      <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
+        <ArrowLeft size={15} aria-hidden="true" /> Home
+      </Link>
+
       {/* Soft background glow, consistent with the login page */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-[500px] h-[500px] rounded-full opacity-20"
@@ -167,7 +175,7 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-8 fade-up">
           <div className="w-16 h-16 mx-auto mb-3 relative">
-            <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain" />
+            <Image src="/logo.png" alt="" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
           </div>
           <h1 className="text-2xl font-bold text-white">BarangayHub 360</h1>
         </div>
@@ -200,15 +208,14 @@ export default function ResetPasswordPage() {
               </div>
               <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Link expired</h2>
               <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
-                This password reset link is invalid, already used, or was opened in a
-                different browser than the one that requested it. Request a new link
-                from the login page — and open it on this same device and browser.
+                This reset link is invalid, has already been used, or has expired.
+                Request a new one from the sign-in page with “Forgot password?”.
               </p>
-              <a href="/login"
+              <Link href="/login"
                 className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
                 style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                Back to Sign In <ArrowRight size={16} />
-              </a>
+                Back to sign in <ArrowRight size={16} />
+              </Link>
             </div>
           )}
 
@@ -243,13 +250,29 @@ export default function ResetPasswordPage() {
                       onChange={e => setPassword(e.target.value)} required minLength={8}
                       autoComplete="new-password"
                       className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
-                      placeholder="At least 8 characters" />
+                      placeholder="Create a strong password"
+                      aria-describedby="new-password-rules" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
+                  <ul id="new-password-rules" className="grid grid-cols-1 gap-1 mt-3" aria-label="Password requirements">
+                    {PASSWORD_RULES.map(({ key, label }) => {
+                      const met = checks[key]
+                      return (
+                        <li key={key} className="flex items-center gap-2 text-xs">
+                          {met
+                            ? <Check size={13} className="text-emerald-600 flex-shrink-0" aria-hidden="true" />
+                            : <X size={13} className="text-gray-400 flex-shrink-0" aria-hidden="true" />}
+                          <span className={met ? 'text-emerald-700' : 'text-gray-600'}>
+                            {label}<span className="sr-only">{met ? ' (met)' : ' (not met yet)'}</span>
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </div>
 
                 <div>
@@ -262,6 +285,9 @@ export default function ResetPasswordPage() {
                       className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
                       placeholder="Repeat your new password" />
                   </div>
+                  {confirm && confirm !== password && (
+                    <p className="text-xs text-red-600 mt-1.5">Passwords don’t match yet.</p>
+                  )}
                 </div>
 
                 <div className="pt-2">
@@ -296,17 +322,17 @@ export default function ResetPasswordPage() {
               <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
                 Your password has been changed. Sign in with your new password to continue.
               </p>
-              <a href="/login"
+              <Link href="/login"
                 className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
                 style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                Sign In <ArrowRight size={16} />
-              </a>
+                Sign in <ArrowRight size={16} />
+              </Link>
             </div>
           )}
         </div>
 
-        <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          © 2026 BH360 · Empowering Filipino communities
+        <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          © 2026 BarangayHub 360
         </p>
       </div>
     </div>

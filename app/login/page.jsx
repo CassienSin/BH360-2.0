@@ -2,8 +2,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
-import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft, CheckCircle, Shield, Users, Activity, KeyRound } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft, Shield, KeyRound, AlertTriangle, BarChart2, MessageCircle } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { dashboardPath } from '@/lib/roles'
 
 const dots = [...Array(25)].map((_, i) => ({
@@ -152,6 +153,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex bg-brand relative overflow-hidden">
 
+      <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
+        <ArrowLeft size={15} aria-hidden="true" /> Home
+      </Link>
+
       {/* Animated background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-[500px] h-[500px] rounded-full opacity-20"
@@ -180,7 +185,7 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div className="w-32 h-32 mx-auto mb-6 relative" style={{ animation: 'float 6s ease-in-out infinite' }}>
-            <Image src="/logo.png" alt="BH360" fill sizes="128px" loading="eager" className="object-contain drop-shadow-2xl" />
+            <Image src="/logo.png" alt="BarangayHub 360" fill sizes="128px" loading="eager" className="object-contain drop-shadow-2xl" />
           </div>
 
           <h1 className="text-5xl mb-3" style={{ fontWeight: 800, letterSpacing: '-2px', lineHeight: 1 }}>
@@ -191,30 +196,24 @@ export default function LoginPage() {
               backgroundClip: 'text',
             }}>BarangayHub 360</span>
           </h1>
-          <p className="text-purple-200 text-sm font-light tracking-widest uppercase mb-10">Smart Community Management</p>
+          <p className="text-purple-50 text-sm font-semibold tracking-widest uppercase mb-10">Smart barangay management</p>
 
           {/* Feature list */}
           <div className="space-y-3 text-left max-w-sm mx-auto">
             {[
-              { icon: Activity, text: 'Smart Incident Reporting', color: '#fb923c' },
-              { icon: Shield, text: 'Real-time Tanod Dispatch', color: '#22c55e' },
-              { icon: Shield, text: 'AI-Powered Analytics', color: '#fbbf24' },
-              { icon: Users, text: 'Resident Support Tickets', color: '#a78bfa' },
+              { icon: AlertTriangle, text: 'Report incidents with a photo and location', color: '#ea580c' },
+              { icon: Shield, text: 'Dispatch tanods and track the response', color: '#16a34a' },
+              { icon: MessageCircle, text: 'Chat with officials through tickets', color: '#7c3aed' },
+              { icon: BarChart2, text: 'See trends with AI summaries', color: '#4A43D4' },
             ].map(({ icon: Icon, text, color }) => (
               <div key={text} className="flex items-center gap-3 p-3 rounded-2xl"
                 style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}>
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.15)' }}>
-                  <Icon size={14} style={{ color }} />
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-white">
+                  <Icon size={15} style={{ color }} aria-hidden="true" />
                 </div>
                 <span className="text-sm font-medium text-white">{text}</span>
               </div>
             ))}
-          </div>
-
-          {/* Trust line */}
-          <div className="mt-10 flex items-center justify-center gap-2 text-xs text-purple-200">
-            <CheckCircle size={11} /> Trusted by Filipino communities
           </div>
         </div>
       </div>
@@ -226,10 +225,10 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8 fade-up">
             <div className="w-16 h-16 mx-auto mb-3 relative">
-              <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain" />
+              <Image src="/logo.png" alt="" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
             </div>
-            <h1 className="text-2xl font-bold text-white">BarangayHub 360</h1>
-            <p className="text-purple-200 text-xs mt-1">Smart Community Management</p>
+            <p className="text-2xl font-bold text-white">BarangayHub 360</p>
+            <p className="text-purple-50 text-xs mt-1">Smart barangay management</p>
           </div>
 
           {/* Card */}
@@ -290,7 +289,7 @@ export default function LoginPage() {
                       <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
                         autoComplete="current-password"
                         className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
-                        placeholder="••••••••" />
+                        placeholder="Enter your password" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
@@ -321,7 +320,11 @@ export default function LoginPage() {
                 <div className="mt-6 pt-6 border-t border-gray-100 text-center">
                   <p className="text-sm text-gray-500">
                     Don&apos;t have an account?{' '}
-                    <a href="/register" className="font-bold transition-colors" style={{ color: 'var(--brand)' }}>Create one →</a>
+                    <a href="/register" className="font-bold transition-colors" style={{ color: 'var(--brand-dark)' }}>Create one</a>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Barangay official?{' '}
+                    <a href="/request-access" className="font-bold transition-colors" style={{ color: 'var(--brand-dark)' }}>Request access</a>
                   </p>
                 </div>
               </>
@@ -408,18 +411,8 @@ export default function LoginPage() {
             )}
           </div>
 
-          {/* Footer trust line */}
-          <div className="mt-6 flex items-center justify-center gap-3 text-xs flex-wrap"
-            style={{ color: 'rgba(255,255,255,0.6)' }}>
-            <span className="flex items-center gap-1"><CheckCircle size={11} /> Secure login</span>
-            <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-            <span className="flex items-center gap-1"><CheckCircle size={11} /> Privacy first</span>
-            <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-            <span className="flex items-center gap-1"><CheckCircle size={11} /> Free forever</span>
-          </div>
-
-          <p className="text-center text-xs mt-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            © 2026 BH360 · Empowering Filipino communities
+          <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            © 2026 BarangayHub 360
           </p>
         </div>
       </div>

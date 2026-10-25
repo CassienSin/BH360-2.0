@@ -108,6 +108,10 @@ VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_SUBJECT=mailto:you@yourbarangay.gov.ph
 PUSH_WEBHOOK_SECRET=any-long-random-string
 
+# Public address used in links sent outside the app (invite emails).
+# Optional — defaults to https://bh-360.vercel.app
+# NEXT_PUBLIC_SITE_URL=https://bh-360.vercel.app
+
 # Maps — all optional. The defaults need no key (OpenFreeMap vector styles).
 # NEXT_PUBLIC_MAP_STYLE_LIGHT=https://tiles.openfreemap.org/styles/positron
 # NEXT_PUBLIC_MAP_STYLE_STREETS=https://tiles.openfreemap.org/styles/liberty

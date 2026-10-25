@@ -3,10 +3,11 @@ import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Send, User, Mail, Phone, Briefcase, MapPin, MessageSquare, CheckCircle, Loader2, Shield } from 'lucide-react'
+import { Send, User, Mail, Phone, Briefcase, MapPin, MessageSquare, CheckCircle, Loader2, Shield } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import SearchSelect from '@/components/SearchSelect'
+import { PageHeader } from '@/components/AppUI'
 import { getProvinces, getCities, getBarangays } from '@/lib/locations'
 
 const dots = [...Array(20)].map((_, i) => ({
@@ -158,12 +159,12 @@ export default function RequestAccess() {
 
     setSubmitted(true)
     setSubmitting(false)
-    toast.success('Application submitted!')
+    toast.success('Request sent')
   }
 
   if (submitted) {
     return (
-      <div className="min-h-screen relative overflow-hidden bg-brand flex items-center justify-center p-4">
+      <div className="min-h-screen relative overflow-clip bg-brand flex items-center justify-center p-4">
         <AnimatedDots />
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -175,18 +176,18 @@ export default function RequestAccess() {
             style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 32px rgba(34,197,94,0.4)', animation: 'float 2s ease-in-out infinite' }}>
             <CheckCircle size={36} className="text-white" />
           </div>
-          <h2 className="text-2xl font-black text-gray-800 mb-2" style={{ letterSpacing: '-0.5px' }}>Application Submitted!</h2>
+          <h2 className="text-2xl font-black text-gray-800 mb-2" style={{ letterSpacing: '-0.5px' }}>Request sent</h2>
           <p className="text-sm text-gray-500 mb-6">
-            Thank you for your interest in BarangayHub 360. Our team will review your application within 1-3 business days and send your invite code to <strong>{form.email}</strong>.
+            Thanks! We’ll review your request and send your invite code to <strong>{form.email}</strong> once it’s approved.
           </p>
 
           <div className="rounded-2xl p-4 mb-6"
             style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
             <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>What&apos;s Next?</p>
             <ol className="text-xs text-gray-700 space-y-1.5 text-left">
-              <li>✓ Our team verifies your barangay credentials</li>
-              <li>✓ You receive an invite code via email</li>
-              <li>✓ Use the code to register and onboard your team</li>
+              <li>1. We verify your position and barangay</li>
+              <li>2. You receive an official invite code by email</li>
+              <li>3. Sign up with the code, then invite your team</li>
             </ol>
           </div>
 
@@ -200,7 +201,7 @@ export default function RequestAccess() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
+    <div className="min-h-screen relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -209,22 +210,15 @@ export default function RequestAccess() {
           style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
-      <header className={`bg-white relative z-10 px-6 py-4 flex items-center gap-3 ${desktop.header}`}
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}>
-        <button onClick={() => router.push('/')} aria-label="Back to home"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 relative">
-            <Image src="/logo.png" alt="BH360" fill sizes="36px" loading="eager" className="object-contain" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-800">Request Access</h1>
-            <p className="text-xs text-gray-500">For Barangay Officials</p>
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        title="Request access"
+        description="For barangay officials setting up their barangay"
+        iconElement={<Image src="/logo.png" alt="" width={36} height={36} className="object-contain" />}
+        iconStyle={{ background: 'transparent' }}
+        onBack={() => router.push('/')}
+        backLabel="Back to home"
+        maxWidth={1180}
+      />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-8 ${desktop.accessPage}`}>
         <div className="glass-card p-4 mb-6 flex items-start gap-3">
@@ -233,9 +227,9 @@ export default function RequestAccess() {
             <Shield size={20} className="text-white" />
           </div>
           <div>
-            <p className="text-white text-sm font-bold">Onboard your barangay</p>
-            <p className="text-purple-200 text-xs mt-0.5">
-              Fill out this form to request access for your barangay. Our team will verify your information and send you an invite code.
+            <p className="text-white text-sm font-bold">Set up your barangay</p>
+            <p className="text-purple-50 text-sm mt-0.5 leading-relaxed">
+              Tell us who you are and which barangay you serve. Once your request is approved, you’ll get an official invite code to create your account and invite your team.
             </p>
           </div>
         </div>
@@ -277,7 +271,7 @@ export default function RequestAccess() {
                 </label>
                 <div className="relative">
                   <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input id="ra-phone" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+                  <input id="ra-phone" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 11) })}
                     required maxLength={11} autoComplete="tel-national" inputMode="numeric"
                     className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
                     placeholder="09xxxxxxxxx" />
@@ -295,7 +289,7 @@ export default function RequestAccess() {
                 <input id="ra-position" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })}
                   required maxLength={100} autoComplete="organization-title"
                   className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
-                  placeholder="e.g. Barangay Captain, Secretary, Kagawad" />
+                  placeholder="e.g. Punong Barangay, Kagawad" />
               </div>
             </div>
 
@@ -352,7 +346,7 @@ export default function RequestAccess() {
                 <textarea id="ra-message" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
                   rows={3} maxLength={500}
                   className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800 resize-none"
-                  placeholder="Tell us why you'd like to onboard your barangay..." />
+                  placeholder="Anything that helps us verify your request" />
               </div>
               <p className="text-xs text-gray-500 text-right mt-1">{form.message.length}/500</p>
             </div>
@@ -366,13 +360,13 @@ export default function RequestAccess() {
                 </>
               ) : (
                 <>
-                  <Send size={14} /> Submit Application
+                  <Send size={14} /> Send request
                 </>
               )}
             </button>
 
             <p className="text-xs text-gray-500 text-center pt-2">
-              Already have an invite code? <a href="/register" className="font-semibold" style={{ color: 'var(--brand)' }}>Register here →</a>
+              Already have an invite code? <a href="/register" className="font-bold" style={{ color: 'var(--brand-dark)' }}>Sign up with it</a>
             </p>
           </form>
         </div>

@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
@@ -10,6 +10,7 @@ import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
 import LiveClock from '@/components/LiveClock'
+import { SITE_URL } from '@/lib/siteUrl'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -73,6 +74,52 @@ const ROLE_CONFIG = {
   tanod: { color: '#22c55e', bg: '#f0fdf4' },
 }
 
+// The invite email, ready to send from the admin's own inbox — the app
+// has no email service of its own.
+function inviteEmail(app) {
+  const barangay = app.barangays?.name ? `Barangay ${app.barangays.name}` : 'your barangay'
+  const subject = `Your BarangayHub 360 invite code for ${barangay}`
+  const body = [
+    `Hi ${app.full_name?.split(' ')[0] || 'there'},`,
+    '',
+    `Your request to set up ${barangay} on BarangayHub 360 has been approved.`,
+    '',
+    `Your official invite code: ${app.generated_code}`,
+    '',
+    'To create your account:',
+    `1. Go to ${SITE_URL}/register`,
+    '2. Choose "Barangay Official" and enter the code above',
+    '3. Fill in your details and sign in',
+    '',
+    'Once you are in, you can create invite codes for your fellow officials and tanods.',
+    '',
+    'BarangayHub 360',
+  ].join('\n')
+  return { to: app.email, subject, body }
+}
+
+// Three ways out, because a mailto: link only works when the computer has
+// a mail app set up — on Windows without one, Chrome/Edge open a blank tab.
+function emailLinks(app) {
+  const { to, subject, body } = inviteEmail(app)
+  const q = (params) => new URLSearchParams(params).toString().replace(/\+/g, '%20')
+  return {
+    gmail: `https://mail.google.com/mail/?${q({ view: 'cm', fs: '1', to, su: subject, body })}`,
+    outlook: `https://outlook.office.com/mail/deeplink/compose?${q({ to, subject, body })}`,
+    mailto: `mailto:${encodeURIComponent(to)}?${q({ subject, body })}`,
+  }
+}
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// A broken photo link falls back to the initial instead of an empty tile.
+function UserAvatar({ src, name }) {
+  const [failedSrc, setFailedSrc] = useState(null)
+  const initial = name?.trim()?.[0]?.toUpperCase() || '?'
+  if (!src || failedSrc === src) return initial
+  return <img loading="lazy" decoding="async" src={src} alt="" onError={() => setFailedSrc(src)} className="w-full h-full object-cover" />
+}
+
 export default function AdminPanel() {
   const router = useRouter()
   // Memoize so we don't construct a new client on every render.
@@ -107,6 +154,7 @@ export default function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [reviewing, setReviewing] = useState(null)
+  const [emailMenuFor, setEmailMenuFor] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -607,7 +655,7 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
+    <div className="min-h-screen relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -617,17 +665,11 @@ export default function AdminPanel() {
       </div>
 
       {/* Premium Header */}
-      <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
+      <header className="bg-white sticky top-0 z-30"
         style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}>
-
-        {/* LEFT — Back & Brand */}
-        <button onClick={() => router.push('/')}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-          title="Back to home">
-          <ArrowLeft size={18} />
-        </button>
-
-        <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
+        {/* Same width as <main> so the header lines up with the cards.
+            No back button: "/" sends a signed-in admin straight back here. */}
+        <div className="mx-auto w-full max-w-6xl px-4 py-3 flex items-center gap-3">
 
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative flex-shrink-0">
@@ -668,8 +710,8 @@ export default function AdminPanel() {
           <LiveClock />
 
           {/* Refresh button */}
-          <button onClick={refreshData} disabled={refreshing}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
+          <button onClick={refreshData} disabled={refreshing} aria-label="Refresh data"
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
             title="Refresh data">
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -678,7 +720,8 @@ export default function AdminPanel() {
           {pendingCount > 0 && (
             <div className="relative">
               <button onClick={() => setActiveTab('applications')}
-                className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
+                aria-label={`${pendingCount} pending application${pendingCount === 1 ? '' : 's'}`}
+                className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
                 title={`${pendingCount} pending applications`}>
                 <Bell size={15} className="text-gray-500" />
                 <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
@@ -694,20 +737,25 @@ export default function AdminPanel() {
           <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
 
           {/* Logout button */}
-          <button onClick={() => setLogoutConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
+          <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out"
+            className="flex items-center gap-1.5 px-3 min-h-11 rounded-xl text-xs font-bold transition-all hover:scale-105"
             style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
             title="Sign out">
             <LogOut size={13} />
             <span className="hidden sm:block">Sign Out</span>
           </button>
         </div>
+        </div>
       </header>
 
       <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-hidden px-4 py-6 space-y-6">
 
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Stats Overview — a swipeable row on phones so the tabs stay
+            near the top; a grid from small tablets up. */}
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none]
+          [&>*]:shrink-0 [&>*]:w-[150px] [&>*]:snap-start
+          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto"
+          aria-label="Platform totals">
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -904,17 +952,44 @@ export default function AdminPanel() {
                   )}
 
                   {app.status === 'approved' && app.generated_code && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl mb-3"
+                    <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl mb-3"
                       style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
                       <CheckCircle size={14} className="text-emerald-600 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Generated Code</p>
-                        <p className="font-mono text-sm font-bold text-emerald-900">{app.generated_code}</p>
+                      <div className="flex-1 min-w-[150px]">
+                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Invite code</p>
+                        <p className="font-mono text-sm font-bold text-emerald-900 whitespace-nowrap">{app.generated_code}</p>
                       </div>
-                      <button onClick={() => copyToClipboard(app.generated_code)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-emerald-100 transition-colors">
-                        <Copy size={12} className="text-emerald-600" />
+                      <button onClick={() => copyToClipboard(app.generated_code)} aria-label="Copy code"
+                        className="w-10 h-10 rounded-lg flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                        <Copy size={14} className="text-emerald-700" />
                       </button>
+                      <button onClick={() => setEmailMenuFor(id => id === app.id ? null : app.id)}
+                        aria-expanded={emailMenuFor === app.id}
+                        className="flex items-center gap-1.5 px-3 min-h-10 rounded-lg text-xs font-bold text-white transition-colors"
+                        style={{ background: '#047857' }}>
+                        <Mail size={13} aria-hidden="true" /> Email code
+                      </button>
+                      {emailMenuFor === app.id && (() => {
+                        const links = emailLinks(app)
+                        const item = 'flex items-center justify-center gap-1.5 px-3 min-h-10 rounded-lg text-xs font-bold transition-colors bg-white hover:bg-emerald-100'
+                        return (
+                          <div className="w-full pt-2 mt-1 border-t border-emerald-200">
+                            <p className="text-xs text-emerald-900 mb-2">Send it from:</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <a href={links.gmail} target="_blank" rel="noopener noreferrer" className={item}
+                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Gmail</a>
+                              <a href={links.outlook} target="_blank" rel="noopener noreferrer" className={item}
+                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Outlook</a>
+                              <a href={links.mailto} className={item}
+                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Mail app</a>
+                              <button onClick={() => { const m = inviteEmail(app); copyToClipboard(`To: ${m.to}\nSubject: ${m.subject}\n\n${m.body}`) }}
+                                className={item} style={{ color: '#047857', border: '1px solid #bbf7d0' }}>
+                                <Copy size={12} aria-hidden="true" /> Copy message
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
 
@@ -1363,14 +1438,14 @@ export default function AdminPanel() {
                   </div>
                 )}
                 {barangayResults.map(b => (
-                  <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                  <div key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 rounded-xl"
                     style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
                     <Building2 size={14} className="text-gray-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-[160px]">
                       <p className="text-sm font-semibold text-gray-800 truncate">{b.name}</p>
                       <p className="text-xs text-gray-500 truncate">{b.city}, {b.province}</p>
                     </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
+                    <div className="flex gap-1.5 flex-shrink-0 ml-auto">
                       <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
                         className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
@@ -1456,9 +1531,9 @@ export default function AdminPanel() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{b?.name}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className="text-orange-600 font-semibold">{officialsCount} officials</span>
-                        <span className="text-green-600 font-semibold">{tanodCount} tanods</span>
-                        <span className="text-purple-600 font-semibold">{residentCount} residents</span>
+                        <span className="text-orange-700 font-semibold">{plural(officialsCount, 'official')}</span>
+                        <span className="text-green-700 font-semibold">{plural(tanodCount, 'tanod')}</span>
+                        <span className="text-purple-700 font-semibold">{plural(residentCount, 'resident')}</span>
                       </div>
                     </div>
                   </div>
@@ -1511,11 +1586,7 @@ export default function AdminPanel() {
                         style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
                         <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
                           style={{ background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)` }}>
-                          {u.avatar_url ? (
-                            <img loading="lazy" decoding="async" src={u.avatar_url} alt={u.full_name || 'User avatar'} className="w-full h-full object-cover" />
-                          ) : (
-                            u.full_name?.[0]?.toUpperCase()
-                          )}
+                          <UserAvatar src={u.avatar_url} name={u.full_name} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>

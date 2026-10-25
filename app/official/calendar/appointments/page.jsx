@@ -109,7 +109,7 @@ export default function AppointmentsPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand">
+    <div className="min-h-screen relative overflow-clip bg-brand">
       <AppointmentReminderWatcher profile={profile} />
       <PageHeader title="Appointments" description={`${profile?.barangays?.name || 'Barangay'} · Appointment schedule`} icon={CalendarDays} onBack={() => router.push('/official')} backLabel="Back to dashboard" actions={<AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} />New Appointment</AppButton>} />
 

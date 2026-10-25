@@ -4,10 +4,12 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { getProvinces, getCities, getBarangays } from '@/lib/locations'
-import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, ArrowRight, KeyRound, CheckCircle, Check, X } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User, Phone, MapPin, ArrowRight, ArrowLeft, KeyRound, CheckCircle, Check, X } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
 import toast from 'react-hot-toast'
 import SearchSelect from '@/components/SearchSelect'
+import { PASSWORD_RULES, checkPassword } from '@/lib/passwordRules'
 
 const dots = [...Array(25)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -122,14 +124,7 @@ export default function RegisterPage() {
   const phonePrefixWrong = form.phone.length >= 2 && !form.phone.startsWith('09')
 
   // Password strength checks
-  const passwordChecks = {
-    length: form.password.length >= 8,
-    uppercase: /[A-Z]/.test(form.password),
-    lowercase: /[a-z]/.test(form.password),
-    number: /[0-9]/.test(form.password),
-    symbol: /[!@#$%^&*(),.?":{}|<>]/.test(form.password),
-  }
-  const passwordStrength = Object.values(passwordChecks).filter(Boolean).length
+  const { checks: passwordChecks, score: passwordStrength } = checkPassword(form.password)
   const strengthLabel = passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'
   const strengthColor = passwordStrength <= 2 ? '#ef4444' : passwordStrength <= 3 ? '#f97316' : passwordStrength <= 4 ? '#22c55e' : '#16a34a'
 
@@ -187,7 +182,7 @@ export default function RegisterPage() {
       setError('Full name must be at least 2 characters.')
       setLoading(false); return
     }
-    if (passwordStrength < 5) {
+    if (passwordStrength < PASSWORD_RULES.length) {
       setError('Password does not meet all requirements.')
       setLoading(false); return
     }
@@ -254,6 +249,10 @@ export default function RegisterPage() {
   return (
     <div className={`min-h-screen flex items-center justify-center py-12 px-6 bg-brand relative overflow-hidden ${desktop.registrationRoot}`}>
 
+      <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
+        <ArrowLeft size={15} aria-hidden="true" /> Home
+      </Link>
+
       {/* Animated background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-[500px] h-[500px] rounded-full opacity-20"
@@ -281,7 +280,7 @@ export default function RegisterPage() {
         {/* Header */}
         <div className={`text-center mb-6 fade-up ${desktop.registrationHeading}`}>
           <div className="w-16 h-16 mx-auto mb-4 relative" style={{ animation: 'float 6s ease-in-out infinite' }}>
-            <Image src="/logo.png" alt="BH360" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
+            <Image src="/logo.png" alt="BarangayHub 360" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
           </div>
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full mb-4"
@@ -298,14 +297,15 @@ export default function RegisterPage() {
               backgroundClip: 'text',
             }}>Create your account</span>
           </h1>
-          <p className="text-purple-200 text-sm">Join your barangay community in seconds</p>
+          <p className="text-purple-50 text-sm">Sign up in two quick steps</p>
         </div>
 
         {/* Step indicators */}
         {!awaitingConfirmation && (
-          <div className={`flex items-center justify-center gap-2 mb-6 fade-up ${desktop.registrationSteps}`}>
+          <ol className={`flex items-start justify-center gap-2 mb-6 fade-up ${desktop.registrationSteps}`} aria-label="Sign-up steps">
             {[1, 2].map(s => (
-              <div key={s} className="flex items-center gap-2">
+              <li key={s} className="flex items-start gap-2" aria-current={step === s ? 'step' : undefined}>
+                <div className="flex flex-col items-center gap-1.5 w-20">
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
                   style={{
                     background: step >= s ? 'white' : 'rgba(255,255,255,0.15)',
@@ -313,12 +313,16 @@ export default function RegisterPage() {
                     border: step >= s ? 'none' : '1px solid rgba(255,255,255,0.25)',
                     boxShadow: step >= s ? '0 4px 16px rgba(255,255,255,0.3)' : 'none',
                   }}>
-                  {step > s ? <CheckCircle size={14} /> : s}
+                  {step > s ? <CheckCircle size={14} aria-label="Done" /> : s}
                 </div>
-                {s < 2 && <div className="w-12 h-0.5 rounded-full transition-all" style={{ background: step > s ? 'white' : 'rgba(255,255,255,0.2)' }} />}
-              </div>
+                <span className="text-xs font-semibold text-white" style={{ opacity: step >= s ? 1 : 0.75 }}>
+                  {s === 1 ? 'Your role' : 'Your details'}
+                </span>
+                </div>
+                {s < 2 && <div className="w-10 h-0.5 rounded-full transition-all mt-4" style={{ background: step > s ? 'white' : 'rgba(255,255,255,0.35)' }} aria-hidden="true" />}
+              </li>
             ))}
-          </div>
+          </ol>
         )}
 
         <div className={`rounded-3xl p-4 sm:p-6 md:p-8 fade-up-1 ${desktop.registrationCard}`}
@@ -493,7 +497,7 @@ export default function RegisterPage() {
 
               <form onSubmit={handleRegister} className={`space-y-4 ${desktop.registrationForm}`}>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="reg-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Full Name</label>
                     <div className="relative">
@@ -584,13 +588,7 @@ export default function RegisterPage() {
 
                       {/* Requirements */}
                       <div className="grid grid-cols-1 gap-1 mt-3">
-                        {[
-                          { key: 'length', label: 'At least 8 characters' },
-                          { key: 'uppercase', label: 'One uppercase letter (A-Z)' },
-                          { key: 'lowercase', label: 'One lowercase letter (a-z)' },
-                          { key: 'number', label: 'One number (0-9)' },
-                          { key: 'symbol', label: 'One symbol (!@#$%^&*)' },
-                        ].map(({ key, label }) => (
+                        {PASSWORD_RULES.map(({ key, label }) => (
                           <div key={key} className="flex items-center gap-2 text-xs">
                             {passwordChecks[key] ? (
                               <Check size={12} className="text-emerald-500 flex-shrink-0" />
@@ -696,23 +694,14 @@ export default function RegisterPage() {
             <div className="mt-6 pt-5 border-t border-gray-100 text-center">
               <p className="text-sm text-gray-500">
                 Already have an account?{' '}
-                <a href="/login" className="font-bold transition-colors" style={{ color: 'var(--brand)' }}>Sign in →</a>
+                <a href="/login" className="font-bold transition-colors" style={{ color: 'var(--brand-dark)' }}>Sign in</a>
               </p>
             </div>
           )}
         </div>
 
-        <div className="mt-6 flex items-center justify-center gap-3 text-xs flex-wrap"
-          style={{ color: 'rgba(255,255,255,0.6)' }}>
-          <span className="flex items-center gap-1"><CheckCircle size={11} /> Free forever</span>
-          <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-          <span className="flex items-center gap-1"><CheckCircle size={11} /> Privacy first</span>
-          <span style={{ color: 'rgba(255,255,255,0.3)' }}>·</span>
-          <span className="flex items-center gap-1"><CheckCircle size={11} /> Secure signup</span>
-        </div>
-
-        <p className="text-center text-xs mt-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          © 2026 BH360 · Empowering Filipino communities
+        <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
+          © 2026 BarangayHub 360
         </p>
       </div>
     </div>
