@@ -1,21 +1,20 @@
 .sidebar { color: #292338; }
 .sidebar > div:not(.scrollArea) { flex-shrink: 0; }
 .scrollArea { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.sidebar :global(.text-gray-400) { color: #70677d; }
 .sidebar button { cursor: pointer; }
 .sidebar button:disabled { cursor: default; }
-.sidebar button:focus-visible, .search:focus-visible { outline: 2px solid #5b54e8; outline-offset: 2px; }
+.sidebar button:focus-visible, .search:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .iconButton { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px; background: #f6f4ff; color: #62576f; }
-.iconButton:hover { background: #e8e3ff; }
+.iconButton:hover { background: var(--brand-border); }
 .search { min-height: 44px; color: #292338; }
 .search::placeholder { color: #70677d; }
 .clearSearch { position: absolute; right: 2px; top: 2px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: #62576f; }
-.clearSearch:hover { background: #f0effe; }
+.clearSearch:hover { background: var(--brand-soft); }
 .navRow { position: relative; display: flex; align-items: center; gap: 2px; }
 .navButton { flex: 1; min-width: 0; min-height: 44px; }
-.navButton > span { min-width: 0; overflow-wrap: anywhere; }
+.navButton > span { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
 .pinButton { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 40px; border-radius: 10px; color: #81738f; }
-.pinButton:hover, .pinButton[aria-pressed="true"] { background: #f0effe; color: #4a43d4; }
+.pinButton:hover, .pinButton[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-dark); }
 .sidebar:not(:global(.open)) nav { padding-inline: 8px; }
 .sidebar button[aria-label="Sign out"] { width: 36px; height: 36px; }
 @media (max-width: 767px) {

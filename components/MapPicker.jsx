@@ -52,7 +52,7 @@ export default function MapPicker({ coords, setCoords, height = 280 }) {
   } : null), [lat, lng, accuracy])
 
   return (
-    <div className="relative rounded-2xl overflow-hidden" style={{ border: '2px solid #e8e3ff', height, background: '#eceafc' }}>
+    <div className="relative rounded-2xl overflow-hidden" style={{ border: '2px solid var(--brand-border)', height, background: '#eceafc' }}>
       <BaseMap
         ref={mapRef}
         initialViewState={startView || undefined}

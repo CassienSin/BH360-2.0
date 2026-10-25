@@ -1,9 +1,10 @@
 'use client'
+import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, HelpCircle, MessageSquare, BookOpen, Phone, ChevronDown, Send, Sparkles, Search, AlertTriangle, Loader2, CheckCircle, X } from 'lucide-react'
+import { HelpCircle, MessageSquare, BookOpen, Phone, ChevronDown, Send, Sparkles, Search, AlertTriangle, Loader2, CheckCircle, X } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import { useMediaQuery } from '@/lib/useMediaQuery'
@@ -202,22 +203,12 @@ export default function HelpPage() {
           style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
       </div>
 
-      <header className={`bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
-        <button onClick={() => router.back()}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>Help & Support</h1>
-          <p className="text-xs text-gray-400 truncate">We&apos;re here to help, 24/7</p>
-        </div>
-        <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
-          <HelpCircle size={16} className="text-white" />
-        </div>
-      </header>
+      <PageHeader
+        title="Help & Support"
+        description={"We're here to help, 24/7"}
+        icon={HelpCircle}
+        onBack={() => router.back()}
+      />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.helpPage}`}>
 
@@ -244,11 +235,11 @@ export default function HelpPage() {
                   role="tab" aria-selected={selected}
                   className="flex flex-col items-center gap-1 py-2 rounded-xl transition-all"
                   style={{
-                    background: selected ? '#f0effe' : 'transparent',
-                    color: selected ? '#5B54E8' : '#6b7280',
+                    background: selected ? 'var(--brand-soft)' : 'transparent',
+                    color: selected ? 'var(--brand)' : '#6b7280',
                   }}>
                   <Icon size={16} aria-hidden="true" />
-                  <span className="text-[10px] font-bold">{tab.label}</span>
+                  <span className="text-xs font-bold">{tab.label}</span>
                 </button>
               )
             })}
@@ -260,7 +251,7 @@ export default function HelpPage() {
           <div className="space-y-3 fade-up-2">
             <div className="white-card p-4">
               <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                   type="search"
                   aria-label="Search FAQs"
@@ -269,7 +260,7 @@ export default function HelpPage() {
                 {searchQuery && (
                   <button onClick={() => setSearchQuery('')}
                     aria-label="Clear search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors">
                     <X size={13} />
                   </button>
                 )}
@@ -281,7 +272,7 @@ export default function HelpPage() {
                 <div className="white-card p-8 text-center">
                   <Search size={32} className="mx-auto mb-3 text-gray-300" aria-hidden="true" />
                   <p className="text-sm font-semibold text-gray-700">No FAQs match your search</p>
-                  <p className="text-xs text-gray-400 mt-1 mb-4">Try different keywords, or send us your question directly</p>
+                  <p className="text-xs text-gray-500 mt-1 mb-4">Try different keywords, or send us your question directly</p>
                   <button
                     onClick={() => {
                       // Carry the search into the contact form so they don't retype it
@@ -289,7 +280,7 @@ export default function HelpPage() {
                       setActiveTab('contact')
                     }}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                    style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                     <MessageSquare size={12} /> Ask support
                   </button>
                 </div>
@@ -305,7 +296,7 @@ export default function HelpPage() {
                       className="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-gray-50 transition-colors">
                       <p className="text-sm font-bold text-gray-800 flex-1">{faq.q}</p>
                       <ChevronDown size={16} aria-hidden="true"
-                        className="text-gray-400 flex-shrink-0 transition-transform"
+                        className="text-gray-500 flex-shrink-0 transition-transform"
                         style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
                     </button>
                     {expanded && (
@@ -324,8 +315,8 @@ export default function HelpPage() {
         {activeTab === 'guides' && (
           <div className={`space-y-3 fade-up-2 ${desktop.helpGrid}`}>
             <div className="p-3 rounded-2xl flex items-start gap-2.5"
-              style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-              <BookOpen size={14} style={{ color: '#5B54E8' }} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
+              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+              <BookOpen size={14} style={{ color: 'var(--brand)' }} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
               <p className="text-xs text-purple-900">
                 Quick guides for <strong>{userRole === 'resident' ? 'residents' : userRole === 'official' ? 'barangay officials' : 'tanods'}</strong>
               </p>
@@ -340,8 +331,8 @@ export default function HelpPage() {
                 <ol className="space-y-2">
                   {guide.steps.map((step, j) => (
                     <li key={step} className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-xl flex items-center justify-center text-[10px] font-black text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                      <div className="w-6 h-6 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
                         {j + 1}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed pt-0.5">{step}</p>
@@ -371,7 +362,7 @@ export default function HelpPage() {
                 <button
                   onClick={() => setSentAt(null)}
                   className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                  style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                   <Send size={12} /> Send another message
                 </button>
               </div>
@@ -379,12 +370,12 @@ export default function HelpPage() {
               <form onSubmit={submitSupport} className="white-card p-5 space-y-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: '#f0effe' }}>
-                    <MessageSquare size={18} style={{ color: '#5B54E8' }} aria-hidden="true" />
+                    style={{ background: 'var(--brand-soft)' }}>
+                    <MessageSquare size={18} style={{ color: 'var(--brand)' }} aria-hidden="true" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Contact Support</h3>
-                    <p className="text-xs text-gray-400">We respond within 24 hours</p>
+                    <p className="text-xs text-gray-500">We respond within 24 hours</p>
                   </div>
                 </div>
 
@@ -397,8 +388,8 @@ export default function HelpPage() {
                         aria-pressed={contactForm.category === c.value}
                         className="p-2.5 rounded-2xl flex items-center gap-2 transition-all"
                         style={{
-                          background: contactForm.category === c.value ? '#f0effe' : '#fafaff',
-                          border: `2px solid ${contactForm.category === c.value ? '#5B54E8' : '#f0effe'}`,
+                          background: contactForm.category === c.value ? 'var(--brand-soft)' : 'var(--app-surface)',
+                          border: `2px solid ${contactForm.category === c.value ? 'var(--brand)' : 'var(--brand-soft)'}`,
                         }}>
                         <span aria-hidden="true">{c.icon}</span>
                         <span className="text-xs font-bold text-gray-700">{c.label}</span>
@@ -423,12 +414,12 @@ export default function HelpPage() {
                     rows={5} maxLength={1000}
                     className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none"
                     placeholder="Tell us what's happening..." />
-                  <p className="text-xs text-gray-400 text-right mt-1" aria-live="polite">{contactForm.message.length}/1000</p>
+                  <p className="text-xs text-gray-500 text-right mt-1" aria-live="polite">{contactForm.message.length}/1000</p>
                 </div>
 
                 <button type="submit" disabled={submitting}
                   className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                   {submitting ? (
                     <><Loader2 size={14} className="animate-spin" /> Sending...</>
                   ) : (
@@ -436,7 +427,7 @@ export default function HelpPage() {
                   )}
                 </button>
 
-                <p className="text-xs text-gray-400 text-center flex items-center justify-center gap-1">
+                <p className="text-xs text-gray-500 text-center flex items-center justify-center gap-1">
                   <CheckCircle size={11} aria-hidden="true" /> Your message goes directly to the BH360 support team
                 </p>
               </form>
@@ -474,7 +465,7 @@ export default function HelpPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-gray-800">{contact.name}</p>
-                  <p className="text-xs text-gray-400 truncate">{contact.desc}</p>
+                  <p className="text-xs text-gray-500 truncate">{contact.desc}</p>
                 </div>
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl flex-shrink-0"
                   style={{ background: contact.bg }}>

@@ -99,21 +99,21 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
             </div>
             <div>
               <h2 id="rating-modal-title" className="text-lg font-bold text-gray-800">Rate the Service</h2>
-              <p className="text-xs text-gray-400">Help us improve barangay response</p>
+              <p className="text-xs text-gray-500">Help us improve barangay response</p>
             </div>
           </div>
           <button onClick={onClose} disabled={submitting} aria-label="Close"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors flex-shrink-0 disabled:opacity-50">
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0 disabled:opacity-50">
             <X size={16} />
           </button>
         </div>
 
         <div className="overflow-y-auto p-6 space-y-5">
           {/* Incident summary */}
-          <div className="p-3 rounded-2xl" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>Resolved Incident</p>
+          <div className="p-3 rounded-2xl" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Resolved Incident</p>
             <p className="text-sm font-bold text-gray-800">{incident?.title}</p>
-            <p className="text-xs text-gray-400 mt-0.5">📍 {incident?.location}</p>
+            <p className="text-xs text-gray-500 mt-0.5">📍 {incident?.location}</p>
           </div>
 
           {/* Star Rating */}
@@ -154,10 +154,10 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
                 <div className="text-center">
                   <p className="text-2xl mb-1 leading-none">{current.emoji}</p>
                   <p className="text-base font-bold" style={{ color: current.color }}>{current.label}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{current.desc}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{current.desc}</p>
                 </div>
               ) : (
-                <p className="text-xs text-gray-300">Tap the stars to rate</p>
+                <p className="text-xs text-gray-500">Tap the stars to rate</p>
               )}
             </div>
           </div>
@@ -166,7 +166,7 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
           <div>
             <label htmlFor="rating-feedback"
               className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <MessageSquare size={11} /> Feedback <span className="text-gray-300 font-normal">(Optional)</span>
+              <MessageSquare size={11} /> Feedback <span className="text-gray-500 font-normal">(Optional)</span>
             </label>
             <textarea
               id="rating-feedback"
@@ -176,14 +176,14 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
               disabled={submitting}
               placeholder="Share your experience with the response..."
               className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none disabled:opacity-60" />
-            <p className="text-xs text-gray-400 text-right mt-1">{feedback.length}/300</p>
+            <p className="text-xs text-gray-500 text-right mt-1">{feedback.length}/300</p>
           </div>
         </div>
 
         <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
           <button onClick={onClose} disabled={submitting}
             className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-gray-50 disabled:opacity-50"
-            style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+            style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
             Skip
           </button>
           <button onClick={handleSubmit} disabled={submitting || rating === 0}

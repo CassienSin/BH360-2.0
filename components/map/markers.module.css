@@ -25,12 +25,12 @@
 }
 .ring {
   position: absolute; left: 50%; top: 21px; width: 58px; height: 58px; border-radius: 50%;
-  border: 2.5px solid var(--cm-accent, #5B54E8); transform: translate(-50%, -50%); pointer-events: none;
+  border: 2.5px solid var(--cm-accent, var(--brand)); transform: translate(-50%, -50%); pointer-events: none;
 }
 
 .badge {
   position: absolute; top: -2px; display: grid; place-items: center; width: 19px; height: 19px;
-  border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 11px; font-weight: 800; line-height: 1;
+  border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 12px; font-weight: 800; line-height: 1;
   box-sizing: border-box;
 }
 .badgeRight { right: -2px; }
@@ -42,7 +42,7 @@
 
 .cluster {
   position: relative; display: grid; place-items: center; border-radius: 50%;
-  border: 3px solid #fff; background: #5B54E8; color: #fff; font: inherit; font-weight: 800;
+  border: 3px solid #fff; background: var(--brand); color: #fff; font: inherit; font-weight: 800;
   box-shadow: 0 4px 14px rgba(41,35,56,.3); cursor: pointer; padding: 0;
 }
 .cluster:focus-visible { outline: 3px solid #b8acf9; outline-offset: 3px; }
@@ -62,7 +62,7 @@
 .tanodHalo { position: absolute; inset: -8px; border-radius: 50%; background: rgba(34,197,94,.22); animation: halo 2.2s ease-out infinite; pointer-events: none; }
 .tanodPhoto { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 
-.measureDot { width: 14px; height: 14px; border-radius: 50%; background: #5B54E8; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.measureDot { width: 14px; height: 14px; border-radius: 50%; background: var(--brand); border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 
 @media (prefers-reduced-motion: reduce) {
   .pulse, .clusterHaloCritical, .tanodHalo { animation: none; }

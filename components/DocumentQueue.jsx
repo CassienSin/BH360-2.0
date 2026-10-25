@@ -122,7 +122,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
       <div className="white-card p-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
             <FileCheck2 size={18} className="text-white" />
           </div>
           <div className="min-w-0">
@@ -131,9 +131,9 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
               Sorted by deadline — the request with the least time left is at the top.
             </p>
             <div className="flex items-start gap-1.5 mt-2">
-              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                <strong style={{ color: '#5B54E8' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — a simple
+              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+              <p className="text-xs text-gray-500 leading-relaxed">
+                <strong style={{ color: 'var(--brand)' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — a simple
                 transaction must be acted on within <strong>3 working days</strong> (7 for complex,
                 20 for highly technical), extendable once. If the deadline passes with no decision,
                 the request is <strong>deemed approved</strong> by operation of law.
@@ -184,59 +184,59 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-gray-800 text-sm">{doc?.label || req.document_type}</h4>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                         style={{ background: st.bg, color: st.color }}>
                         {st.label}
                       </span>
                       {state.label && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                           style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}>
                           {state.label}
                         </span>
                       )}
                       {req.extended && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">
                           Extended once
                         </span>
                       )}
                     </div>
 
-                    <p className="font-mono text-[11px] mt-1" style={{ color: '#5B54E8' }}>
+                    <p className="font-mono text-xs mt-1" style={{ color: 'var(--brand)' }}>
                       {req.reference_code}
                     </p>
                     <p className="text-xs text-gray-600 mt-1">
                       <strong>{req.profiles?.full_name || 'Unknown requester'}</strong> · {req.purpose}
                     </p>
-                    {req.notes && <p className="text-[11px] text-gray-500 mt-0.5">{req.notes}</p>}
+                    {req.notes && <p className="text-xs text-gray-500 mt-0.5">{req.notes}</p>}
 
                     <div className="flex items-center gap-1.5 mt-2">
                       <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} />
-                      <p className="text-[11px]" style={{ color: dl.color }}>
+                      <p className="text-xs" style={{ color: dl.color }}>
                         Due {formatDeadline(req.due_at)}
-                        <span className="text-gray-400">
+                        <span className="text-gray-500">
                           {' · '}{req.processing_days} working day{req.processing_days === 1 ? '' : 's'}
                         </span>
                       </p>
                     </div>
 
                     <div className="flex items-start gap-1.5 mt-1">
-                      <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-                      <p className="text-[11px] text-gray-500 leading-relaxed">{req.legal_basis}</p>
+                      <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+                      <p className="text-xs text-gray-500 leading-relaxed">{req.legal_basis}</p>
                     </div>
 
                     {req.extension_reason && (
-                      <p className="text-[11px] text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 mt-1">
                         <strong>Extension:</strong> {req.extension_reason}
                       </p>
                     )}
                     {req.denial_reason && (
-                      <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
                         style={{ background: '#fef2f2', color: '#b91c1c' }}>
                         <strong>Denied:</strong> {req.denial_reason}
                       </p>
                     )}
 
-                    <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(req.created_at)}>
+                    <p className="text-xs text-gray-500 mt-1.5" title={fullDate(req.created_at)}>
                       Filed {timeAgo(req.created_at)}
                       {req.released_at && ` · closed ${timeAgo(req.released_at)}`}
                     </p>
@@ -245,7 +245,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
 
                 {extending === req.id ? (
                   <div className="mt-3 space-y-2">
-                    <div className="px-3 py-2 rounded-xl text-[11px] leading-relaxed"
+                    <div className="px-3 py-2 rounded-xl text-xs leading-relaxed"
                       style={{ background: '#fffbeb', border: '1px solid #fef3c7', color: '#92400e' }}>
                       RA 11032 Sec. 9(b)(1) allows <strong>one</strong> extension, for the same number
                       of days. This moves the deadline to{' '}
@@ -265,7 +265,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
                       </button>
                       <button onClick={() => { setExtending(null); setReason('') }}
                         className="px-4 py-2.5 rounded-2xl text-xs font-bold"
-                        style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                         Cancel
                       </button>
                     </div>
@@ -285,7 +285,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
                       </button>
                       <button onClick={() => { setDenying(null); setReason('') }}
                         className="px-4 py-2.5 rounded-2xl text-xs font-bold"
-                        style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                         Cancel
                       </button>
                     </div>
@@ -303,7 +303,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
                     {req.status === 'processing' && (
                       <button onClick={() => markReady(req)} disabled={busy}
                         className="flex-1 min-w-[130px] flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-xs font-bold text-white disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
                         Mark ready
                       </button>
@@ -322,7 +322,7 @@ export default function DocumentQueue({ profile, requests, onUpdated }) {
                       <button onClick={() => { setExtending(req.id); setReason('') }} disabled={busy}
                         title="RA 11032 Sec. 9(b)(1) — one extension only"
                         className="px-4 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                        style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                         Extend once
                       </button>
                     )}

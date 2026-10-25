@@ -1,9 +1,10 @@
 'use client'
+import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, User, Phone, MapPin, Camera, Save, Lock, AlertTriangle, FileText, CheckCircle, Bell, Loader2, Edit3, X, Activity, Award, Mail, Eye, EyeOff, Check } from 'lucide-react'
+import { User, Phone, MapPin, Camera, Save, Lock, AlertTriangle, FileText, CheckCircle, Bell, Loader2, Edit3, X, Activity, Award, Mail, Eye, EyeOff, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 
@@ -348,17 +349,13 @@ export default function ProfilePage() {
           style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
       </div>
 
-      <header className={`bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3 ${desktop.header}`}
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
-        <button onClick={() => router.push(getDashboardPath())} aria-label="Back to dashboard"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div>
-          <h1 className="text-base font-bold text-gray-800">My Profile</h1>
-          <p className="text-xs text-gray-400">Manage your account & activity</p>
-        </div>
-      </header>
+      <PageHeader
+        title="My Profile"
+        description="Manage your account & activity"
+        icon={User}
+        onBack={() => router.push(getDashboardPath())}
+        backLabel="Back to dashboard"
+      />
 
       <main className={`relative z-10 max-w-3xl mx-auto px-4 py-8 space-y-6 ${desktop.profilePage}`}>
 
@@ -403,8 +400,8 @@ export default function ProfilePage() {
                   <button onClick={() => fileInputRef.current?.click()}
                     aria-label="Change avatar"
                     className="absolute -bottom-1.5 -right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-                    style={{ background: 'white', border: '2px solid #f0effe' }}>
-                    <Camera size={13} style={{ color: '#5B54E8' }} />
+                    style={{ background: 'white', border: '2px solid var(--brand-soft)' }}>
+                    <Camera size={13} style={{ color: 'var(--brand)' }} />
                   </button>
                 )}
 
@@ -424,7 +421,7 @@ export default function ProfilePage() {
                 {!editing ? (
                   <button onClick={() => setEditing(true)}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                    style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                     <Edit3 size={12} /> Edit Profile
                   </button>
                 ) : (
@@ -437,7 +434,7 @@ export default function ProfilePage() {
                     </button>
                     <button onClick={handleSave} disabled={saving}
                       className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
                       {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                       {saving ? 'Saving...' : 'Save'}
                     </button>
@@ -455,9 +452,9 @@ export default function ProfilePage() {
                 </span>
               </div>
               {profile?.barangays && (
-                <p className="text-sm text-gray-400 mt-1">📍 {profile.barangays.name}, {profile.barangays.city}, {profile.barangays.province}</p>
+                <p className="text-sm text-gray-500 mt-1">📍 {profile.barangays.name}, {profile.barangays.city}, {profile.barangays.province}</p>
               )}
-              <p className="text-xs text-gray-300 mt-1">Member since {fullDate(profile?.created_at)}</p>
+              <p className="text-xs text-gray-500 mt-1">Member since {fullDate(profile?.created_at)}</p>
             </div>
           </div>
         </div>
@@ -473,7 +470,7 @@ export default function ProfilePage() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap"
               style={{
                 background: activeTab === value ? 'white' : 'rgba(255,255,255,0.15)',
-                color: activeTab === value ? '#5B54E8' : 'white',
+                color: activeTab === value ? 'var(--brand)' : 'white',
                 boxShadow: activeTab === value ? '0 4px 16px rgba(91,84,232,0.15)' : 'none',
               }}>
               <Icon size={13} /> {label}
@@ -485,7 +482,7 @@ export default function ProfilePage() {
         {activeTab === 'info' && (
           <div className="white-card p-6 fade-up">
             <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <User size={14} style={{ color: '#5B54E8' }} /> Personal Information
+              <User size={14} style={{ color: 'var(--brand)' }} /> Personal Information
             </h3>
 
             <div className={`space-y-4 ${desktop.personalFields}`}>
@@ -493,7 +490,7 @@ export default function ProfilePage() {
               <div>
                 <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email</label>
                 <p className="text-sm text-gray-800 font-medium px-1 flex items-center gap-2">
-                  <Mail size={13} className="text-gray-400" /> {email || '—'}
+                  <Mail size={13} className="text-gray-500" /> {email || '—'}
                 </p>
               </div>
 
@@ -502,7 +499,7 @@ export default function ProfilePage() {
                 <label htmlFor="profile-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Full Name</label>
                 {editing ? (
                   <div className="relative">
-                    <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="profile-name" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })}
                       maxLength={100} autoComplete="name"
                       className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
@@ -518,14 +515,14 @@ export default function ProfilePage() {
                 <label htmlFor="profile-phone" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Phone Number</label>
                 {editing ? (
                   <div className="relative">
-                    <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="profile-phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
                       maxLength={11} autoComplete="tel-national" inputMode="numeric"
                       className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
                       placeholder="09xxxxxxxxx" />
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.phone || <span className="text-gray-300 italic">Not provided</span>}</p>
+                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.phone || <span className="text-gray-500 italic">Not provided</span>}</p>
                 )}
               </div>
 
@@ -534,14 +531,14 @@ export default function ProfilePage() {
                 <label htmlFor="profile-address" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Address</label>
                 {editing ? (
                   <div className="relative">
-                    <MapPin size={14} className="absolute left-3.5 top-3.5 text-gray-400" />
+                    <MapPin size={14} className="absolute left-3.5 top-3.5 text-gray-500" />
                     <textarea id="profile-address" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
                       rows={2} maxLength={200} autoComplete="street-address"
                       className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800 resize-none"
                       placeholder="Sitio, Street, etc." />
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.address || <span className="text-gray-300 italic">Not provided</span>}</p>
+                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.address || <span className="text-gray-500 italic">Not provided</span>}</p>
                 )}
               </div>
             </div>
@@ -562,7 +559,7 @@ export default function ProfilePage() {
                 <div key={stat.label} className="white-card p-4">
                   <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
                   <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
                 </div>
               ))}
 
@@ -577,7 +574,7 @@ export default function ProfilePage() {
                 <div key={stat.label} className="white-card p-4">
                   <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
                   <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
                 </div>
               ))}
 
@@ -587,7 +584,7 @@ export default function ProfilePage() {
                 <div key={stat.label} className="white-card p-4">
                   <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
                   <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
                 </div>
               ))}
             </div>
@@ -595,13 +592,13 @@ export default function ProfilePage() {
             {/* Recent activity */}
             <div className="white-card p-6">
               <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Activity size={14} style={{ color: '#5B54E8' }} /> Recent Activity
+                <Activity size={14} style={{ color: 'var(--brand)' }} /> Recent Activity
               </h3>
 
               {totalActivity === 0 && (
                 <div className="text-center py-8">
                   <Activity size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-400">No activity yet</p>
+                  <p className="text-sm text-gray-500">No activity yet</p>
                 </div>
               )}
 
@@ -613,9 +610,9 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                      <p className="text-xs text-gray-400" title={fullDate(inc.created_at)}>Reported {timeAgo(inc.created_at)}</p>
+                      <p className="text-xs text-gray-500" title={fullDate(inc.created_at)}>Reported {timeAgo(inc.created_at)}</p>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
                       inc.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                       inc.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
                       'bg-emerald-100 text-emerald-700'
@@ -626,14 +623,14 @@ export default function ProfilePage() {
                 {profile?.role === 'resident' && tickets.map(t => (
                   <div key={t.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                       <FileText size={13} className="text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-400" title={fullDate(t.created_at)}>Ticket · {timeAgo(t.created_at)}</p>
+                      <p className="text-xs text-gray-500" title={fullDate(t.created_at)}>Ticket · {timeAgo(t.created_at)}</p>
                     </div>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
                       t.status === 'open' ? 'bg-amber-100 text-amber-700' :
                       t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
                       'bg-emerald-100 text-emerald-700'
@@ -648,14 +645,14 @@ export default function ProfilePage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                      <p className="text-xs text-gray-400" title={fullDate(inc.created_at)}>
+                      <p className="text-xs text-gray-500" title={fullDate(inc.created_at)}>
                         {inc.status === 'resolved' && inc.resolved_at ? `Resolved ${timeAgo(inc.resolved_at)}` : `Assigned ${timeAgo(inc.created_at)}`}
                       </p>
                     </div>
                     {inc.rating && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">⭐ {inc.rating}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">⭐ {inc.rating}</span>
                     )}
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
                       inc.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
                     }`}>{inc.status}</span>
                   </div>
@@ -664,12 +661,12 @@ export default function ProfilePage() {
                 {profile?.role === 'official' && announcements.map(a => (
                   <div key={a.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                       <Bell size={13} className="text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
-                      <p className="text-xs text-gray-400" title={fullDate(a.created_at)}>Posted {timeAgo(a.created_at)}</p>
+                      <p className="text-xs text-gray-500" title={fullDate(a.created_at)}>Posted {timeAgo(a.created_at)}</p>
                     </div>
                   </div>
                 ))}
@@ -682,15 +679,15 @@ export default function ProfilePage() {
         {activeTab === 'security' && (
           <div className="white-card p-6 fade-up">
             <h3 className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2">
-              <Lock size={14} style={{ color: '#5B54E8' }} /> Change Password
+              <Lock size={14} style={{ color: 'var(--brand)' }} /> Change Password
             </h3>
-            <p className="text-xs text-gray-400 mb-5">Update your account password</p>
+            <p className="text-xs text-gray-500 mb-5">Update your account password</p>
 
             <div className="space-y-4">
               <div>
                 <label htmlFor="new-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">New Password</label>
                 <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input id="new-password" type={showNewPassword ? 'text' : 'password'}
                     value={passwordForm.new}
                     onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })}
@@ -699,7 +696,7 @@ export default function ProfilePage() {
                     placeholder="At least 8 characters" />
                   <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
                     aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                     {showNewPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
@@ -708,7 +705,7 @@ export default function ProfilePage() {
               <div>
                 <label htmlFor="confirm-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Confirm New Password</label>
                 <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'}
                     value={passwordForm.confirm}
                     onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
@@ -718,7 +715,7 @@ export default function ProfilePage() {
                     placeholder="Confirm new password" />
                   <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                     {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
@@ -732,7 +729,7 @@ export default function ProfilePage() {
 
               <button onClick={handleChangePassword} disabled={changingPassword || !passwordForm.new || !passwordForm.confirm}
                 className="w-full py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
                 {changingPassword ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 size={14} className="animate-spin" /> Updating...

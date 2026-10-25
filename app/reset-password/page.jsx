@@ -183,7 +183,7 @@ export default function ResetPasswordPage() {
           {/* Verifying the link */}
           {linkState === 'checking' && !done && (
             <div className="text-center py-8">
-              <svg className="animate-spin w-6 h-6 mx-auto mb-4" fill="none" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#5B54E8' }}>
+              <svg className="animate-spin w-6 h-6 mx-auto mb-4" fill="none" viewBox="0 0 24 24" aria-hidden="true" style={{ color: 'var(--brand)' }}>
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
@@ -199,14 +199,14 @@ export default function ResetPasswordPage() {
                 <KeyRound size={26} className="text-red-400" />
               </div>
               <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Link expired</h2>
-              <p className="text-gray-400 text-sm mt-3 max-w-xs mx-auto">
+              <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
                 This password reset link is invalid, already used, or was opened in a
                 different browser than the one that requested it. Request a new link
                 from the login page — and open it on this same device and browser.
               </p>
               <a href="/login"
                 className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                 Back to Sign In <ArrowRight size={16} />
               </a>
             </div>
@@ -217,12 +217,12 @@ export default function ResetPasswordPage() {
             <>
               <div className="mb-8">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
-                  style={{ background: '#f0effe' }}>
-                  <KeyRound size={11} style={{ color: '#5B54E8' }} />
-                  <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Almost there</span>
+                  style={{ background: 'var(--brand-soft)' }}>
+                  <KeyRound size={11} style={{ color: 'var(--brand)' }} />
+                  <span className="text-xs font-bold" style={{ color: 'var(--brand)' }}>Almost there</span>
                 </div>
                 <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Set new password 🔐</h2>
-                <p className="text-gray-400 text-sm mt-2">Choose a strong password you haven&apos;t used before.</p>
+                <p className="text-gray-500 text-sm mt-2">Choose a strong password you haven&apos;t used before.</p>
               </div>
 
               {error && (
@@ -238,7 +238,7 @@ export default function ResetPasswordPage() {
                 <div>
                   <label htmlFor="new-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">New Password</label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="new-password" type={showPassword ? 'text' : 'password'} value={password}
                       onChange={e => setPassword(e.target.value)} required minLength={8}
                       autoComplete="new-password"
@@ -246,7 +246,7 @@ export default function ResetPasswordPage() {
                       placeholder="At least 8 characters" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
@@ -255,7 +255,7 @@ export default function ResetPasswordPage() {
                 <div>
                   <label htmlFor="confirm-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Confirm Password</label>
                   <div className="relative">
-                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="confirm-password" type={showPassword ? 'text' : 'password'} value={confirm}
                       onChange={e => setConfirm(e.target.value)} required minLength={8}
                       autoComplete="new-password"
@@ -267,7 +267,7 @@ export default function ResetPasswordPage() {
                 <div className="pt-2">
                   <button type="submit" disabled={loading}
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                     {loading ? (
                       <span className="flex items-center gap-2">
                         <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -293,12 +293,12 @@ export default function ResetPasswordPage() {
                 <CheckCircle size={26} className="text-emerald-500" />
               </div>
               <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Password updated! ✅</h2>
-              <p className="text-gray-400 text-sm mt-3 max-w-xs mx-auto">
+              <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
                 Your password has been changed. Sign in with your new password to continue.
               </p>
               <a href="/login"
                 className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                 Sign In <ArrowRight size={16} />
               </a>
             </div>

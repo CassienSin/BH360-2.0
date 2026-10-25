@@ -604,6 +604,10 @@ export default function OfficialDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  // Sections share one scrolling <main>; start each one at the top.
+  const mainRef = useRef(null)
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [activeSection])
+
   async function doDispatch(incidentId, tanod) {
     // Atomic: only succeeds while the incident is still pending, so two
     // officials can't double-dispatch the same incident
@@ -1105,7 +1109,7 @@ export default function OfficialDashboard() {
           }}
         />
 
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
            <NotificationBanner />
            <AppointmentReminderWatcher profile={profile} />
 
@@ -1165,9 +1169,9 @@ export default function OfficialDashboard() {
                     cursor-pointer focus:outline-none focus-visible:ring-2"
                   style={{ '--tw-ring-color': '#ffffff' }}>
                   <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
-                    style={{ background: '#5B54E8' }} aria-hidden="true" />
+                    style={{ background: 'var(--brand)' }} aria-hidden="true" />
                   <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
                     <Bell size={20} className="text-white" />
                   </span>
                   <span className="flex-1 min-w-0 block">
@@ -1176,7 +1180,7 @@ export default function OfficialDashboard() {
                       Reaches every resident of {profile?.barangays?.name || 'the barangay'} at once
                     </span>
                   </span>
-                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: 'var(--brand)' }} aria-hidden="true" />
                 </button>
               </div>
 
@@ -1208,7 +1212,7 @@ export default function OfficialDashboard() {
                   })}
                   {incidents.length === 0 && (
                     <div className="white-card p-6 text-center">
-                      <p className="text-gray-400 text-sm">No incidents yet.</p>
+                      <p className="text-gray-500 text-sm">No incidents yet.</p>
                     </div>
                   )}
                 </div>
@@ -1237,7 +1241,7 @@ export default function OfficialDashboard() {
                 <div className="white-card p-4 mb-2">
                   <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
-                      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                       <input
                         value={ticketSearch}
                         onChange={e => setTicketSearch(e.target.value)}
@@ -1249,7 +1253,7 @@ export default function OfficialDashboard() {
                       {ticketSearch && (
                         <button onClick={() => setTicketSearch('')}
                           aria-label="Clear search"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
                           <X size={14} />
                         </button>
                       )}
@@ -1265,16 +1269,16 @@ export default function OfficialDashboard() {
                           aria-pressed={ticketFilter === f.value}
                           className="px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                           style={{
-                            background: ticketFilter === f.value ? f.color : '#fafaff',
+                            background: ticketFilter === f.value ? f.color : 'var(--app-surface)',
                             color: ticketFilter === f.value ? 'white' : '#6b7280',
-                            border: ticketFilter === f.value ? 'none' : '1px solid #f0effe',
+                            border: ticketFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
                             boxShadow: ticketFilter === f.value ? `0 4px 12px ${f.color}40` : 'none',
                           }}>
                           {f.label}
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px]"
+                          <span className="px-1.5 py-0.5 rounded-md text-xs"
                             style={{
                               background: ticketFilter === f.value ? 'rgba(255,255,255,0.25)' : 'rgba(91,84,232,0.1)',
-                              color: ticketFilter === f.value ? 'white' : '#5B54E8',
+                              color: ticketFilter === f.value ? 'white' : 'var(--brand)',
                             }}>
                             {f.count}
                           </span>
@@ -1283,10 +1287,10 @@ export default function OfficialDashboard() {
                     </div>
                   </div>
                   {(ticketSearch || ticketFilter !== 'all') && (
-                    <p className="text-xs text-gray-400 mt-3">
+                    <p className="text-xs text-gray-500 mt-3">
                       Showing {filteredTickets.length} of {tickets.length} tickets
                       <button onClick={() => { setTicketSearch(''); setTicketFilter('all') }}
-                        className="ml-2 font-semibold" style={{color: '#5B54E8'}}>
+                        className="ml-2 font-semibold" style={{color: 'var(--brand)'}}>
                         Clear filters
                       </button>
                     </p>
@@ -1294,7 +1298,7 @@ export default function OfficialDashboard() {
 
                   {/* Export buttons */}
                   <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-400 mr-auto">Export {filteredTickets.length} {filteredTickets.length === 1 ? 'ticket' : 'tickets'}</p>
+                    <p className="text-xs text-gray-500 mr-auto">Export {filteredTickets.length} {filteredTickets.length === 1 ? 'ticket' : 'tickets'}</p>
                     <button onClick={() => handleExportTickets('csv')} disabled={filteredTickets.length === 0}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
                       style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
@@ -1340,19 +1344,19 @@ export default function OfficialDashboard() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                      style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
                       <Bell size={20} className="text-white" />
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-800">Community Broadcasts</h3>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         {announcements.length} total · Reaches all residents in {profile?.barangays?.name}
                       </p>
                     </div>
                   </div>
                   <button onClick={() => router.push('/official/announcement/new')}
                     className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
-                    style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
                     <Plus size={14} /> New Announcement
                   </button>
                 </div>
@@ -1361,20 +1365,20 @@ export default function OfficialDashboard() {
                 {announcements.length > 0 && (
                   <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100">
                     <div className="text-center">
-                      <p className="text-xl font-black" style={{color: '#5B54E8'}}>{announcements.length}</p>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Total</p>
+                      <p className="text-xl font-black" style={{color: 'var(--brand)'}}>{announcements.length}</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">Total</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-black" style={{color: '#22c55e'}}>
                         {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 7).length}
                       </p>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">This Week</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">This Week</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-black" style={{color: '#f97316'}}>
                         {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 1).length}
                       </p>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Today</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">Today</p>
                     </div>
                   </div>
                 )}
@@ -1384,14 +1388,14 @@ export default function OfficialDashboard() {
               {announcements.length === 0 && (
                 <div className="white-card p-10 text-center">
                   <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                    style={{background: '#f0effe'}}>
-                    <Bell size={28} style={{color: '#5B54E8', opacity: 0.5}} />
+                    style={{background: 'var(--brand-soft)'}}>
+                    <Bell size={28} style={{color: 'var(--brand)', opacity: 0.5}} />
                   </div>
                   <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
-                  <p className="text-gray-400 text-xs mt-1">Start broadcasting updates to your community</p>
+                  <p className="text-gray-500 text-xs mt-1">Start broadcasting updates to your community</p>
                   <button onClick={() => router.push('/official/announcement/new')}
                     className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-white text-sm font-bold transition-all hover:scale-105"
-                    style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
+                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
                     <Plus size={14} /> Create First Announcement
                   </button>
                 </div>
@@ -1408,25 +1412,25 @@ export default function OfficialDashboard() {
                     {/* New badge accent bar */}
                     {isNew && (
                       <div className="absolute top-0 left-0 right-0 h-1"
-                        style={{background: 'linear-gradient(90deg, #5B54E8, #7C75F0, #5B54E8)', animation: 'shimmer 2s linear infinite'}} />
+                        style={{background: 'linear-gradient(90deg, var(--brand), var(--brand-light), var(--brand))', animation: 'shimmer 2s linear infinite'}} />
                     )}
 
                     <div className="flex items-start gap-3">
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
+                        style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
                         <Bell size={18} className="text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
                           {isNew && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
                               style={{background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite'}}>
                               NEW
                             </span>
                           )}
                           {!isNew && isThisWeek && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
                               style={{background: '#f0fdf4', color: '#16a34a'}}>
                               THIS WEEK
                             </span>
@@ -1434,7 +1438,7 @@ export default function OfficialDashboard() {
                         </div>
                         <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
 
-                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400">
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-500">
                           <span className="flex items-center gap-1" title={fullDate(a.created_at)}>
                             📅 {timeAgoLong(a.created_at)}
                           </span>
@@ -1463,14 +1467,14 @@ export default function OfficialDashboard() {
             <div className="fade-up space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
                   <BarChart2 size={28} className="text-white" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 mb-1">AI-Powered Analytics</h2>
-                <p className="text-gray-400 text-sm mb-6">Get deep insights from your barangay data</p>
+                <p className="text-gray-500 text-sm mb-6">Get deep insights from your barangay data</p>
                 <button onClick={() => router.push('/official/analytics')}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
                   View Analytics <ChevronRight size={16} />
                 </button>
               </div>
@@ -1482,12 +1486,12 @@ export default function OfficialDashboard() {
               <div className="white-card p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)'}}>
+                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))'}}>
                     <KeyRound size={18} className="text-white" />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-800">Invite Codes</h3>
-                    <p className="text-xs text-gray-400">Generate codes for {profile?.barangays?.name || 'your barangay'}</p>
+                    <p className="text-xs text-gray-500">Generate codes for {profile?.barangays?.name || 'your barangay'}</p>
                   </div>
                 </div>
                 <div className="flex gap-3 mb-5">
@@ -1504,15 +1508,15 @@ export default function OfficialDashboard() {
                 </div>
 
                 <div className="space-y-2">
-                  {inviteCodes.length === 0 && <p className="text-gray-400 text-sm text-center py-4">No invite codes yet.</p>}
+                  {inviteCodes.length === 0 && <p className="text-gray-500 text-sm text-center py-4">No invite codes yet.</p>}
                   {inviteCodes.map(code => {
                     const usedBy = users.find(user => user.id === code.used_by)
                     return (
                     <div key={code.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                      style={{background: code.used ? '#f9fafb' : '#f0effe', border: `1px solid ${code.used ? '#e5e7eb' : '#e8e3ff'}`}}>
+                      style={{background: code.used ? '#f9fafb' : 'var(--brand-soft)', border: `1px solid ${code.used ? '#e5e7eb' : 'var(--brand-border)'}`}}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm font-bold" style={{color: code.used ? '#9ca3af' : '#5B54E8'}}>
+                          <span className="font-mono text-sm font-bold" style={{color: code.used ? '#9ca3af' : 'var(--brand)'}}>
                             {code.code}
                           </span>
                           <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
@@ -1521,14 +1525,14 @@ export default function OfficialDashboard() {
                           {code.used && <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">used</span>}
                         </div>
                         {code.used && usedBy && (
-                          <p className="text-xs text-gray-400 mt-0.5">Used by {usedBy.full_name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Used by {usedBy.full_name}</p>
                         )}
                       </div>
                       {!code.used && (
                         <button onClick={() => copyToClipboard(code.code)}
                           aria-label={`Copy code ${code.code}`}
                           className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
-                          <Copy size={14} style={{color: '#5B54E8'}} />
+                          <Copy size={14} style={{color: 'var(--brand)'}} />
                         </button>
                       )}
                     </div>
@@ -1541,12 +1545,12 @@ export default function OfficialDashboard() {
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: '#f0effe'}}>
-                      <Users size={18} style={{color: '#5B54E8'}} />
+                      style={{background: 'var(--brand-soft)'}}>
+                      <Users size={18} style={{color: 'var(--brand)'}} />
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-800">All Users</h3>
-                      <p className="text-xs text-gray-400">{users.length} registered accounts in {profile?.barangays?.name}</p>
+                      <p className="text-xs text-gray-500">{users.length} registered accounts in {profile?.barangays?.name}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1568,7 +1572,7 @@ export default function OfficialDashboard() {
                 {users.length > 0 && (
                   <div className="flex flex-col sm:flex-row gap-2 mb-4">
                     <div className="relative flex-1">
-                      <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                      <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                       <input
                         value={userSearch}
                         onChange={e => setUserSearch(e.target.value)}
@@ -1580,7 +1584,7 @@ export default function OfficialDashboard() {
                       {userSearch && (
                         <button onClick={() => setUserSearch('')}
                           aria-label="Clear search"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
                           <X size={13} />
                         </button>
                       )}
@@ -1598,9 +1602,9 @@ export default function OfficialDashboard() {
                             aria-pressed={userRoleFilter === f.value}
                             className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
                             style={{
-                              background: userRoleFilter === f.value ? color : '#fafaff',
+                              background: userRoleFilter === f.value ? color : 'var(--app-surface)',
                               color: userRoleFilter === f.value ? 'white' : '#6b7280',
-                              border: userRoleFilter === f.value ? `1px solid ${color}` : '1px solid #f0effe',
+                              border: userRoleFilter === f.value ? `1px solid ${color}` : '1px solid var(--brand-soft)',
                             }}>
                             {f.label} <span style={{opacity: 0.75}}>{f.count}</span>
                           </button>
@@ -1614,7 +1618,7 @@ export default function OfficialDashboard() {
                   <div className="text-center py-8">
                     <p className="text-gray-500 text-sm font-medium">No users match your search</p>
                     <button onClick={() => { setUserSearch(''); setUserRoleFilter('all') }}
-                      className="mt-2 text-xs font-semibold" style={{color: '#5B54E8'}}>
+                      className="mt-2 text-xs font-semibold" style={{color: 'var(--brand)'}}>
                       Clear filters →
                     </button>
                   </div>
@@ -1625,7 +1629,7 @@ export default function OfficialDashboard() {
                     const rc = roleConfig[u.role] || roleConfig.resident
                     return (
                       <div key={u.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                        style={{background: '#fafafa', border: '1px solid #f0effe'}}>
+                        style={{background: '#fafafa', border: '1px solid var(--brand-soft)'}}>
                         {/* Profile photo — this list previously showed only the initial */}
                         <Avatar
                           src={u.avatar_url}
@@ -1636,7 +1640,7 @@ export default function OfficialDashboard() {
                         />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
-                          <p className="text-xs text-gray-400 truncate">{u.phone || 'No phone'} · {u.address || 'No address'}</p>
+                          <p className="text-xs text-gray-500 truncate">{u.phone || 'No phone'} · {u.address || 'No address'}</p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
                           {/* Verification standing, next to the role — the two
@@ -1644,7 +1648,7 @@ export default function OfficialDashboard() {
                           {!u.is_super_admin && (() => {
                             const vs = verificationStyle(u.verification_status)
                             return (
-                              <span className="text-[10px] px-2 py-1 rounded-full font-bold"
+                              <span className="text-xs px-2 py-1 rounded-full font-bold"
                                 style={{background: vs.bg, color: vs.color, border: `1px solid ${vs.border}`}}
                                 title={vs.label}>
                                 {vs.icon} {vs.short}
@@ -1700,14 +1704,14 @@ export default function OfficialDashboard() {
             <div className="fade-up space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
                   <Map size={28} className="text-white" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 mb-1">Incident Map View</h2>
-                <p className="text-gray-400 text-sm mb-6">Visualize all incidents geographically on an interactive map</p>
+                <p className="text-gray-500 text-sm mb-6">Visualize all incidents geographically on an interactive map</p>
                 <button onClick={() => router.push('/official/map')}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
                   Open Map View <ChevronRight size={16} />
                 </button>
               </div>
@@ -1718,14 +1722,14 @@ export default function OfficialDashboard() {
             <div className="fade-up space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
                   <Calendar size={28} className="text-white" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 mb-1">Calendar View</h2>
-                <p className="text-gray-400 text-sm mb-6">View incidents and announcements plotted by date</p>
+                <p className="text-gray-500 text-sm mb-6">View incidents and announcements plotted by date</p>
                 <button onClick={() => router.push('/official/calendar')}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
+                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
                   Open Calendar <ChevronRight size={16} />
                 </button>
               </div>

@@ -53,7 +53,7 @@ export function AvailabilityStrip({ availability, compact = false }) {
           {cfg.title(availability.tanodCount)}
         </p>
         {!compact && (
-          <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: cfg.color, opacity: 0.85 }}>
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: cfg.color, opacity: 0.85 }}>
             {cfg.body}
           </p>
         )}
@@ -92,7 +92,7 @@ export function EmergencyContacts({ category, availability, barangayPhone }) {
               ? `${basis.agency} handles this — call them now`
               : 'Call for help directly'}
           </p>
-          <p className="text-[11px] text-red-100 mt-0.5 leading-relaxed">
+          <p className="text-xs text-red-100 mt-0.5 leading-relaxed">
             {mustRefer
               ? 'The barangay will coordinate, but has no authority to respond to this itself.'
               : 'Do not wait for the barangay if lives are at risk.'}
@@ -111,7 +111,7 @@ export function EmergencyContacts({ category, availability, barangayPhone }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-900">{c.number}</p>
-              <p className="text-[10px] text-gray-500 truncate">{c.label} · {c.note}</p>
+              <p className="text-xs text-gray-500 truncate">{c.label} · {c.note}</p>
             </div>
           </a>
         ))}
@@ -119,14 +119,14 @@ export function EmergencyContacts({ category, availability, barangayPhone }) {
         {barangayPhone && (
           <a href={`tel:${barangayPhone.replace(/[^0-9+]/g, '')}`}
             className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-transform active:scale-95"
-            style={{ background: 'white', border: '1px solid #e8e3ff' }}>
+            style={{ background: 'white', border: '1px solid var(--brand-border)' }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
               <Phone size={15} className="text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-gray-900">{barangayPhone}</p>
-              <p className="text-[10px] text-gray-500">Barangay hall</p>
+              <p className="text-xs text-gray-500">Barangay hall</p>
             </div>
           </a>
         )}

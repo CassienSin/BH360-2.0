@@ -9,12 +9,16 @@ export function AppButton({ children, variant = 'primary', busy = false, busyLab
   </button>
 }
 
-export function PageHeader({ title, description, onBack, backLabel = 'Go back', icon: Icon, actions, maxWidth }) {
+// icon: a lucide component. iconElement/iconStyle: a ready-made icon (e.g. a
+// category icon) with its own tile colours. actionsDesktopOnly: hide the
+// actions below 600px when the page repeats them in its body on phones.
+export function PageHeader({ title, description, onBack, backLabel = 'Go back', icon: Icon, iconElement, iconStyle, actions, actionsDesktopOnly = false, maxWidth }) {
+  const iconContent = iconElement || (Icon && <Icon size={21} aria-hidden="true" />)
   return <header className={styles.header}><div className={styles.headerInner} style={maxWidth ? { maxWidth } : undefined}>
     {onBack && <button type="button" onClick={onBack} className={styles.back} aria-label={backLabel}><ArrowLeft size={19} aria-hidden="true" /></button>}
-    {Icon && <span className={styles.headerIcon}><Icon size={21} aria-hidden="true" /></span>}
+    {iconContent && <span className={styles.headerIcon} style={iconStyle} aria-hidden="true">{iconContent}</span>}
     <div className={styles.heading}><h1>{title}</h1>{description && <p>{description}</p>}</div>
-    {actions && <div className={styles.headerActions}>{actions}</div>}
+    {actions && <div className={`${styles.headerActions} ${actionsDesktopOnly ? styles.desktopOnly : ''}`}>{actions}</div>}
   </div></header>
 }
 

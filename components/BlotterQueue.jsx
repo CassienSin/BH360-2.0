@@ -183,7 +183,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
       <div className="white-card p-4">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
             <Gavel size={18} className="text-white" />
           </div>
           <div className="min-w-0">
@@ -192,9 +192,9 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
               Sorted by deadline — the case closest to running out of time is at the top.
             </p>
             <div className="flex items-start gap-1.5 mt-2">
-              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                <strong style={{ color: '#5B54E8' }}>RA 7160, Secs. 408–418</strong> — summon the
+              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+              <p className="text-xs text-gray-500 leading-relaxed">
+                <strong style={{ color: 'var(--brand)' }}>RA 7160, Secs. 408–418</strong> — summon the
                 respondent by the <strong>next working day</strong>, mediate within{' '}
                 <strong>15 days</strong> of the first meeting, then the Pangkat has 15 more,
                 extendible once. Conciliation is a <strong>precondition to court</strong> (Sec. 412);
@@ -251,15 +251,15 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold" style={{ color: '#5B54E8' }}>
+                      <span className="font-mono text-xs font-bold" style={{ color: 'var(--brand)' }}>
                         {kase.case_number}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                         style={{ background: st.bg, color: st.color }}>
                         {st.label}
                       </span>
                       {deadline.label && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                           style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}
                           title={deadline.citation || undefined}>
                           {deadline.label}
@@ -268,7 +268,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
                         </span>
                       )}
                       {kase.prohibited && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                           style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
                           ⛔ Must not be mediated
                         </span>
@@ -276,41 +276,41 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
                     </div>
 
                     <p className="text-sm font-bold text-gray-800 mt-1.5">
-                      {kase.complainant_name} <span className="font-normal text-gray-400">vs</span> {kase.respondent_name}
+                      {kase.complainant_name} <span className="font-normal text-gray-500">vs</span> {kase.respondent_name}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{kase.nature}</p>
-                    <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{kase.description}</p>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{kase.description}</p>
 
                     <div className="flex items-start gap-1.5 mt-2">
-                      <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-                      <p className="text-[11px] text-gray-500 leading-relaxed">{kase.legal_basis}</p>
+                      <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+                      <p className="text-xs text-gray-500 leading-relaxed">{kase.legal_basis}</p>
                     </div>
 
                     {kase.settlement_terms && (
-                      <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
                         style={{ background: '#f0fdf4', color: '#166534' }}>
                         <strong>Settled:</strong> {kase.settlement_terms}
                       </p>
                     )}
                     {kase.repudiation_reason && (
-                      <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
                         style={{ background: '#fffbeb', color: '#92400e' }}>
                         <strong>Repudiated:</strong> {kase.repudiation_reason}
                       </p>
                     )}
                     {kase.cfa_reason && (
-                      <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
                         style={{ background: '#fef2f2', color: '#b91c1c' }}>
                         <strong>CFA:</strong> {kase.cfa_reason}
                       </p>
                     )}
                     {kase.referred_to && (
-                      <p className="text-[11px] text-gray-500 mt-1.5">
+                      <p className="text-xs text-gray-500 mt-1.5">
                         <strong>Referred to:</strong> {kase.referred_to}
                       </p>
                     )}
 
-                    <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(kase.filed_at)}>
+                    <p className="text-xs text-gray-500 mt-1.5" title={fullDate(kase.filed_at)}>
                       Filed {timeAgo(kase.filed_at)}
                     </p>
                   </div>
@@ -452,7 +452,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
         <div>
           <label htmlFor="kp-complainant-account" className="text-xs font-bold text-gray-700">
             Is the complainant a registered resident?{' '}
-            <span className="font-normal text-gray-400">(optional)</span>
+            <span className="font-normal text-gray-500">(optional)</span>
           </label>
           <select id="kp-complainant-account" value={form.complainant_id}
             onChange={e => pickComplainant(e.target.value)}
@@ -464,7 +464,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
           </select>
           {/* Linking the account is what lets the complainant follow their own
               case from their dashboard — the read policy is scoped to it. */}
-          <p className="text-[10px] text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             Linking an account lets the complainant follow the case themselves.
           </p>
         </div>
@@ -473,7 +473,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
       {incidents.length > 0 && (
         <div>
           <label htmlFor="kp-incident" className="text-xs font-bold text-gray-700">
-            Arising from a reported incident? <span className="font-normal text-gray-400">(optional)</span>
+            Arising from a reported incident? <span className="font-normal text-gray-500">(optional)</span>
           </label>
           <select id="kp-incident" value={form.incident_id}
             onChange={e => pickIncident(e.target.value)}
@@ -486,7 +486,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
             ))}
           </select>
           {hint?.prompt && (
-            <p className="text-[11px] mt-1.5 px-2.5 py-2 rounded-lg leading-relaxed"
+            <p className="text-xs mt-1.5 px-2.5 py-2 rounded-lg leading-relaxed"
               style={{ background: '#fffbeb', color: '#92400e' }}>
               {hint.prompt}
             </p>
@@ -527,7 +527,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
 
       <div>
         <p className="text-xs font-bold text-gray-700">
-          Does any of these apply? <span className="font-normal text-gray-400">(RA 7160, Sec. 408)</span>
+          Does any of these apply? <span className="font-normal text-gray-500">(RA 7160, Sec. 408)</span>
         </p>
         <div className="space-y-1.5 mt-2">
           {Object.entries(KP_EXCLUSIONS).map(([key, x]) => {
@@ -536,14 +536,14 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
               <label key={key}
                 className="flex items-start gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-colors"
                 style={{
-                  background: on ? (x.prohibited ? '#fef2f2' : '#fffbeb') : '#fafaff',
-                  border: `1px solid ${on ? (x.prohibited ? '#fecaca' : '#fef3c7') : '#f0effe'}`,
+                  background: on ? (x.prohibited ? '#fef2f2' : '#fffbeb') : 'var(--app-surface)',
+                  border: `1px solid ${on ? (x.prohibited ? '#fecaca' : '#fef3c7') : 'var(--brand-soft)'}`,
                 }}>
                 <input type="checkbox" checked={on} onChange={() => toggle(key)} className="mt-0.5" />
                 <span className="min-w-0">
-                  <span className="text-[11px] font-semibold text-gray-800 block">{x.label}</span>
-                  {x.help && <span className="text-[10px] text-gray-500 block mt-0.5">{x.help}</span>}
-                  <span className="text-[10px] font-bold block mt-0.5" style={{ color: '#5B54E8' }}>{x.citation}</span>
+                  <span className="text-xs font-semibold text-gray-800 block">{x.label}</span>
+                  {x.help && <span className="text-xs text-gray-500 block mt-0.5">{x.help}</span>}
+                  <span className="text-xs font-bold block mt-0.5" style={{ color: 'var(--brand)' }}>{x.citation}</span>
                 </span>
               </label>
             )
@@ -561,7 +561,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
           {assessment.summary}
         </p>
         {assessment.blocking.map(b => (
-          <p key={b.key} className="text-[11px] text-gray-600 mt-1.5 leading-relaxed">
+          <p key={b.key} className="text-xs text-gray-600 mt-1.5 leading-relaxed">
             <strong>{b.citation}</strong> — {b.label}
             {b.consequence && <span className="block mt-0.5">{b.consequence}</span>}
           </p>

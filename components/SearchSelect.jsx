@@ -113,11 +113,11 @@ export default function SearchSelect({
         aria-controls={listId}
         aria-required={required || undefined}
         className="input-field w-full rounded-2xl pl-9 pr-9 py-3 text-sm text-left flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
-        <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-        <span className={`truncate ${display ? 'text-gray-800' : 'text-gray-400'}`}>
+        <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
+        <span className={`truncate ${display ? 'text-gray-800' : 'text-gray-500'}`}>
           {display || placeholder}
         </span>
-        <ChevronDown size={13} className={`absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} className={`absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Invisible input so the `required` prop participates in native form validation */}
@@ -135,12 +135,12 @@ export default function SearchSelect({
 
       {open && (
         <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-2xl overflow-hidden fade-up"
-          style={{ boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff' }}>
+          style={{ boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
 
           {/* Search */}
           <div className="p-2 border-b border-gray-100">
             <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
                 ref={inputRef}
                 value={search}
@@ -149,7 +149,7 @@ export default function SearchSelect({
                 placeholder="Search..."
                 aria-label="Search options"
                 className="w-full pl-9 pr-3 py-2 text-sm rounded-xl outline-none"
-                style={{ background: '#fafaff', border: '1px solid #f0effe' }}
+                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
               />
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function SearchSelect({
           {/* Options list */}
           <div ref={listRef} id={listId} role="listbox" className="max-h-64 overflow-y-auto">
             {filtered.length === 0 && (
-              <p className="text-center text-gray-400 text-sm py-6">
+              <p className="text-center text-gray-500 text-sm py-6">
                 {search ? `No results for "${search}"` : 'No options available'}
               </p>
             )}
@@ -176,12 +176,12 @@ export default function SearchSelect({
                   onMouseEnter={() => setHighlighted(i)}
                   className="w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between gap-2"
                   style={{
-                    background: selected ? '#f0effe' : isHighlighted ? '#faf5ff' : 'transparent',
-                    color: selected ? '#5B54E8' : '#374151',
+                    background: selected ? 'var(--brand-soft)' : isHighlighted ? '#faf5ff' : 'transparent',
+                    color: selected ? 'var(--brand)' : '#374151',
                     fontWeight: selected ? 600 : 400,
                   }}>
                   <span className="truncate">{optLabel || '—'}</span>
-                  {selected && <Check size={14} style={{ color: '#5B54E8' }} className="flex-shrink-0" />}
+                  {selected && <Check size={14} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />}
                 </button>
               )
             })}
@@ -189,7 +189,7 @@ export default function SearchSelect({
 
           {/* Count footer */}
           {filtered.length > 0 && (
-            <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-400 text-center">
+            <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 text-center">
               {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
             </div>
           )}

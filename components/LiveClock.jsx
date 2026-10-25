@@ -12,8 +12,8 @@ export default function LiveClock() {
   if (now == null) return null
   return (
     <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
-      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-      <Clock size={12} className="text-gray-400" aria-hidden="true" />
+      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+      <Clock size={12} className="text-gray-500" aria-hidden="true" />
       <span className="text-xs font-bold text-gray-600">
         {new Date(now).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
       </span>

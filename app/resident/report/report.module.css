@@ -7,10 +7,6 @@
 
 /* Keep the existing single-column presentation below the desktop breakpoint. */
 @media (min-width: 1024px) {
-  .header {
-    padding: 10px max(24px, calc((100% - 1328px) / 2));
-  }
-
   .main {
     max-width: 1376px;
     padding: 12px 24px 16px;
@@ -89,7 +85,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    color: #5b54e8;
+    color: var(--brand);
     background: #f1efff;
     border-radius: 12px;
   }
@@ -119,7 +115,7 @@
   }
 
   .categoryButton > :last-child {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.25;
   }
 
@@ -129,7 +125,7 @@
 
   .column label,
   .column legend {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .column legend {
@@ -162,13 +158,13 @@
   .desktopGuidance summary {
     padding: 6px 12px;
     color: #514b8b;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     cursor: pointer;
   }
 
   .desktopGuidance summary:focus-visible {
-    outline: 2px solid #5b54e8;
+    outline: 2px solid var(--brand);
     outline-offset: -2px;
   }
 
@@ -200,7 +196,7 @@
   .mapSection > p,
   .photoSection > p {
     margin-bottom: 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .mapSection > div:first-of-type {

@@ -99,9 +99,9 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
               report incidents, because an emergency should never wait on paperwork.
             </p>
             <div className="flex items-start gap-1.5 mt-2">
-              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-              <p className="text-[11px] text-gray-500 leading-relaxed">
-                <strong style={{ color: '#5B54E8' }}>RA 7160, Sec. 394</strong> — the barangay secretary
+              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+              <p className="text-xs text-gray-500 leading-relaxed">
+                <strong style={{ color: 'var(--brand)' }}>RA 7160, Sec. 394</strong> — the barangay secretary
                 keeps the record of the barangay’s inhabitants and reports the actual number of
                 residents. The barangay, not the signup form, is the authority on who lives here.
               </p>
@@ -127,7 +127,7 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
               <div key={u.id} className="white-card p-4">
                 <div className="flex items-start gap-3">
                   <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                     {u.avatar_url
                       ? <img loading="lazy" decoding="async" src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                       : u.full_name?.[0]?.toUpperCase() || '?'}
@@ -136,22 +136,22 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-bold text-gray-800 text-sm truncate">{u.full_name}</h4>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                         style={{ background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>
                         {style.icon} {style.short}
                       </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">
                         {u.role}
                       </span>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">{u.phone || 'No phone on file'}</p>
                     <p className="text-xs text-gray-500">{u.address || 'No address on file'}</p>
-                    <p className="text-[11px] text-gray-400 mt-1" title={fullDate(u.created_at)}>
+                    <p className="text-xs text-gray-500 mt-1" title={fullDate(u.created_at)}>
                       Registered {timeAgo(u.created_at)}
                       {u.verified_at && ` · reviewed ${timeAgo(u.verified_at)}`}
                     </p>
                     {u.verification_note && (
-                      <p className="text-[11px] mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
                         style={{ background: style.bg, color: style.color }}>
                         {u.verification_note}
                       </p>
@@ -179,7 +179,7 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
                       </button>
                       <button onClick={() => { setRejecting(null); setReason('') }}
                         className="px-4 py-2.5 rounded-2xl text-xs font-bold"
-                        style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                         Cancel
                       </button>
                     </div>
@@ -205,7 +205,7 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
                       <button onClick={() => decide(u, 'pending', null)} disabled={busy}
                         title="Move back to the review queue"
                         className="px-4 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                        style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                         <RotateCcw size={13} />
                       </button>
                     )}

@@ -227,10 +227,10 @@ import { useBrowserValue } from '@/lib/useHydrated'
         <main className="relative z-10 mx-auto grid w-full max-w-[1320px] gap-4 px-4 py-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <section className="white-card min-w-0 p-5 sm:p-6">
             <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: '#f0effe' }}><Plus size={18} style={{ color: '#5B54E8' }} /></div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl" style={{ background: 'var(--brand-soft)' }}><Plus size={18} style={{ color: 'var(--brand)' }} /></div>
                 <div>
                 <h2 className="font-bold text-gray-800">Record an appointment</h2>
-                <p className="text-xs text-gray-400">Add the schedule and when you should be reminded.</p>
+                <p className="text-xs text-gray-500">Add the schedule and when you should be reminded.</p>
                 </div>
             </div>
 
@@ -242,7 +242,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
                 </label>
                 <label className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-gray-600">Resident / contact name</span>
-                <div className="relative"><UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className="relative"><UserRound size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input maxLength={120} value={form.participant_name} onChange={e => setForm({ ...form, participant_name: e.target.value })}
                     placeholder="Optional" className="input-field w-full rounded-xl py-3 pl-10 pr-3.5 text-sm text-gray-800" />
                 </div>
@@ -278,21 +278,21 @@ import { useBrowserValue } from '@/lib/useHydrated'
                 </div>
                 </div>
                 {notificationPermission !== 'granted' && (
-                <button onClick={requestNotifications} className="w-fit flex-shrink-0 rounded-lg px-3 py-2 text-xs font-bold" style={{ background: '#f0effe', color: '#5B54E8' }}>Enable alerts</button>
+                <button onClick={requestNotifications} className="w-fit flex-shrink-0 rounded-lg px-3 py-2 text-xs font-bold" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>Enable alerts</button>
                 )}
                 {notificationPermission === 'granted' && <span className="flex items-center gap-1 text-xs font-bold text-emerald-600"><Check size={13} /> Enabled</span>}
             </div>
 
             <div className="white-card min-w-0 p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                <div><h2 className="font-bold text-gray-800">Saved appointments</h2><p className="text-xs text-gray-400">{appointments.length} recorded</p></div>
-                <AlarmClock size={19} style={{ color: '#5B54E8' }} />
+                <div><h2 className="font-bold text-gray-800">Saved appointments</h2><p className="text-xs text-gray-500">{appointments.length} recorded</p></div>
+                <AlarmClock size={19} style={{ color: 'var(--brand)' }} />
                 </div>
                 {appointments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#e8e3ff] px-4 py-10 text-center">
+                <div className="rounded-2xl border border-dashed border-brand-border px-4 py-10 text-center">
                     <CalendarDays size={30} className="mx-auto mb-2 text-gray-300" />
                     <p className="text-sm font-semibold text-gray-600">No appointments yet</p>
-                    <p className="mt-1 text-xs text-gray-400">Appointments you record will appear here.</p>
+                    <p className="mt-1 text-xs text-gray-500">Appointments you record will appear here.</p>
                 </div>
                 ) : (
                 <div className="max-h-[680px] space-y-2 overflow-y-auto pr-1">
@@ -300,18 +300,18 @@ import { useBrowserValue } from '@/lib/useHydrated'
                     const reminderSent = Boolean(appointment.reminder_sent_at)
                     const past = new Date(appointment.starts_at) < new Date()
                     return (
-                        <article key={appointment.id} className="rounded-2xl border border-[#f0effe] p-4">
+                        <article key={appointment.id} className="rounded-2xl border border-brand-soft p-4">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                             <h3 className="break-words text-sm font-bold text-gray-800">{appointment.title}</h3>
                             {appointment.participant_name && <p className="mt-1 flex items-center gap-1.5 text-xs text-gray-500"><UserRound size={12} /> {appointment.participant_name}</p>}
                             </div>
-                            <span className={`flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${past ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>{past ? 'Past' : 'Scheduled'}</span>
+                            <span className={`flex-shrink-0 rounded-full px-2 py-1 text-xs font-bold ${past ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>{past ? 'Past' : 'Scheduled'}</span>
                         </div>
-                        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-700"><CalendarDays size={13} style={{ color: '#5B54E8' }} /> {formatDateTime(appointment.starts_at)}</p>
+                        <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-700"><CalendarDays size={13} style={{ color: 'var(--brand)' }} /> {formatDateTime(appointment.starts_at)}</p>
                         <p className="mt-1.5 flex items-center gap-2 text-xs text-gray-500"><Clock3 size={13} /> Reminder: {formatDateTime(appointment.remind_at)}</p>
                         {appointment.notes && <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-500">{appointment.notes}</p>}
-                        <p className={`mt-2 text-[10px] font-semibold ${reminderSent ? 'text-emerald-600' : 'text-orange-600'}`}>{reminderSent ? 'Reminder sent' : 'Reminder pending'}</p>
+                        <p className={`mt-2 text-xs font-semibold ${reminderSent ? 'text-emerald-600' : 'text-orange-600'}`}>{reminderSent ? 'Reminder sent' : 'Reminder pending'}</p>
                         </article>
                     )
                     })}

@@ -145,7 +145,7 @@ export default function InstallPrompt() {
       <div className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:w-80 z-50 fade-up">
         <div className="rounded-2xl overflow-hidden"
           style={{
-            background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
+            background: 'linear-gradient(135deg, var(--brand), var(--brand-light))',
             boxShadow: '0 16px 48px rgba(91,84,232,0.4)',
           }}>
           <div className="p-4 flex items-center gap-3">
@@ -164,7 +164,7 @@ export default function InstallPrompt() {
           <div className="px-4 pb-4 flex gap-2">
             <button onClick={handleInstall}
               className="flex-1 py-2 rounded-xl text-xs font-bold bg-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02]"
-              style={{ color: '#5B54E8' }}>
+              style={{ color: 'var(--brand)' }}>
               <Download size={12} /> {primaryLabel}
             </button>
             <button onClick={() => setShowFull(true)}
@@ -189,7 +189,7 @@ export default function InstallPrompt() {
 
             {/* Header */}
             <div className="relative px-6 pt-6 pb-4 overflow-hidden flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
               <div className="absolute inset-0 opacity-30"
                 style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
@@ -219,9 +219,9 @@ export default function InstallPrompt() {
                 { icon: '🌐', title: 'Works offline', desc: 'Access cached pages without internet' },
               ].map((benefit) => (
                 <div key={benefit.title} className="flex items-start gap-3 p-3 rounded-2xl"
-                  style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                  style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-lg"
-                    style={{ background: '#f0effe' }}>
+                    style={{ background: 'var(--brand-soft)' }}>
                     {benefit.icon}
                   </div>
                   <div>
@@ -234,8 +234,8 @@ export default function InstallPrompt() {
               {/* Instructions — pick the right steps for the environment */}
               {isInApp ? (
                 <div className="rounded-2xl p-4 mt-4"
-                  style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--app-surface), var(--brand-soft))', border: '1px solid var(--brand-border)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
                     ⚠️ You&apos;re in an in-app browser
                   </p>
                   <p className="text-xs text-gray-500 mb-3">
@@ -243,57 +243,57 @@ export default function InstallPrompt() {
                   </p>
                   <ol className="text-sm text-gray-700 space-y-2">
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>1.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>1.</span>
                       <span>Tap the <strong>⋯</strong> menu (top right)</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>2.</span>
                       <span>Choose <strong>&quot;Open in browser&quot;</strong> {isIOS ? '(Safari)' : '(Chrome)'}</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>3.</span>
                       <span>Then install from there</span>
                     </li>
                   </ol>
                 </div>
               ) : isIOS ? (
                 <div className="rounded-2xl p-4 mt-4"
-                  style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--app-surface), var(--brand-soft))', border: '1px solid var(--brand-border)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
                     📱 iOS Installation Steps
                   </p>
                   <ol className="text-sm text-gray-700 space-y-2">
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>1.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>1.</span>
                       <span>Tap the <strong>Share</strong> button <span className="inline-block">⬆️</span></span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>2.</span>
                       <span>Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong></span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>3.</span>
                       <span>Tap <strong>&quot;Add&quot;</strong> in the top right</span>
                     </li>
                   </ol>
                 </div>
               ) : !deferredPrompt ? (
                 <div className="rounded-2xl p-4 mt-4"
-                  style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--app-surface), var(--brand-soft))', border: '1px solid var(--brand-border)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
                     💻 Installation Steps
                   </p>
                   <ol className="text-sm text-gray-700 space-y-2">
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>1.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>1.</span>
                       <span>Look for the <strong>Install icon</strong> in your browser&apos;s address bar</span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>2.</span>
                       <span>Or open the menu (⋮) and click <strong>&quot;Install BarangayHub 360&quot;</strong></span>
                     </li>
                     <li className="flex gap-2">
-                      <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
+                      <span className="font-bold" style={{ color: 'var(--brand)' }}>3.</span>
                       <span>Click <strong>&quot;Install&quot;</strong> to confirm</span>
                     </li>
                   </ol>
@@ -309,7 +309,7 @@ export default function InstallPrompt() {
                   setShowFull(false)
                 }}
                   className="w-full py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                   <Download size={14} /> Install Now
                 </button>
               </div>

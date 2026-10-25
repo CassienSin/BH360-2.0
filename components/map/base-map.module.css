@@ -3,7 +3,7 @@
 .wrap :global(.maplibregl-map) { font-family: inherit; }
 
 .wrap :global(.maplibregl-ctrl-group) {
-  border-radius: 14px; overflow: hidden; border: 1px solid #e8e3ff;
+  border-radius: 14px; overflow: hidden; border: 1px solid var(--brand-border);
   box-shadow: 0 4px 14px rgba(41,35,56,.12);
 }
 .wrap :global(.maplibregl-ctrl-group button) { width: 44px; height: 44px; }

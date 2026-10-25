@@ -135,11 +135,11 @@ export default function NotificationBanner() {
     <div className="fade-up mb-4" role="status">
       <div className="rounded-2xl p-4 flex items-center gap-3"
         style={{
-          background: 'linear-gradient(135deg, #f0effe, #e8e3ff)',
-          border: '1px solid #e8e3ff',
+          background: 'linear-gradient(135deg, var(--brand-soft), var(--brand-border))',
+          border: '1px solid var(--brand-border)',
         }}>
         <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
+          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
           <Bell size={18} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
@@ -149,11 +149,11 @@ export default function NotificationBanner() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <button onClick={handleEnable} disabled={enabling}
             className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 flex items-center gap-1.5 disabled:opacity-60 disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
+            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
             {enabling ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Enable
           </button>
           <button onClick={handleDismiss} aria-label="Dismiss notification banner"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-white hover:text-gray-600 transition-colors">
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-white hover:text-gray-600 transition-colors">
             <X size={14} />
           </button>
         </div>

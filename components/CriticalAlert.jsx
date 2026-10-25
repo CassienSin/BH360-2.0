@@ -189,7 +189,7 @@ export default function CriticalAlert({
               style={{ background: 'rgba(255,255,255,0.2)' }}>
               <AlertTriangle size={30} className="text-white" />
             </div>
-            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-red-100">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-red-100">
               {multiple ? `${queue.length} Critical Incidents` : 'Critical Incident'}
             </p>
             <h2 id="crit-title" className="text-xl font-black text-white mt-1 leading-tight">
@@ -221,7 +221,7 @@ export default function CriticalAlert({
                           <MapPin size={11} className="text-red-500 flex-shrink-0" />
                           <span className="truncate">{inc.location || 'No location'}</span>
                         </p>
-                        <p className="text-[11px] mt-1 font-bold"
+                        <p className="text-xs mt-1 font-bold"
                           style={{ color: mins >= 5 ? '#dc2626' : '#9ca3af' }}>
                           {timeAgo(inc.created_at)}{mins >= 5 && ' — overdue'}
                           {b?.agency && ` · ${b.agency.split('(')[0].trim()}`}
@@ -230,13 +230,13 @@ export default function CriticalAlert({
                     </div>
                     <div className="flex gap-2 mt-2.5 pl-10">
                       <button onClick={() => acknowledgeOne(inc)} disabled={ackBusy === inc.id}
-                        className="flex-1 h-9 rounded-xl text-[11px] font-black text-white transition-transform active:scale-95 disabled:opacity-50"
+                        className="flex-1 h-9 rounded-xl text-xs font-black text-white transition-transform active:scale-95 disabled:opacity-50"
                         style={{ background: '#dc2626' }}>
                         {ackBusy === inc.id ? 'Saving…' : 'Acknowledge'}
                       </button>
                       <button onClick={() => { onView?.(inc); acknowledgeOne(inc) }} disabled={ackBusy === inc.id}
-                        className="flex-1 h-9 rounded-xl text-[11px] font-bold transition-transform active:scale-95 disabled:opacity-50"
-                        style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                        className="flex-1 h-9 rounded-xl text-xs font-bold transition-transform active:scale-95 disabled:opacity-50"
+                        style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                         View & dispatch
                       </button>
                     </div>
@@ -263,7 +263,7 @@ export default function CriticalAlert({
                   <span className="text-gray-700 font-semibold">{current.location || 'No location given'}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
-                  <User size={15} className="flex-shrink-0 mt-0.5 text-gray-400" aria-hidden="true" />
+                  <User size={15} className="flex-shrink-0 mt-0.5 text-gray-500" aria-hidden="true" />
                   <span className="text-gray-600">{current.profiles?.full_name || 'Unknown reporter'}</span>
                 </div>
                 <div className="flex items-start gap-2.5">
@@ -276,10 +276,10 @@ export default function CriticalAlert({
               </div>
 
               {basis?.law && (
-                <div className="p-3 rounded-2xl" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
+                <div className="p-3 rounded-2xl" style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
                   <div className="flex items-start gap-2">
-                    <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
-                    <p className="text-[11px] leading-relaxed" style={{ color: '#5B54E8' }}>
+                    <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} aria-hidden="true" />
+                    <p className="text-xs leading-relaxed" style={{ color: 'var(--brand)' }}>
                       Classified Critical under <strong>{basis.law}</strong>.
                       {basis.responseMode === 'refer_to_agency' && basis.agency && (
                         <strong className="block mt-1 text-orange-700">
@@ -307,7 +307,7 @@ export default function CriticalAlert({
           )}
 
           {/* Footer */}
-          <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: multiple ? '1px solid #f0effe' : 'none' }}>
+          <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: multiple ? '1px solid var(--brand-soft)' : 'none' }}>
             {!multiple && (
               <div className="space-y-2 mb-2">
                 <button onClick={() => acknowledgeOne(current)} disabled={ackBusy === current.id}
@@ -317,7 +317,7 @@ export default function CriticalAlert({
                 </button>
                 <button onClick={() => { onView?.(current); acknowledgeOne(current) }} disabled={ackBusy === current.id}
                   className="w-full py-3 rounded-2xl text-sm font-bold transition-transform active:scale-95 disabled:opacity-60"
-                  style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                  style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                   View &amp; dispatch a tanod
                 </button>
               </div>
@@ -328,18 +328,18 @@ export default function CriticalAlert({
                 that was never audible. */}
             {!canSound && !muted ? (
               <button onClick={() => primeAudio()}
-                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-black transition-transform active:scale-95"
+                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-black transition-transform active:scale-95"
                 style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
                 <VolumeX size={12} /> Alert sound is off — tap to turn it on
               </button>
             ) : (
               <button onClick={() => { setMuted(m => !m); primeAudio() }}
-                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-600 transition-colors">
                 {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
                 {muted ? 'Sound off' : 'Mute alert sound'}
               </button>
             )}
-            <p className="text-[10px] text-center text-gray-400 leading-relaxed">
+            <p className="text-xs text-center text-gray-500 leading-relaxed">
               {multiple
                 ? 'Each incident must be acknowledged separately. Your name and the time are recorded.'
                 : 'This alert stays until acknowledged. Your name and the time are recorded.'}

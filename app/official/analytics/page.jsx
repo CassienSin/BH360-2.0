@@ -3,7 +3,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useNow } from '@/lib/useNow'
-import { ArrowLeft, BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Ticket, Minus } from 'lucide-react'
+import { PageHeader, AppButton } from '@/components/AppUI'
+import { BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Ticket, Minus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
@@ -62,7 +63,7 @@ function TrendBadge({ current, previous }) {
   const bg = diff > 0 ? '#fef2f2' : diff < 0 ? '#f0fdf4' : '#f9fafb'
   return (
     <span
-      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
+      className="text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
       style={{ background: bg, color }}
       title={`${current} this week vs ${previous} last week`}
     >
@@ -80,7 +81,7 @@ function CustomTooltip({ active, payload, label }) {
       <div className="bg-white rounded-2xl px-4 py-3 shadow-lg border border-gray-100">
         <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
         {payload.map((p, i) => (
-          <p key={i} className="text-sm font-bold" style={{ color: p.color || p.fill || '#5B54E8' }}>
+          <p key={i} className="text-sm font-bold" style={{ color: p.color || p.fill || 'var(--brand)' }}>
             {p.value} {p.name}
           </p>
         ))}
@@ -363,16 +364,7 @@ export default function AIAnalytics() {
     return (
       <div className="min-h-screen relative overflow-hidden bg-brand">
         <AnimatedDots />
-        <header
-          className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
-          style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-        >
-          <div className="w-9 h-9 rounded-xl skeleton-shimmer" />
-          <div className="flex-1 space-y-2">
-            <div className="skeleton-shimmer h-4 w-40 rounded-lg" />
-            <div className="skeleton-shimmer h-3 w-28 rounded-lg" />
-          </div>
-        </header>
+        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => router.back()} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
@@ -408,40 +400,18 @@ export default function AIAnalytics() {
         />
       </div>
 
-      <header
-        className="bg-white relative z-10 px-4 sm:px-6 py-4 flex items-center gap-3"
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0"
-        >
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
-          >
-            <BarChart2 size={16} className="text-white" />
-          </div>
-          <div className="min-w-0">
-            <h1 className="text-base font-bold text-gray-800 truncate">Analytics Dashboard</h1>
-            <p className="text-xs text-gray-400 truncate">Insights and trends{profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}</p>
-          </div>
-        </div>
-        <button
-          onClick={generateAnalysis}
-          disabled={loading || !dataLoaded}
-          className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold disabled:opacity-50 transition-all"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', color: 'white', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
-        >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          <span className="hidden sm:block">{loading ? 'Analyzing...' : 'AI Report'}</span>
-          <span className="sm:hidden">{loading ? '...' : 'AI'}</span>
-        </button>
-      </header>
+      <PageHeader
+        title="Analytics Dashboard"
+        description={`Insights and trends${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
+        icon={BarChart2} maxWidth={1168}
+        onBack={() => router.back()}
+        actions={
+          <AppButton onClick={generateAnalysis} disabled={!dataLoaded} busy={loading} busyLabel="Analyzing…">
+            <RefreshCw size={15} aria-hidden="true" />
+            AI Report
+          </AppButton>
+        }
+      />
 
       <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-6">
 
@@ -467,14 +437,14 @@ export default function AIAnalytics() {
               <div className="flex items-center justify-between mb-2">
                 <div
                   className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
                 >
                   <Activity size={18} className="text-white" />
                 </div>
                 <TrendBadge current={stats.thisWeek} previous={stats.lastWeek} />
               </div>
               <p className="text-3xl font-black text-gray-800">{stats.totalIncidents}</p>
-              <p className="text-xs text-gray-400 mt-1">Total Incidents</p>
+              <p className="text-xs text-gray-500 mt-1">Total Incidents</p>
             </div>
 
             <div className="white-card p-5">
@@ -485,10 +455,10 @@ export default function AIAnalytics() {
                 >
                   <Award size={18} className="text-white" />
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>RATE</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>RATE</span>
               </div>
               <p className="text-3xl font-black text-gray-800">{stats.resolutionRate}%</p>
-              <p className="text-xs text-gray-400 mt-1">Resolution Rate</p>
+              <p className="text-xs text-gray-500 mt-1">Resolution Rate</p>
             </div>
 
             <div className="white-card p-5">
@@ -499,10 +469,10 @@ export default function AIAnalytics() {
                 >
                   <Clock size={18} className="text-white" />
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>SPEED</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>SPEED</span>
               </div>
               <p className="text-3xl font-black text-gray-800">{formatHours(stats.avgResponseHours)}</p>
-              <p className="text-xs text-gray-400 mt-1">Avg Response Time</p>
+              <p className="text-xs text-gray-500 mt-1">Avg Response Time</p>
             </div>
 
             <div className="white-card p-5">
@@ -513,10 +483,10 @@ export default function AIAnalytics() {
                 >
                   <Star size={18} className="text-white fill-white" />
                 </div>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>RATING</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>RATING</span>
               </div>
               <p className="text-3xl font-black text-gray-800">{stats.avgRating ? `${stats.avgRating}★` : 'N/A'}</p>
-              <p className="text-xs text-gray-400 mt-1">Avg Resident Rating</p>
+              <p className="text-xs text-gray-500 mt-1">Avg Resident Rating</p>
             </div>
           </div>
 
@@ -546,9 +516,9 @@ export default function AIAnalytics() {
           <div className="white-card p-10 text-center">
             <div
               className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center"
-              style={{ background: '#f0effe' }}
+              style={{ background: 'var(--brand-soft)' }}
             >
-              <BarChart2 size={28} style={{ color: '#5B54E8' }} />
+              <BarChart2 size={28} style={{ color: 'var(--brand)' }} />
             </div>
             <h3 className="text-lg font-bold text-gray-800 mb-1">No incident data yet</h3>
             <p className="text-sm text-gray-500 max-w-md mx-auto">
@@ -563,7 +533,7 @@ export default function AIAnalytics() {
             <div className="flex items-center gap-2 mb-4">
               <Trophy size={16} style={{ color: '#f59e0b' }} />
               <h3 className="font-bold text-gray-800 text-sm">Tanod Leaderboard</h3>
-              <span className="text-xs text-gray-400 ml-auto">{tanods.length} tanod{tanods.length === 1 ? '' : 's'}</span>
+              <span className="text-xs text-gray-500 ml-auto">{tanods.length} tanod{tanods.length === 1 ? '' : 's'}</span>
             </div>
 
             <div className="space-y-2">
@@ -574,10 +544,10 @@ export default function AIAnalytics() {
                   <div
                     key={t.id}
                     className="flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors hover:bg-gray-50"
-                    style={{ background: idx < 3 ? `linear-gradient(90deg, ${['#fff7ed', '#f0effe', '#fffbeb'][idx]}, transparent)` : '#fafafa' }}
+                    style={{ background: idx < 3 ? `linear-gradient(90deg, ${['#fff7ed', 'var(--brand-soft)', '#fffbeb'][idx]}, transparent)` : '#fafafa' }}
                   >
                     <div className="flex items-center gap-2 flex-shrink-0 w-12">
-                      {medal ? <span className="text-2xl" aria-hidden="true">{medal}</span> : <span className="text-sm font-bold text-gray-400">#{idx + 1}</span>}
+                      {medal ? <span className="text-2xl" aria-hidden="true">{medal}</span> : <span className="text-sm font-bold text-gray-500">#{idx + 1}</span>}
                     </div>
 
                     <div
@@ -594,11 +564,11 @@ export default function AIAnalytics() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{t.name}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className="text-gray-400">{t.resolved}/{t.assigned} resolved</span>
+                        <span className="text-gray-500">{t.resolved}/{t.assigned} resolved</span>
                         {t.avgRating > 0 && (
                           <span className="flex items-center gap-0.5 text-amber-600 font-semibold">
                             <Star size={10} fill="#f59e0b" /> {t.avgRating.toFixed(1)}
-                            <span className="text-gray-300 font-normal">({t.ratingCount})</span>
+                            <span className="text-gray-500 font-normal">({t.ratingCount})</span>
                           </span>
                         )}
                         {t.avgResponseTime !== null && (
@@ -615,13 +585,13 @@ export default function AIAnalytics() {
                       >
                         {Math.round(t.score)}
                       </p>
-                      <p className="text-[10px] text-gray-400">SCORE</p>
+                      <p className="text-xs text-gray-500">SCORE</p>
                     </div>
                   </div>
                 )
               })}
             </div>
-            <p className="text-[10px] text-gray-300 mt-3 text-center">
+            <p className="text-xs text-gray-500 mt-3 text-center">
               Score = resolution rate (50%) · resident rating (30%) · response speed (20%)
             </p>
           </div>
@@ -633,7 +603,7 @@ export default function AIAnalytics() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="white-card p-5">
                 <div className="flex items-center gap-2 mb-4">
-                  <Activity size={16} style={{ color: '#5B54E8' }} />
+                  <Activity size={16} style={{ color: 'var(--brand)' }} />
                   <h3 className="font-bold text-gray-800 text-sm">Status Distribution</h3>
                 </div>
                 <ResponsiveContainer width="100%" height={220}>
@@ -673,9 +643,9 @@ export default function AIAnalytics() {
             {/* Activity Heatmap */}
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <Activity size={16} style={{ color: '#5B54E8' }} />
+                <Activity size={16} style={{ color: 'var(--brand)' }} />
                 <h3 className="font-bold text-gray-800 text-sm">Activity Heatmap</h3>
-                <span className="text-xs text-gray-400 ml-auto">When incidents are reported</span>
+                <span className="text-xs text-gray-500 ml-auto">When incidents are reported</span>
               </div>
 
               <div className="overflow-x-auto">
@@ -683,7 +653,7 @@ export default function AIAnalytics() {
                   <div className="flex items-center gap-1 mb-1">
                     <div className="w-10 flex-shrink-0"></div>
                     {heatmapData.hours.map(h => (
-                      <div key={h} className="flex-1 text-[9px] text-gray-400 text-center">
+                      <div key={h} className="flex-1 text-[11px] text-gray-500 text-center">
                         {h % 3 === 0 ? `${h}h` : ''}
                       </div>
                     ))}
@@ -708,25 +678,25 @@ export default function AIAnalytics() {
               </div>
 
               <div className="flex items-center gap-2 mt-4 text-xs">
-                <span className="text-gray-400">Less</span>
+                <span className="text-gray-500">Less</span>
                 {[0, 0.25, 0.5, 0.75, 1].map((intensity, i) => (
                   <div key={i} className="w-5 h-5 rounded" style={{ background: getHeatmapColor(intensity * heatmapData.max) }} />
                 ))}
-                <span className="text-gray-400">More</span>
+                <span className="text-gray-500">More</span>
               </div>
             </div>
 
             {/* Category Trends */}
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <TrendingUp size={16} style={{ color: '#5B54E8' }} />
+                <TrendingUp size={16} style={{ color: 'var(--brand)' }} />
                 <h3 className="font-bold text-gray-800 text-sm">Category Trends — Last 4 Weeks</h3>
               </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trendCategoryData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0effe" />
-                  <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <XAxis dataKey="week" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<CustomTooltip />} />
                   {topCategories.map(cat => (
                     <Line
@@ -740,7 +710,7 @@ export default function AIAnalytics() {
                     />
                   ))}
                   <Legend iconType="circle" iconSize={6}
-                    formatter={(value) => <span style={{ fontSize: '11px', color: '#6b7280' }}>{CATEGORY_CONFIG[value]?.icon} {value}</span>} />
+                    formatter={(value) => <span style={{ fontSize: 12, color: '#6b7280' }}>{CATEGORY_CONFIG[value]?.icon} {value}</span>} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -748,7 +718,7 @@ export default function AIAnalytics() {
             {/* Daily Activity */}
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <Activity size={16} style={{ color: '#5B54E8' }} />
+                <Activity size={16} style={{ color: 'var(--brand)' }} />
                 <h3 className="font-bold text-gray-800 text-sm">Daily Activity — Last 14 Days</h3>
               </div>
               <ResponsiveContainer width="100%" height={220}>
@@ -764,8 +734,8 @@ export default function AIAnalytics() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0effe" />
-                  <XAxis dataKey="day" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area type="monotone" dataKey="incidents" name="reported" stroke="#5B54E8" strokeWidth={2} fillOpacity={1} fill="url(#colorIncidents)" />
                   <Area type="monotone" dataKey="resolved" name="resolved" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#colorResolved)" />
@@ -776,7 +746,7 @@ export default function AIAnalytics() {
             {/* Top Categories */}
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
-                <BarChart2 size={16} style={{ color: '#5B54E8' }} />
+                <BarChart2 size={16} style={{ color: 'var(--brand)' }} />
                 <h3 className="font-bold text-gray-800 text-sm">Top Incident Categories</h3>
               </div>
               <div className="space-y-3">
@@ -791,7 +761,7 @@ export default function AIAnalytics() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold" style={{ color: cat.color }}>{cat.count}</span>
-                          <span className="text-xs text-gray-400">({percent.toFixed(0)}%)</span>
+                          <span className="text-xs text-gray-500">({percent.toFixed(0)}%)</span>
                         </div>
                       </div>
                       <div className="relative h-2 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
@@ -813,7 +783,7 @@ export default function AIAnalytics() {
           {analysis && (
             <div
               className="absolute top-0 right-0 w-64 h-64 rounded-full opacity-10 pointer-events-none"
-              style={{ background: 'radial-gradient(circle, #5B54E8 0%, transparent 70%)', filter: 'blur(60px)' }}
+              style={{ background: 'radial-gradient(circle, var(--brand) 0%, transparent 70%)', filter: 'blur(60px)' }}
             />
           )}
 
@@ -823,7 +793,7 @@ export default function AIAnalytics() {
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 relative" style={{ animation: 'float 2s ease-in-out infinite' }}>
                   <div
                     className="absolute inset-0 rounded-2xl"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <BarChart2 size={20} className="text-white" />
@@ -832,7 +802,7 @@ export default function AIAnalytics() {
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-10"
                     style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)' }}
                   >
-                    <span className="text-[8px]" aria-hidden="true">✨</span>
+                    <span className="text-[11px]" aria-hidden="true">✨</span>
                   </div>
                 </div>
                 <div>
@@ -842,7 +812,7 @@ export default function AIAnalytics() {
                       CLAUDE AI
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400">Smart analysis powered by Claude</p>
+                  <p className="text-xs text-gray-500">Smart analysis powered by Claude</p>
                 </div>
               </div>
 
@@ -851,7 +821,7 @@ export default function AIAnalytics() {
                   onClick={generateAnalysis}
                   disabled={loading}
                   className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-50"
-                  style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}
+                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
                 >
                   <RefreshCw size={12} /> Regenerate
                 </button>
@@ -863,11 +833,11 @@ export default function AIAnalytics() {
                 <div className="relative w-20 h-20 mx-auto mb-5">
                   <div
                     className="absolute inset-0 rounded-3xl"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', opacity: 0.1, animation: 'float 4s ease-in-out infinite' }}
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', opacity: 0.1, animation: 'float 4s ease-in-out infinite' }}
                   />
                   <div
                     className="absolute inset-2 rounded-2xl flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
                   >
                     <BarChart2 size={28} className="text-white" />
                   </div>
@@ -876,18 +846,18 @@ export default function AIAnalytics() {
                 <p className="text-sm text-gray-500 mb-1 max-w-md mx-auto">
                   Get AI-powered insights, trend analysis, hotspot detection, and actionable recommendations.
                 </p>
-                <p className="text-xs text-gray-400 mb-6">Analysis takes about 10-15 seconds.</p>
+                <p className="text-xs text-gray-500 mb-6">Analysis takes about 10-15 seconds.</p>
 
                 <button
                   onClick={generateAnalysis}
                   disabled={!dataLoaded || incidents.length === 0}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
                 >
                   ✨ Generate AI Report
                 </button>
                 {incidents.length === 0 && (
-                  <p className="text-xs text-gray-400 mt-3">Needs at least one incident to analyze</p>
+                  <p className="text-xs text-gray-500 mt-3">Needs at least one incident to analyze</p>
                 )}
               </div>
             )}
@@ -898,7 +868,7 @@ export default function AIAnalytics() {
                   <div className="relative w-12 h-12 flex-shrink-0" style={{ animation: 'float 2s ease-in-out infinite' }}>
                     <div
                       className="absolute inset-0 rounded-2xl"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <BarChart2 size={20} className="text-white" />
@@ -907,10 +877,10 @@ export default function AIAnalytics() {
                   <div>
                     <p className="text-sm font-bold text-gray-800">Claude AI is analyzing...</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#5B54E8', animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#7C75F0', animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
                       <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
-                      <span className="text-xs text-gray-400 ml-1.5">Processing your data</span>
+                      <span className="text-xs text-gray-500 ml-1.5">Processing your data</span>
                     </div>
                   </div>
                 </div>
@@ -926,7 +896,7 @@ export default function AIAnalytics() {
               <div className="fade-up">
                 <div
                   className="rounded-2xl p-6 mb-4"
-                  style={{ background: 'linear-gradient(135deg, #fafaff 0%, #f5f4ff 100%)', border: '1px solid #f0effe' }}
+                  style={{ background: 'linear-gradient(135deg, var(--app-surface) 0%, #f5f4ff 100%)', border: '1px solid var(--brand-soft)' }}
                 >
                   <div className="markdown ai-analysis text-gray-700 leading-relaxed">
                     <ReactMarkdown>{analysis}</ReactMarkdown>
@@ -934,7 +904,7 @@ export default function AIAnalytics() {
                 </div>
 
                 <div className="flex items-center justify-between flex-wrap gap-3 mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Generated at {analysisTime?.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -950,7 +920,7 @@ export default function AIAnalytics() {
                       onClick={generateAnalysis}
                       disabled={loading}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-50"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
                     >
                       <RefreshCw size={11} /> Regenerate
                     </button>

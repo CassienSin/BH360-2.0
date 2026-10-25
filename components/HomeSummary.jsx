@@ -43,7 +43,7 @@ export function HomeSummary({ greeting, name, summary, pressing, allClearNote, o
             focus-visible:ring-2 ${interactive ? 'cursor-pointer' : ''}`}
           style={{
             background: tone.bg, border: `1px solid ${tone.border}`,
-            '--tw-ring-color': '#5B54E8',
+            '--tw-ring-color': 'var(--brand)',
           }}>
           <span className="w-2 h-2 rounded-full flex-shrink-0"
             style={{ background: tone.dot }} aria-hidden="true" />
@@ -51,7 +51,7 @@ export function HomeSummary({ greeting, name, summary, pressing, allClearNote, o
             <span className="block text-[13px] font-bold truncate" style={{ color: tone.ink }}>
               {pressing ? pressing.title : 'All clear'}
             </span>
-            <span className="block text-[11.5px] mt-0.5 truncate" style={{ color: tone.sub }}>
+            <span className="block text-xs mt-0.5 truncate" style={{ color: tone.sub }}>
               {pressing ? pressing.detail : allClearNote}
             </span>
           </span>
@@ -118,11 +118,11 @@ export function ActivityTile({ icon, count, label, caption, tone = 'waiting', qu
     <button onClick={onClick}
       className={`white-card relative w-full text-left p-4 pl-[18px] cursor-pointer
         focus:outline-none focus-visible:ring-2 ${className}`}
-      style={{ '--tw-ring-color': '#5B54E8' }}>
+      style={{ '--tw-ring-color': 'var(--brand)' }}>
       <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
         style={{ background: rail }} aria-hidden="true" />
       <span className="flex items-center justify-between gap-2">
-        <span className="text-gray-400" aria-hidden="true">{icon}</span>
+        <span className="text-gray-500" aria-hidden="true">{icon}</span>
       </span>
       <span className="block text-[26px] font-extrabold leading-none mt-2.5 tabular-nums"
         style={{ color: quiet ? '#9ca3af' : rail }}>
@@ -130,7 +130,7 @@ export function ActivityTile({ icon, count, label, caption, tone = 'waiting', qu
       </span>
       <span className="block text-[12.5px] font-semibold text-gray-700 mt-1">{label}</span>
       {caption && (
-        <span className="block text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>{caption}</span>
+        <span className="block text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>{caption}</span>
       )}
     </button>
   )

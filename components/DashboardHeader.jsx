@@ -49,7 +49,7 @@ function ResultRow({ idx, highlighted, onHighlight, icon, iconStyle, title, subt
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
-        <p className="text-xs text-gray-400 truncate">{subtitle}</p>
+        <p className="text-xs text-gray-500 truncate">{subtitle}</p>
       </div>
       <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} aria-hidden="true" />
     </button>
@@ -268,7 +268,7 @@ export default function DashboardHeader({
       <header className={`bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader}`}
         style={{
           boxShadow: '0 2px 12px rgba(91,84,232,0.06)',
-          borderBottom: '1px solid #f0effe',
+          borderBottom: '1px solid var(--brand-soft)',
         }}>
 
         {/* LEFT SIDE — Menu + Title */}
@@ -276,10 +276,10 @@ export default function DashboardHeader({
           {!sidebarOpen && (
             <>
               <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar" aria-expanded={false} aria-controls="dashboard-navigation"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
                 <Menu size={18} />
               </button>
-              <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} aria-hidden="true" />
+              <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} aria-hidden="true" />
             </>
           )}
 
@@ -292,7 +292,7 @@ export default function DashboardHeader({
                 <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
                   style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-                  <span className="text-[10px] font-bold text-emerald-700">LIVE</span>
+                  <span className="text-xs font-bold text-emerald-700">LIVE</span>
                 </div>
               </div>
               {profile?.barangays ? (
@@ -304,7 +304,7 @@ export default function DashboardHeader({
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 truncate mt-0.5">{sectionDesc}</p>
+                <p className="text-xs text-gray-500 truncate mt-0.5">{sectionDesc}</p>
               )}
             </div>
           </div>
@@ -313,11 +313,11 @@ export default function DashboardHeader({
         {/* CENTER — Search bar */}
         <button onClick={openSearch} aria-label="Open search"
           className="hidden md:flex items-center gap-3 px-4 py-2 rounded-2xl flex-1 max-w-md transition-all hover:bg-gray-50"
-          style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-          <Search size={15} className="text-gray-400 flex-shrink-0" aria-hidden="true" />
-          <span className="text-sm text-gray-400 flex-1 text-left">Search anything...</span>
-          <kbd className="px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5"
-            style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+          style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+          <Search size={15} className="text-gray-500 flex-shrink-0" aria-hidden="true" />
+          <span className="text-sm text-gray-500 flex-1 text-left">Search anything...</span>
+          <kbd className="px-2 py-0.5 rounded-md text-xs font-bold flex items-center gap-0.5"
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
             {isMac ? '⌘K' : 'Ctrl+K'}
           </kbd>
         </button>
@@ -329,7 +329,7 @@ export default function DashboardHeader({
 
           {/* Mobile search */}
           <button onClick={openSearch} aria-label="Open search"
-            className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+            className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
             <Search size={16} />
           </button>
 
@@ -338,7 +338,7 @@ export default function DashboardHeader({
             <button onClick={() => setNotifOpen(!notifOpen)}
               aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
               aria-expanded={notifOpen}
-              className="relative w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+              className="relative w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors">
               <Bell size={16} />
               {unread > 0 && (
                 <>
@@ -350,13 +350,13 @@ export default function DashboardHeader({
 
             {notifOpen && (
               <div className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-80 sm:max-w-none rounded-2xl overflow-hidden fade-up z-50"
-                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff' }}>
+                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
 
                 <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"
-                  style={{ background: '#fafaff' }}>
+                  style={{ background: 'var(--app-surface)' }}>
                   <div>
                     <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
-                    <p className="text-xs text-gray-400" aria-live="polite">
+                    <p className="text-xs text-gray-500" aria-live="polite">
                       {unread > 0
                         ? `${unread} unread ${unread === 1 ? 'item' : 'items'}`
                         : 'All caught up'}
@@ -364,8 +364,8 @@ export default function DashboardHeader({
                   </div>
                   {unread > 0 && (
                     <button onClick={markAllRead}
-                      className="flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold hover:opacity-70 transition-opacity"
-                      style={{ background: '#f0effe', color: '#5B54E8' }}>
+                      className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold hover:opacity-70 transition-opacity"
+                      style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                       <CheckCheck size={11} aria-hidden="true" />
                       Mark all read
                     </button>
@@ -380,7 +380,7 @@ export default function DashboardHeader({
                         <Bell size={20} className="text-emerald-500" />
                       </div>
                       <p className="text-sm font-semibold text-gray-700">All caught up!</p>
-                      <p className="text-xs text-gray-400 mt-0.5">No notifications right now</p>
+                      <p className="text-xs text-gray-500 mt-0.5">No notifications right now</p>
                     </div>
                   ) : (
                     sortedNotifications.slice(0, 10).map((notif) => {
@@ -404,12 +404,12 @@ export default function DashboardHeader({
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.subtitle}</p>
                             {notif.created_at && (
-                              <p className="text-[10px] text-gray-400 mt-1">{timeAgo(notif.created_at)}</p>
+                              <p className="text-xs text-gray-500 mt-1">{timeAgo(notif.created_at)}</p>
                             )}
                           </div>
                           {!read && (
                             <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1.5"
-                              style={{ background: '#5B54E8' }}>
+                              style={{ background: 'var(--brand)' }}>
                               <span className="sr-only">Unread</span>
                             </span>
                           )}
@@ -420,8 +420,8 @@ export default function DashboardHeader({
                 </div>
 
                 {visibleNotifications.length > 0 && (
-                  <div className="px-4 py-2 border-t border-gray-100" style={{ background: '#fafaff' }}>
-                    <p className="text-[10px] text-gray-400 text-center">
+                  <div className="px-4 py-2 border-t border-gray-100" style={{ background: 'var(--app-surface)' }}>
+                    <p className="text-xs text-gray-500 text-center">
                       {sortedNotifications.length > 10
                         ? `Showing 10 of ${sortedNotifications.length} — resolve or close items to clear the list`
                         : 'Click any notification to view details'}
@@ -441,28 +441,28 @@ export default function DashboardHeader({
                 src={profile?.avatar_url}
                 name={profile?.full_name}
                 className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 2px 8px rgba(91,84,232,0.3)' }}
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 2px 8px rgba(91,84,232,0.3)' }}
               />
-              <ChevronDown size={12} className={`text-gray-400 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              <ChevronDown size={12} className={`text-gray-500 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
             </button>
 
             {userMenuOpen && (
               <div role="menu" aria-label="Account"
                 className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-64 rounded-2xl overflow-hidden fade-up z-50"
-                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff' }}>
+                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
 
                 {/* User info */}
-                <div className="px-4 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(135deg, #fafaff, white)' }}>
+                <div className="px-4 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(135deg, var(--app-surface), white)' }}>
                   <div className="flex items-center gap-3">
                     <HeaderAvatar
                       src={profile?.avatar_url}
                       name={profile?.full_name}
                       className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{profile?.full_name}</p>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold inline-block mt-0.5"
+                      <span className="text-xs px-2 py-0.5 rounded-full font-bold inline-block mt-0.5"
                         style={{ background: rc.bg, color: rc.color }}>
                         {rc.label}
                       </span>
@@ -470,7 +470,7 @@ export default function DashboardHeader({
                   </div>
                   {profile?.barangays && (
                     <div className="flex items-center gap-1.5 mt-3 px-2 py-1.5 rounded-lg text-xs"
-                      style={{ background: '#f0effe', color: '#5B54E8' }}>
+                      style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                       <span aria-hidden="true">📍</span>
                       <span className="font-semibold truncate">{profile.barangays.name}</span>
                     </div>
@@ -481,17 +481,17 @@ export default function DashboardHeader({
                 <div className="py-2">
                   <button role="menuitem" onClick={() => { router.push('/profile'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <User size={14} className="text-gray-400" aria-hidden="true" />
+                    <User size={14} className="text-gray-500" aria-hidden="true" />
                     <span className="text-sm text-gray-700">My Profile</span>
                   </button>
                   <button role="menuitem" onClick={() => { router.push('/settings'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <Settings size={14} className="text-gray-400" aria-hidden="true" />
+                    <Settings size={14} className="text-gray-500" aria-hidden="true" />
                     <span className="text-sm text-gray-700">Settings</span>
                   </button>
                   <button role="menuitem" onClick={() => { router.push('/help'); setUserMenuOpen(false) }}
                     className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <HelpCircle size={14} className="text-gray-400" aria-hidden="true" />
+                    <HelpCircle size={14} className="text-gray-500" aria-hidden="true" />
                     <span className="text-sm text-gray-700">Help & Support</span>
                   </button>
                 </div>
@@ -518,7 +518,7 @@ export default function DashboardHeader({
             style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}>
 
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <Search size={18} className="text-gray-400 flex-shrink-0" aria-hidden="true" />
+              <Search size={18} className="text-gray-500 flex-shrink-0" aria-hidden="true" />
               <input
                 ref={searchInputRef}
                 value={searchQuery}
@@ -531,14 +531,14 @@ export default function DashboardHeader({
                 aria-controls="search-results"
                 aria-autocomplete="list"
                 aria-activedescendant={totalResults > 0 ? `search-result-${highlighted}` : undefined}
-                className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-400"
+                className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
               />
-              <kbd className="px-2 py-0.5 rounded-md text-[10px] font-bold"
-                style={{ background: '#f0effe', color: '#5B54E8' }}>
+              <kbd className="px-2 py-0.5 rounded-md text-xs font-bold"
+                style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                 ESC
               </kbd>
               <button onClick={closeSearch} aria-label="Close search"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors">
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
                 <X size={14} />
               </button>
             </div>
@@ -547,15 +547,15 @@ export default function DashboardHeader({
               {!searchQuery && (
                 <div className="px-5 py-8 text-center">
                   <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                    style={{ background: '#f0effe' }}>
-                    <Sparkles size={20} style={{ color: '#5B54E8' }} />
+                    style={{ background: 'var(--brand-soft)' }}>
+                    <Sparkles size={20} style={{ color: 'var(--brand)' }} />
                   </div>
                   <p className="text-sm font-semibold text-gray-700">Quick Search</p>
-                  <p className="text-xs text-gray-400 mt-1">Type to search across all your barangay data</p>
-                  <div className="mt-5 flex items-center justify-center gap-2 flex-wrap text-xs text-gray-400">
-                    <span className="px-2 py-1 rounded-lg" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>incidents</span>
-                    <span className="px-2 py-1 rounded-lg" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>tickets</span>
-                    <span className="px-2 py-1 rounded-lg" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>announcements</span>
+                  <p className="text-xs text-gray-500 mt-1">Type to search across all your barangay data</p>
+                  <div className="mt-5 flex items-center justify-center gap-2 flex-wrap text-xs text-gray-500">
+                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>incidents</span>
+                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>tickets</span>
+                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>announcements</span>
                   </div>
                 </div>
               )}
@@ -563,14 +563,14 @@ export default function DashboardHeader({
               {searchQuery && totalResults === 0 && (
                 <div className="px-5 py-12 text-center">
                   <p className="text-sm font-semibold text-gray-700">No results for &quot;{searchQuery}&quot;</p>
-                  <p className="text-xs text-gray-400 mt-1">Try a different search term</p>
+                  <p className="text-xs text-gray-500 mt-1">Try a different search term</p>
                 </div>
               )}
 
               {filteredResults.incidents.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400"
-                    style={{ background: '#fafaff' }}>
+                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
+                    style={{ background: 'var(--app-surface)' }}>
                     Incidents ({filteredResults.incidents.length})
                   </p>
                   {filteredResults.incidents.map((inc, i) => (
@@ -591,8 +591,8 @@ export default function DashboardHeader({
 
               {filteredResults.tickets.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400"
-                    style={{ background: '#fafaff' }}>
+                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
+                    style={{ background: 'var(--app-surface)' }}>
                     Tickets ({filteredResults.tickets.length})
                   </p>
                   {filteredResults.tickets.map((t, i) => (
@@ -613,8 +613,8 @@ export default function DashboardHeader({
 
               {filteredResults.announcements.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400"
-                    style={{ background: '#fafaff' }}>
+                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
+                    style={{ background: 'var(--app-surface)' }}>
                     Announcements ({filteredResults.announcements.length})
                   </p>
                   {filteredResults.announcements.map((a, i) => (
@@ -635,15 +635,15 @@ export default function DashboardHeader({
             </div>
 
             {searchQuery && totalResults > 0 && (
-              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between" style={{ background: '#fafaff' }}>
-                <p className="text-xs text-gray-400" aria-live="polite">{totalResults} {totalResults === 1 ? 'result' : 'results'} found</p>
-                <div className="flex items-center gap-3 text-xs text-gray-400">
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between" style={{ background: 'var(--app-surface)' }}>
+                <p className="text-xs text-gray-500" aria-live="polite">{totalResults} {totalResults === 1 ? 'result' : 'results'} found</p>
+                <div className="flex items-center gap-3 text-xs text-gray-500">
                   <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↑↓</kbd>
+                    <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↑↓</kbd>
                     navigate
                   </span>
                   <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↵</kbd>
+                    <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↵</kbd>
                     select
                   </span>
                 </div>

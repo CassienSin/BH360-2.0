@@ -41,7 +41,7 @@ export function RecordGroup({ label, count, children }) {
   return (
     <>
       <div className="flex items-center gap-2.5 mt-2 mb-0.5 px-0.5">
-        <span className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/70">
+        <span className="text-xs font-bold uppercase tracking-[0.12em] text-white/70">
           {label} · {count}
         </span>
         <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
@@ -72,7 +72,7 @@ function Track({ steps, at }) {
                   ...(state === 'now' ? { boxShadow: '0 0 0 3px rgba(91,84,232,0.18)' } : {}),
                 }}
                 aria-hidden="true" />
-              <span className={`text-[10.5px] font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
+              <span className={`text-xs font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
                 style={{ color: text }}>{label}</span>
             </span>
           </li>
@@ -150,7 +150,7 @@ export default function RecordCard({
           <span className="flex items-center gap-2 flex-shrink-0">
             {action}
             <span className="hidden sm:contents">{status}{badges}</span>
-            {when && <span className="text-[11.5px] tabular-nums whitespace-nowrap" style={{ color: META }}>{when}</span>}
+            {when && <span className="text-xs tabular-nums whitespace-nowrap" style={{ color: META }}>{when}</span>}
             <ChevronRight size={14} className="text-gray-300" aria-hidden="true" />
           </span>
         </span>
@@ -195,7 +195,7 @@ export default function RecordCard({
           justify-center pl-4 border-l min-w-[142px]" style={{ borderColor: '#f3f4f6' }}>
           {status}
           {badges}
-          {when && <span className="text-[11.5px]" style={{ color: META }}>{when}</span>}
+          {when && <span className="text-xs" style={{ color: META }}>{when}</span>}
         </span>
       </span>
     </div>

@@ -14,10 +14,10 @@
   --font-mono: var(--font-geist-mono, ui-monospace, 'SF Mono', Monaco, monospace);
   --font-heading: var(--font-sora), "Sora", sans-serif;
 
-  /* Brand tokens — the purple is currently hardcoded (#5B54E8) in ~30
-     places across components. These expose it as Tailwind utilities
-     (text-brand, bg-brand-soft, border-brand-border, ring-brand, …) so
-     new code can reference the token instead of the hex. */
+  /* Brand tokens as Tailwind utilities (text-brand, bg-brand-soft,
+     border-brand-border, ring-brand, …). Inline styles and CSS modules use
+     var(--brand…) directly; hex stays only where a library or a colour
+     calculation needs a literal value (charts, map paint, `${color}18`). */
   --color-brand: var(--brand);
   --color-brand-light: var(--brand-light);
   --color-brand-dark: var(--brand-dark);
@@ -254,7 +254,7 @@
 
 .skeleton-shimmer {
   @apply rounded-[12px] animate-shimmer;
-  background: linear-gradient(90deg, #f0effe 25%, #e8e3ff 50%, #f0effe 75%);
+  background: linear-gradient(90deg, var(--brand-soft) 25%, var(--brand-border) 50%, var(--brand-soft) 75%);
   background-size: 200% 100%;
 }
 
@@ -270,14 +270,14 @@
 }
 
 .input-field {
-  @apply border-[1.5px] border-[#e8e3ff] bg-[#faf9ff] outline-none transition-all duration-200;
+  @apply border-[1.5px] border-[var(--brand-border)] bg-[#faf9ff] outline-none transition-all duration-200;
   min-height: 44px;
   line-height: 1.6;
 }
 .input-field::placeholder { color: #777184; opacity: 1; }
 .input-field[aria-invalid='true'] { border-color: #b91c1c; }
 .input-field:focus {
-  @apply border-[#5B54E8] bg-white shadow-[0_0_0_4px_rgba(91,84,232,0.08)];
+  @apply border-[var(--brand)] bg-white shadow-[0_0_0_4px_rgba(91,84,232,0.08)];
 }
 
 .btn-primary {
@@ -287,15 +287,12 @@
   @apply transition-all duration-300 shadow-[0_4px_24px_rgba(91,84,232,0.35)];
 }
 
-/* Secondary text on white content surfaces, without dimming text on purple. */
-.white-card .text-gray-400 { color: var(--app-text-muted); }
-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 
 .bg-brand {
-  background: linear-gradient(145deg, #4A43D4 0%, #6B5FEE 35%, #7C75F0 60%, #5B54E8 100%);
+  background: linear-gradient(145deg, var(--brand-dark) 0%, #6B5FEE 35%, var(--brand-light) 60%, var(--brand) 100%);
 }
 
 .markdown h1, .markdown h2, .markdown h3 { @apply font-semibold mt-2 mb-1; }
@@ -320,7 +317,7 @@
 /* ===== LANDING PAGE BUTTONS ===== */
 .btn-hero-primary {
   background: white;
-  color: #5B54E8;
+  color: var(--brand);
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   transition: all 0.3s ease;
 }
@@ -396,9 +393,9 @@
   color: #1f2937;
   margin: 1.75rem 0 0.75rem;
   padding: 12px 16px;
-  background: linear-gradient(135deg, #f0effe 0%, #faf9ff 100%);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, #faf9ff 100%);
   border-radius: 12px;
-  border-left: 4px solid #5B54E8;
+  border-left: 4px solid var(--brand);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -432,13 +429,13 @@
   line-height: 1.7;
   background: white;
   border-radius: 10px;
-  border: 1px solid #f0effe;
+  border: 1px solid var(--brand-soft);
   transition: all 0.2s ease;
 }
 
 @media (hover: hover) {
   .markdown.ai-analysis ul li:hover {
-    border-color: #e8e3ff;
+    border-color: var(--brand-border);
     transform: translateX(2px);
   }
 }
@@ -451,7 +448,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #5B54E8, #7C75F0);
+  background: linear-gradient(135deg, var(--brand), var(--brand-light));
   box-shadow: 0 0 0 3px rgba(91,84,232,0.15);
 }
 
@@ -467,7 +464,7 @@
   line-height: 1.7;
   background: white;
   border-radius: 10px;
-  border: 1px solid #f0effe;
+  border: 1px solid var(--brand-soft);
   counter-increment: ai-list;
 }
 
@@ -479,7 +476,7 @@
   width: 22px;
   height: 22px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #5B54E8, #7C75F0);
+  background: linear-gradient(135deg, var(--brand), var(--brand-light));
   color: white;
   font-size: 11px;
   font-weight: 700;
@@ -490,7 +487,7 @@
 }
 
 .markdown.ai-analysis strong {
-  color: #5B54E8;
+  color: var(--brand);
   font-weight: 700;
 }
 
@@ -502,13 +499,13 @@
 .markdown.ai-analysis hr {
   border: none;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #e8e3ff 50%, transparent);
+  background: linear-gradient(90deg, transparent, var(--brand-border) 50%, transparent);
   margin: 1.5rem 0;
 }
 
 .markdown.ai-analysis code {
-  background: #f0effe;
-  color: #5B54E8;
+  background: var(--brand-soft);
+  color: var(--brand);
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 12px;
@@ -517,8 +514,8 @@
 }
 
 .markdown.ai-analysis blockquote {
-  border-left: 3px solid #5B54E8;
-  background: #fafaff;
+  border-left: 3px solid var(--brand);
+  background: var(--app-surface);
   padding: 0.875rem 1rem;
   margin: 1rem 0;
   border-radius: 0 12px 12px 0;
@@ -644,7 +641,7 @@
 .bh-toast-btn:focus-visible,
 .bh-toast-btn-ghost:focus-visible,
 .bh-toast-close:focus-visible {
-  outline: 2px solid #5B54E8;
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 

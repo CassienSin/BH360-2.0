@@ -118,12 +118,12 @@ export default function AppointmentsPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-bold text-gray-800">Your appointments</h2>
-              <p className="text-xs text-gray-400">{loadError ? 'Appointments unavailable' : `${visibleAppointments.length} shown · ${appointments.length} total`}</p>
+              <p className="text-xs text-gray-500">{loadError ? 'Appointments unavailable' : `${visibleAppointments.length} shown · ${appointments.length} total`}</p>
             </div>
             <div className="flex rounded-xl bg-[#f5f4ff] p-1" aria-label="Filter appointments">
               {[['upcoming', 'Upcoming'], ['past', 'Past'], ['all', 'All']].map(([key, label]) => (
                 <button key={key} onClick={() => setFilter(key)} aria-pressed={filter === key}
-                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${filter === key ? 'bg-white text-[#5B54E8] shadow-sm' : 'text-gray-500'}`}>
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold ${filter === key ? 'bg-white text-brand shadow-sm' : 'text-gray-500'}`}>
                   {label}
                 </button>
               ))}
@@ -137,7 +137,7 @@ export default function AppointmentsPage() {
               {visibleAppointments.map(appointment => {
                 const past = new Date(appointment.starts_at).getTime() < now
                 return (
-                  <article key={appointment.id} className="rounded-2xl border border-[#f0effe] p-4 sm:p-5">
+                  <article key={appointment.id} className="rounded-2xl border border-brand-soft p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h3 className="break-words text-sm font-bold text-gray-800">{appointment.title}</h3>
@@ -147,10 +147,10 @@ export default function AppointmentsPage() {
                         {past ? 'Past' : 'Scheduled'}
                       </StatusBadge>
                     </div>
-                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-700"><CalendarDays size={13} style={{ color: '#5B54E8' }} /> {formatDateTime(appointment.starts_at)}</p>
+                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-gray-700"><CalendarDays size={13} style={{ color: 'var(--brand)' }} /> {formatDateTime(appointment.starts_at)}</p>
                     <p className="mt-1.5 flex items-center gap-2 text-xs text-gray-500"><Clock3 size={13} /> Reminder: {formatDateTime(appointment.remind_at)}</p>
                     {appointment.notes && <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-gray-500">{appointment.notes}</p>}
-                    <p className={`mt-2 text-[10px] font-semibold ${appointment.reminder_sent_at ? 'text-emerald-600' : 'text-orange-600'}`}>
+                    <p className={`mt-2 text-xs font-semibold ${appointment.reminder_sent_at ? 'text-emerald-600' : 'text-orange-600'}`}>
                       {appointment.reminder_sent_at ? 'Reminder sent' : 'Reminder pending'}
                     </p>
                   </article>

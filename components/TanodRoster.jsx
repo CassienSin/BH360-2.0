@@ -28,7 +28,7 @@ function statusOf(tanod, activeAssignments) {
 const statusConfig = {
   responding: { label: 'Responding', dot: '#f97316', bg: '#fff7ed', color: '#c2410c' },
   available:  { label: 'Available',  dot: '#22c55e', bg: '#f0fdf4', color: '#15803d' },
-  off:        { label: 'Off duty',   dot: '#d1d5db', bg: '#fafaff', color: '#9ca3af' },
+  off:        { label: 'Off duty',   dot: '#d1d5db', bg: '#fafaff', color: '#6b7280' },
 }
 
 const statusOrder = { responding: 0, available: 1, off: 2 }
@@ -148,11 +148,11 @@ export default function TanodRoster({ profile }) {
 
   return (
     <div className="rounded-2xl overflow-hidden"
-      style={{ background: 'white', border: '1px solid #e8e3ff', boxShadow: '0 2px 12px rgba(91,84,232,0.06)' }}>
+      style={{ background: 'white', border: '1px solid var(--brand-border)', boxShadow: '0 2px 12px rgba(91,84,232,0.06)' }}>
 
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"
-        style={{ background: '#fafaff' }}>
+        style={{ background: 'var(--app-surface)' }}>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center"
             style={{ background: '#f0fdf4' }}>
@@ -160,10 +160,10 @@ export default function TanodRoster({ profile }) {
           </div>
           <div>
             <h3 className="text-sm font-bold text-gray-800">Tanod Roster</h3>
-            <p className="text-[11px] text-gray-400">Live duty status</p>
+            <p className="text-xs text-gray-500">Live duty status</p>
           </div>
         </div>
-        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold"
+        <span className="px-2.5 py-1 rounded-full text-xs font-bold"
           style={{
             background: onDutyCount > 0 ? '#f0fdf4' : '#fff1f1',
             color: onDutyCount > 0 ? '#15803d' : '#dc2626',
@@ -175,9 +175,9 @@ export default function TanodRoster({ profile }) {
       {/* List */}
       <div className="max-h-96 overflow-y-auto">
         {loading ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-400">Loading roster…</p>
+          <p className="px-4 py-8 text-center text-sm text-gray-500">Loading roster…</p>
         ) : sorted.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-400">No tanods registered yet.</p>
+          <p className="px-4 py-8 text-center text-sm text-gray-500">No tanods registered yet.</p>
         ) : (
           sorted.map(t => {
             const status = statusOf(t, activeAssignments)
@@ -192,7 +192,7 @@ export default function TanodRoster({ profile }) {
                 {/* Avatar + status dot */}
                 <div className="relative flex-shrink-0">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                     {t.avatar_url
                       ? <img loading="lazy" decoding="async" src={t.avatar_url} alt={t.full_name} className="w-full h-full object-cover" />
                       : t.full_name?.[0]?.toUpperCase()}
@@ -204,7 +204,7 @@ export default function TanodRoster({ profile }) {
                 {/* Name + freshness */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-gray-800 truncate">{t.full_name}</p>
-                  <p className="text-[11px] text-gray-400 truncate">
+                  <p className="text-xs text-gray-500 truncate">
                     {t.on_duty && t.last_seen_at
                       ? `Active ${timeAgo(t.last_seen_at)}`
                       : t.on_duty
@@ -219,14 +219,14 @@ export default function TanodRoster({ profile }) {
                 {/* Stale warning: on duty but unreachable-looking */}
                 {stale && (
                   <span title="On duty but not seen recently — consider calling first"
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0"
                     style={{ background: '#fefce8', color: '#a16207' }}>
                     <AlertTriangle size={10} /> Inactive
                   </span>
                 )}
 
                 {/* Status badge */}
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0"
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0"
                   style={{ background: sc.bg, color: sc.color }}>
                   {sc.label}
                 </span>
@@ -234,7 +234,7 @@ export default function TanodRoster({ profile }) {
                 {/* Quick call */}
                 {t.phone && (
                   <a href={`tel:${t.phone}`} aria-label={`Call ${t.full_name}`}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
                     <Phone size={13} />
                   </a>
                 )}

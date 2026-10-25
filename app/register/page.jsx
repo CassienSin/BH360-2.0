@@ -309,7 +309,7 @@ export default function RegisterPage() {
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
                   style={{
                     background: step >= s ? 'white' : 'rgba(255,255,255,0.15)',
-                    color: step >= s ? '#5B54E8' : 'rgba(255,255,255,0.5)',
+                    color: step >= s ? 'var(--brand)' : 'rgba(255,255,255,0.5)',
                     border: step >= s ? 'none' : '1px solid rgba(255,255,255,0.25)',
                     boxShadow: step >= s ? '0 4px 16px rgba(255,255,255,0.3)' : 'none',
                   }}>
@@ -353,7 +353,7 @@ export default function RegisterPage() {
               </p>
               <button onClick={() => router.replace('/login')}
                 className="mt-6 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                 Go to Sign In <ArrowRight size={16} />
               </button>
             </div>
@@ -363,7 +363,7 @@ export default function RegisterPage() {
           {!awaitingConfirmation && step === 1 && (
             <div className="fade-up">
               <h2 className="text-2xl font-black text-gray-900 mb-1" style={{ letterSpacing: '-0.5px' }}>Who are you?</h2>
-              <p className="text-gray-400 text-sm mb-6">Select your role in the barangay.</p>
+              <p className="text-gray-500 text-sm mb-6">Select your role in the barangay.</p>
 
               <div className="space-y-3 mb-5" role="radiogroup" aria-label="Select your role">
                 {roles.map(role => (
@@ -380,14 +380,14 @@ export default function RegisterPage() {
                     }}
                     className="rounded-2xl p-4 flex items-center gap-4 cursor-pointer transition-all"
                     style={{
-                      border: `2px solid ${selectedRole === role.value ? '#5B54E8' : '#e8e3ff'}`,
-                      background: selectedRole === role.value ? '#f0effe' : 'white',
+                      border: `2px solid ${selectedRole === role.value ? 'var(--brand)' : 'var(--brand-border)'}`,
+                      background: selectedRole === role.value ? 'var(--brand-soft)' : 'white',
                       boxShadow: selectedRole === role.value ? '0 0 0 4px rgba(91,84,232,0.08)' : 'none',
                     }}>
                     <div className="text-3xl" aria-hidden="true">{role.icon}</div>
                     <div className="flex-1">
                       <p className="font-bold text-gray-800 text-sm">{role.label}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{role.desc}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{role.desc}</p>
                     </div>
                     {!role.public && (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: '#fef9c3' }}>
@@ -397,8 +397,8 @@ export default function RegisterPage() {
                     )}
                     <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
                       style={{
-                        borderColor: selectedRole === role.value ? '#5B54E8' : '#d1d5db',
-                        background: selectedRole === role.value ? '#5B54E8' : 'transparent',
+                        borderColor: selectedRole === role.value ? 'var(--brand)' : '#d1d5db',
+                        background: selectedRole === role.value ? 'var(--brand)' : 'transparent',
                       }}>
                       {selectedRole === role.value && <div className="w-2 h-2 rounded-full bg-white" />}
                     </div>
@@ -413,7 +413,7 @@ export default function RegisterPage() {
                     Invite Code
                   </label>
                   <div className="relative">
-                    <KeyRound size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <KeyRound size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
                       id="invite-code"
                       value={inviteCode}
@@ -424,13 +424,13 @@ export default function RegisterPage() {
                       placeholder={`e.g. ${selectedRole === 'official' ? 'OFFICIAL-2026' : 'TANOD-2026'}`}
                     />
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                  <p className="text-xs text-gray-500 mt-1.5 flex items-center gap-1">
                     <KeyRound size={10} /> Contact your barangay captain to get an invite code
                   </p>
                   <p className="text-xs mt-2">
                     Don&apos;t have a code yet?{' '}
                     <button type="button" onClick={() => router.push('/request-access')}
-                      className="font-bold hover:underline" style={{ color: '#5B54E8' }}>
+                      className="font-bold hover:underline" style={{ color: 'var(--brand)' }}>
                       Request access →
                     </button>
                   </p>
@@ -440,7 +440,7 @@ export default function RegisterPage() {
               <button onClick={handleRoleNext}
                 disabled={inviteLoading || (selectedRole !== 'resident' && !inviteCode.trim())}
                 className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                 {inviteLoading ? (
                   <span className="flex items-center gap-2">
                     <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -461,19 +461,19 @@ export default function RegisterPage() {
             <div className="fade-up">
               <div className="flex items-center justify-between mb-5">
                 <button onClick={() => { setStep(1); setError('') }}
-                  className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors flex items-center gap-1">
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-600 transition-colors flex items-center gap-1">
                   ← Back
                 </button>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: '#f0effe' }}>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: 'var(--brand-soft)' }}>
                   <span className="text-base" aria-hidden="true">{roles.find(r => r.value === selectedRole)?.icon}</span>
-                  <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>
+                  <span className="text-xs font-bold" style={{ color: 'var(--brand)' }}>
                     {roles.find(r => r.value === selectedRole)?.label}
                   </span>
                 </div>
               </div>
 
               <h2 className="text-2xl font-black text-gray-900 mb-1" style={{ letterSpacing: '-0.5px' }}>Account details</h2>
-              <p className="text-gray-400 text-sm mb-6">Fill in your personal information.</p>
+              <p className="text-gray-500 text-sm mb-6">Fill in your personal information.</p>
 
               {/* Verified barangay banner for officials/tanods */}
               {verifiedBarangay && (
@@ -497,7 +497,7 @@ export default function RegisterPage() {
                   <div>
                     <label htmlFor="reg-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Full Name</label>
                     <div className="relative">
-                      <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <User size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input id="reg-name" name="full_name" value={form.full_name} onChange={handleChange} required maxLength={100}
                         autoComplete="name"
                         className="input-field w-full rounded-2xl pl-9 pr-3 py-3 text-sm text-gray-800"
@@ -507,7 +507,7 @@ export default function RegisterPage() {
                   <div>
                     <label htmlFor="reg-phone" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Phone</label>
                     <div className="relative">
-                      <Phone size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Phone size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input id="reg-phone" name="phone" type="tel" value={form.phone} onChange={handlePhoneChange}
                         maxLength={11} autoComplete="tel-national" inputMode="numeric" pattern="09[0-9]{9}"
                         aria-invalid={form.phone ? !phoneValid : undefined}
@@ -541,7 +541,7 @@ export default function RegisterPage() {
                 <div>
                   <label htmlFor="reg-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email</label>
                   <div className="relative">
-                    <Mail size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Mail size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="reg-email" name="email" type="email" value={form.email} onChange={handleChange} required
                       autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
                       className="input-field w-full rounded-2xl pl-9 pr-4 py-3 text-sm text-gray-800"
@@ -553,14 +553,14 @@ export default function RegisterPage() {
                 <div>
                   <label htmlFor="reg-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Password</label>
                   <div className="relative">
-                    <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="reg-password" name="password" type={showPassword ? 'text' : 'password'} value={form.password} onChange={handleChange} required
                       autoComplete="new-password"
                       className="input-field w-full rounded-2xl pl-9 pr-10 py-3 text-sm text-gray-800"
                       placeholder="Create a strong password" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
@@ -611,14 +611,14 @@ export default function RegisterPage() {
                 <div>
                   <label htmlFor="reg-confirm" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Confirm Password</label>
                   <div className="relative">
-                    <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Lock size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="reg-confirm" name="confirmPassword" type={showConfirmPassword ? 'text' : 'password'} value={form.confirmPassword} onChange={handleChange} required
                       autoComplete="new-password"
                       className="input-field w-full rounded-2xl pl-9 pr-10 py-3 text-sm text-gray-800"
                       placeholder="Re-enter password" />
                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                       {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
@@ -665,7 +665,7 @@ export default function RegisterPage() {
                 <div>
                   <label htmlFor="reg-address" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Address</label>
                   <div className="relative">
-                    <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input id="reg-address" name="address" value={form.address} onChange={handleChange} maxLength={200}
                       autoComplete="street-address"
                       className="input-field w-full rounded-2xl pl-9 pr-4 py-3 text-sm text-gray-800"
@@ -675,7 +675,7 @@ export default function RegisterPage() {
 
                 <button type="submit" disabled={loading || (form.phone.length > 0 && !phoneValid)}
                   className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100 mt-2"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                   {loading ? (
                     <span className="flex items-center gap-2">
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -694,9 +694,9 @@ export default function RegisterPage() {
 
           {!awaitingConfirmation && (
             <div className="mt-6 pt-5 border-t border-gray-100 text-center">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500">
                 Already have an account?{' '}
-                <a href="/login" className="font-bold transition-colors" style={{ color: '#5B54E8' }}>Sign in →</a>
+                <a href="/login" className="font-bold transition-colors" style={{ color: 'var(--brand)' }}>Sign in →</a>
               </p>
             </div>
           )}

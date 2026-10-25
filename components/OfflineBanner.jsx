@@ -94,7 +94,7 @@ export default function OfflineBanner() {
 
       {online && waiting && !syncing && (
         <button onClick={retry}
-          className="text-[11.5px] font-bold underline underline-offset-2 flex-shrink-0"
+          className="text-xs font-bold underline underline-offset-2 flex-shrink-0"
           style={{ color: tone.ink }}>
           Retry now
         </button>

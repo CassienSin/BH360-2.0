@@ -186,7 +186,7 @@ export default function AIAssistant() {
           background: scrolled ? 'rgba(255,255,255,0.85)' : 'white',
           backdropFilter: scrolled ? 'blur(20px)' : 'none',
           boxShadow: '0 2px 12px rgba(91,84,232,0.08)',
-          borderBottom: '1px solid #f0effe',
+          borderBottom: '1px solid var(--brand-soft)',
         }}
       >
         <button
@@ -212,7 +212,7 @@ export default function AIAssistant() {
                 Online
               </span>
             </div>
-            <p className="text-xs text-gray-400 truncate">Your virtual barangay helper</p>
+            <p className="text-xs text-gray-500 truncate">Your virtual barangay helper</p>
           </div>
         </div>
 
@@ -273,7 +273,7 @@ export default function AIAssistant() {
               {msg.role === 'assistant' && (
                 <div
                   className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
                 >
                   <Bot size={15} className="text-white" />
                 </div>
@@ -308,7 +308,7 @@ export default function AIAssistant() {
               {msg.role === 'user' && (
                 <div
                   className="w-9 h-9 rounded-2xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
                 >
                   You
                 </div>
@@ -321,7 +321,7 @@ export default function AIAssistant() {
             <div className="flex gap-2.5 justify-start fade-up">
               <div
                 className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
               >
                 <Bot size={15} className="text-white" />
               </div>
@@ -330,11 +330,11 @@ export default function AIAssistant() {
                 style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderTopLeftRadius: '6px' }}
               >
                 <div className="flex gap-1.5">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#5B54E8', animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#7C75F0', animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
                   <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
                 </div>
-                <span className="text-gray-400 text-xs">Thinking...</span>
+                <span className="text-gray-500 text-xs">Thinking...</span>
               </div>
             </div>
           )}
@@ -381,7 +381,7 @@ export default function AIAssistant() {
               className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:scale-105 disabled:hover:scale-100"
               style={{
                 background: input.trim() ? 'linear-gradient(135deg, #fff, #f5f4ff)' : 'rgba(255,255,255,0.3)',
-                color: '#5B54E8',
+                color: 'var(--brand)',
                 boxShadow: input.trim() ? '0 4px 16px rgba(255,255,255,0.4)' : 'none',
               }}
             >
@@ -393,7 +393,7 @@ export default function AIAssistant() {
           <div className="flex items-center justify-end mt-2 px-2">
             <p className="text-xs text-purple-200 opacity-60 hidden sm:block">
               {input.length}/{MAX_INPUT_LENGTH} · Press{' '}
-              <kbd className="px-1.5 py-0.5 rounded text-[10px]" style={{ background: 'rgba(255,255,255,0.15)' }}>
+              <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'rgba(255,255,255,0.15)' }}>
                 Enter
               </kbd>{' '}
               to send

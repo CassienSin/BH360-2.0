@@ -288,7 +288,7 @@ export default function NewAnnouncement() {
           <div
             className="w-20 h-20 mx-auto mb-5 rounded-3xl flex items-center justify-center relative"
             style={{
-              background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
+              background: 'linear-gradient(135deg, var(--brand), var(--brand-light))',
               boxShadow: '0 8px 32px rgba(91,84,232,0.4)',
               animation: 'float 2s ease-in-out infinite',
             }}
@@ -302,12 +302,12 @@ export default function NewAnnouncement() {
           </p>
 
           {/* Countdown progress bar */}
-          <div className="relative h-1.5 rounded-full overflow-hidden mt-4 mb-5" style={{ background: '#f0effe' }}>
+          <div className="relative h-1.5 rounded-full overflow-hidden mt-4 mb-5" style={{ background: 'var(--brand-soft)' }}>
             <div
               className="absolute inset-y-0 left-0 rounded-full"
               style={{
                 width: `${(undoSecondsLeft / UNDO_SECONDS) * 100}%`,
-                background: 'linear-gradient(90deg, #5B54E8, #7C75F0)',
+                background: 'linear-gradient(90deg, var(--brand), var(--brand-light))',
                 transition: 'width 1s linear',
               }}
             />
@@ -329,13 +329,13 @@ export default function NewAnnouncement() {
                 router.push('/official')
               }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
-              style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
             >
               Done
             </button>
           </div>
 
-          <p className="text-xs text-gray-400 mt-4">
+          <p className="text-xs text-gray-500 mt-4">
             Leaving this page won&apos;t cancel the announcement — it publishes automatically.
           </p>
         </div>
@@ -432,14 +432,14 @@ export default function NewAnnouncement() {
                 </label>
                 <span
                   className={`text-xs font-bold ${
-                    form.title.length > 120 ? 'text-orange-500' : titleValid ? 'text-emerald-500' : 'text-gray-300'
+                    form.title.length > 120 ? 'text-orange-500' : titleValid ? 'text-emerald-500' : 'text-gray-500'
                   }`}
                 >
                   {form.title.length}/{TITLE_MAX}
                 </span>
               </div>
               <div className="relative">
-                <Bell size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                <Bell size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input
                   id="announcement-title"
                   value={form.title}
@@ -470,14 +470,14 @@ export default function NewAnnouncement() {
                 </label>
                 <span
                   className={`text-xs font-bold ${
-                    form.content.length > 1800 ? 'text-orange-500' : contentValid ? 'text-emerald-500' : 'text-gray-300'
+                    form.content.length > 1800 ? 'text-orange-500' : contentValid ? 'text-emerald-500' : 'text-gray-500'
                   }`}
                 >
                   {form.content.length}/{CONTENT_MAX}
                 </span>
               </div>
               <div className="relative">
-                <AlignLeft size={15} className="absolute left-3.5 top-3.5 text-gray-400" aria-hidden="true" />
+                <AlignLeft size={15} className="absolute left-3.5 top-3.5 text-gray-500" aria-hidden="true" />
                 <textarea
                   id="announcement-content"
                   value={form.content}
@@ -517,16 +517,16 @@ export default function NewAnnouncement() {
             {/* Keep the empty preview visible only on desktop. */}
               <div className={`fade-up ${styles.preview} ${!isDirty ? styles.emptyPreview : ""}`}>
                 <div className="flex items-center gap-2 mb-2">
-                  <Eye size={11} style={{ color: '#5B54E8' }} />
-                  <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>
+                  <Eye size={11} style={{ color: 'var(--brand)' }} />
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
                     Preview (as residents will see)
                   </p>
                 </div>
-                <div className={`rounded-2xl p-4 ${styles.previewCard}`} style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                <div className={`rounded-2xl p-4 ${styles.previewCard}`} style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
                   <div className="flex items-start gap-3">
                     <div
                       className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
                     >
                       <Bell size={16} className="text-white" />
                     </div>
@@ -537,7 +537,7 @@ export default function NewAnnouncement() {
                       <p className="text-gray-500 text-sm mt-1 leading-relaxed whitespace-pre-wrap break-words">
                         {form.content || 'Your detailed content will appear here as residents will see it...'}
                       </p>
-                      <p className="text-gray-300 text-xs mt-2">
+                      <p className="text-gray-500 text-xs mt-2">
                         {posterName ? `${posterName} · ` : ''}just now
                       </p>
                     </div>
@@ -548,7 +548,7 @@ export default function NewAnnouncement() {
             {/* Submit button */}
             <AppButton type="submit" busy={loading} busyLabel="Posting announcement…" disabled={loading || !formValid} className={`w-full ${styles.submit}`}><Megaphone size={16} />Post Announcement</AppButton>
 
-            <p className={`text-xs text-gray-400 text-center ${styles.publishNote}`}>
+            <p className={`text-xs text-gray-500 text-center ${styles.publishNote}`}>
               📢 Residents will see this after the 60-second undo window.
             </p>
           </form>
@@ -557,7 +557,7 @@ export default function NewAnnouncement() {
         {/* Best practices */}
         <div className={`white-card p-5 fade-up-3 ${styles.practices}`}>
           <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <Info size={14} style={{ color: '#5B54E8' }} /> Best Practices
+            <Info size={14} style={{ color: 'var(--brand)' }} /> Best Practices
           </h3>
           <div className="space-y-2.5">
             {BEST_PRACTICES.map((tip, i) => (

@@ -9,7 +9,7 @@
 .liveOn .liveDot { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.18); }
 .night {
   display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 14px;
-  border: 1px solid #e8e3ff; background: transparent; color: #514765; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--brand-border); background: transparent; color: #514765; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
 }
 .night[aria-pressed='true'] { background: #292338; border-color: #292338; color: #fff; }
 .loading { flex: 1; display: grid; place-items: center; }

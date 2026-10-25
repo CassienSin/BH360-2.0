@@ -328,6 +328,10 @@ export default function TanodDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  // Sections share one scrolling <main>; start each one at the top.
+  const mainRef = useRef(null)
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [activeSection])
+
   /**
    * Record having seen an assignment, or having reached it.
    *
@@ -610,11 +614,11 @@ export default function TanodDashboard() {
           onSearchResultClick={() => setActiveSection('active')}
         />
 
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <NotificationBanner />
 
           {!loading && profile && (
-            <div className="max-w-2xl mx-auto mb-4 fade-up">
+            <div className={`${activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto mb-4 fade-up`}>
               <DutyToggle profile={profile} />
             </div>
           )}
@@ -698,7 +702,7 @@ export default function TanodDashboard() {
                 <div className="white-card p-8 text-center">
                   <CheckCircle size={40} className="mx-auto text-emerald-300 mb-3" />
                   <p className="font-semibold text-gray-700">All clear!</p>
-                  <p className="text-gray-400 text-sm mt-1">No active assignments right now.</p>
+                  <p className="text-gray-500 text-sm mt-1">No active assignments right now.</p>
                 </div>
               )}
             </div>
@@ -710,7 +714,7 @@ export default function TanodDashboard() {
                 <div className="white-card p-10 text-center">
                   <CheckCircle size={40} className="mx-auto text-emerald-300 mb-3" />
                   <p className="font-semibold text-gray-700">All clear!</p>
-                  <p className="text-gray-400 text-sm mt-1">No active assignments right now.</p>
+                  <p className="text-gray-500 text-sm mt-1">No active assignments right now.</p>
                 </div>
               )}
               {assignedIncidents.map(inc => {
@@ -747,7 +751,7 @@ export default function TanodDashboard() {
                             </span>
                           )}
                           <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                            style={{ background: '#f0effe', color: '#5B54E8' }}>
+                            style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                             {RESPONSE_STEPS[stage]}
                           </span>
                           {/* The same aging signal the officials' queue
@@ -765,10 +769,10 @@ export default function TanodDashboard() {
                           )}
                         </div>
                         <p className="text-gray-500 text-sm mt-1">{inc.description}</p>
-                        <div className="flex items-center gap-1 mt-2 text-gray-400 text-xs">
+                        <div className="flex items-center gap-1 mt-2 text-gray-500 text-xs">
                           <MapPin size={12} /><span>{inc.location}</span>
                         </div>
-                        <div className="flex items-center gap-1 mt-1 text-gray-400 text-xs" title={fullDate(inc.created_at)}>
+                        <div className="flex items-center gap-1 mt-1 text-gray-500 text-xs" title={fullDate(inc.created_at)}>
                           <Clock size={12} />
                           <span>Reported by {inc.profiles?.full_name || 'Unknown'} · {timeAgoLong(inc.created_at)}</span>
                         </div>
@@ -778,13 +782,13 @@ export default function TanodDashboard() {
                     <IncidentPhoto stored={inc.image_url} alt="Incident evidence"
                       className="block mb-3 rounded-2xl overflow-hidden"
                       imgClassName="w-full max-h-48 object-cover"
-                      style={{ border: '1px solid #f0effe' }} />
+                      style={{ border: '1px solid var(--brand-soft)' }} />
 
                     {hasCoords && (
                       <div className="mb-3 relative">
                         <MiniMap lat={inc.latitude} lng={inc.longitude} />
-                        <div className="absolute top-2 left-2 px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1"
-                          style={{ background: 'rgba(255,255,255,0.95)', color: '#5B54E8', backdropFilter: 'blur(10px)' }}>
+                        <div className="absolute top-2 left-2 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
+                          style={{ background: 'rgba(255,255,255,0.95)', color: 'var(--brand)', backdropFilter: 'blur(10px)' }}>
                           <MapPin size={10} /> Reported Location
                         </div>
                       </div>
@@ -798,7 +802,7 @@ export default function TanodDashboard() {
                             onClick={() => setDirectionsMenu(directionsMenu === inc.id ? null : inc.id)}
                             aria-expanded={directionsMenu === inc.id}
                             className="w-full py-2.5 rounded-2xl text-xs font-bold transition-all hover:scale-105 flex items-center justify-center gap-1.5"
-                            style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                             <Navigation size={12} /> Navigate
                           </button>
                           {directionsMenu === inc.id && (
@@ -806,7 +810,7 @@ export default function TanodDashboard() {
                               {/* Invisible backdrop: click anywhere else to close */}
                               <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setDirectionsMenu(null)} />
                               <div className="absolute bottom-full left-0 right-0 mb-2 rounded-2xl overflow-hidden fade-up"
-                                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid #e8e3ff', zIndex: 9999 }}>
+                                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)', zIndex: 9999 }}>
                                 <button onClick={() => openDirections('google', inc.latitude, inc.longitude)}
                                   className="w-full px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors">
                                   🗺️ Google Maps
@@ -853,7 +857,7 @@ export default function TanodDashboard() {
                           active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
                         style={{
                           background: action.key === 'acknowledge'
-                            ? 'linear-gradient(135deg, #5B54E8, #7C75F0)'
+                            ? 'linear-gradient(135deg, var(--brand), var(--brand-light))'
                             : 'linear-gradient(135deg, #f59e0b, #d97706)',
                           boxShadow: action.key === 'acknowledge'
                             ? '0 8px 24px rgba(91,84,232,0.35)'
@@ -870,7 +874,7 @@ export default function TanodDashboard() {
                       {RESPONSE_STEPS.map((label, i) => {
                         const state = i < stage ? 'done' : i === stage ? 'now' : 'todo'
                         const dot = state === 'done' ? '#10b981' : state === 'now' ? '#5B54E8' : '#e5e7eb'
-                        const ink = state === 'done' ? '#047857' : state === 'now' ? '#5B54E8' : '#9ca3af'
+                        const ink = state === 'done' ? '#047857' : state === 'now' ? '#5B54E8' : '#6b7280'
                         return (
                           <li key={label} className="contents">
                             {i > 0 && (
@@ -880,7 +884,7 @@ export default function TanodDashboard() {
                             <span className="flex items-center gap-1.5 flex-shrink-0">
                               <span className="w-2 h-2 rounded-full flex-shrink-0" aria-hidden="true"
                                 style={{ background: dot, ...(state === 'now' ? { boxShadow: '0 0 0 3px rgba(91,84,232,0.18)' } : {}) }} />
-                              <span className={`text-[10.5px] font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
+                              <span className={`text-xs font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
                                 style={{ color: ink }}>{label}</span>
                             </span>
                           </li>
@@ -895,7 +899,7 @@ export default function TanodDashboard() {
                 <div className="pt-1 pb-2 text-center">
                   <button onClick={loadMore} disabled={loadingMore}
                     className="px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
-                    style={{ background: 'white', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    style={{ background: 'white', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                     {loadingMore ? 'Loading…' : 'Load older assignments'}
                   </button>
                 </div>
@@ -907,7 +911,7 @@ export default function TanodDashboard() {
             <div className="space-y-3 fade-up max-w-2xl mx-auto">
               {resolvedIncidents.length === 0 && (
                 <div className="white-card p-10 text-center">
-                  <p className="text-gray-400 text-sm">No resolved incidents yet.</p>
+                  <p className="text-gray-500 text-sm">No resolved incidents yet.</p>
                 </div>
               )}
               <RecordGroup label="Resolved" count={resolvedIncidents.length}>
@@ -936,7 +940,7 @@ export default function TanodDashboard() {
                           <FileText size={12} className="text-emerald-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
                           <div className="min-w-0 flex-1">
                             {inc.resolution_notes && (
-                              <p className="text-[11.5px] text-emerald-900 leading-relaxed">{inc.resolution_notes}</p>
+                              <p className="text-xs text-emerald-900 leading-relaxed">{inc.resolution_notes}</p>
                             )}
                             <IncidentPhoto stored={inc.resolution_image_url} alt="Resolution proof"
                               className="block mt-2 rounded-lg overflow-hidden"
@@ -956,9 +960,9 @@ export default function TanodDashboard() {
             <div className="space-y-6 fade-up max-w-3xl mx-auto">
               <div className="white-card p-6 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>Performance Dashboard</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Performance Dashboard</p>
                   <h2 className="text-2xl font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }}>Your Impact 🏆</h2>
-                  <p className="text-gray-400 text-sm mt-1">Keep up the great work, {profile?.full_name?.split(' ')[0]}!</p>
+                  <p className="text-gray-500 text-sm mt-1">Keep up the great work, {profile?.full_name?.split(' ')[0]}!</p>
                 </div>
                 <div className="w-16 h-16 rounded-3xl flex items-center justify-center"
                   style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 24px rgba(34,197,94,0.4)' }}>
@@ -984,7 +988,7 @@ export default function TanodDashboard() {
                     </div>
                     <p className="text-2xl font-bold tabular-nums" style={{ color }}>{value}</p>
                     <p className="text-xs font-semibold text-gray-700 mt-1">{label}</p>
-                    <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>{note}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>{note}</p>
                   </div>
                 ))}
               </div>
@@ -993,16 +997,16 @@ export default function TanodDashboard() {
                   before because neither was being recorded. */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="white-card p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Travel time</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Travel time</p>
                   <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.travel.label || 'N/A'}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
                     {stats.travel.sample ? `acknowledged to on scene, over ${stats.travel.sample}` : 'no arrivals recorded yet'}
                   </p>
                 </div>
                 <div className="white-card p-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Start to finish</p>
+                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Start to finish</p>
                   <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.resolve.label || 'N/A'}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#9ca3af' }}>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
                     {stats.resolve.sample ? `reported to resolved, over ${stats.resolve.sample}` : 'nothing resolved yet'}
                   </p>
                 </div>
@@ -1013,7 +1017,7 @@ export default function TanodDashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="font-bold text-gray-800 text-sm">Resolution Rate</h3>
-                    <p className="text-xs text-gray-400">Percentage of incidents you&apos;ve resolved</p>
+                    <p className="text-xs text-gray-500">Percentage of incidents you&apos;ve resolved</p>
                   </div>
                   <p className="text-3xl font-black" style={{ color: stats.resolutionRate >= 80 ? '#22c55e' : stats.resolutionRate >= 50 ? '#f97316' : '#ef4444' }}>
                     {stats.resolutionRate}%
@@ -1031,7 +1035,7 @@ export default function TanodDashboard() {
                     }} />
                 </div>
                 <div className="flex items-center gap-2 mt-3 text-xs">
-                  <span className="text-gray-400">{resolvedIncidents.length} of {stats.totalAssigned} incidents resolved</span>
+                  <span className="text-gray-500">{resolvedIncidents.length} of {stats.totalAssigned} incidents resolved</span>
                 </div>
               </div>
 
@@ -1049,9 +1053,9 @@ export default function TanodDashboard() {
                       <div key={badge.title} className={`white-card p-4 text-center transition-all ${unlocked ? '' : 'opacity-60'}`}>
                         <div className={`text-3xl mb-2 ${unlocked ? '' : 'grayscale opacity-60'}`}>{badge.icon}</div>
                         <p className="text-xs font-bold text-gray-800">{badge.title}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{badge.desc}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{badge.desc}</p>
                         {unlocked ? (
-                          <div className="mt-2 inline-block px-2 py-0.5 rounded-full text-[9px] font-bold"
+                          <div className="mt-2 inline-block px-2 py-0.5 rounded-full text-xs font-bold"
                             style={{ background: '#f0fdf4', color: '#16a34a' }}>
                             UNLOCKED
                           </div>
@@ -1061,7 +1065,7 @@ export default function TanodDashboard() {
                               <div className="absolute inset-y-0 left-0 rounded-full"
                                 style={{ width: `${progress}%`, background: '#a78bfa' }} />
                             </div>
-                            <p className="text-[9px] text-gray-400 mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                               {badge.type === 'count' ? `${current}/${badge.target}` : `${current}% of ${badge.target}%`}
                             </p>
                           </div>
@@ -1110,9 +1114,9 @@ export default function TanodDashboard() {
                               {inc.rating_feedback ? (
                                 <p className="text-xs text-gray-500 italic">&quot;{inc.rating_feedback}&quot;</p>
                               ) : (
-                                <p className="text-xs text-gray-300">No written feedback</p>
+                                <p className="text-xs text-gray-500">No written feedback</p>
                               )}
-                              <p className="text-[10px] text-gray-400 mt-1">
+                              <p className="text-xs text-gray-500 mt-1">
                                 From {inc.profiles?.full_name || 'a resident'} · {timeAgo(inc.rated_at || inc.resolved_at)}
                               </p>
                             </div>

@@ -618,16 +618,16 @@ export default function AdminPanel() {
 
       {/* Premium Header */}
       <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
+        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}>
 
         {/* LEFT — Back & Brand */}
         <button onClick={() => router.push('/')}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
           title="Back to home">
           <ArrowLeft size={18} />
         </button>
 
-        <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} />
+        <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
 
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="relative flex-shrink-0">
@@ -652,7 +652,7 @@ export default function AdminPanel() {
               <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
                 style={{ background: 'linear-gradient(135deg, #1f2937, #4b5563)' }}>
                 <Sparkles size={9} className="text-yellow-300" />
-                <span className="text-[10px] font-black text-white tracking-wider">ROOT</span>
+                <span className="text-xs font-black text-white tracking-wider">ROOT</span>
               </div>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -669,7 +669,7 @@ export default function AdminPanel() {
 
           {/* Refresh button */}
           <button onClick={refreshData} disabled={refreshing}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
             title="Refresh data">
             <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -680,8 +680,8 @@ export default function AdminPanel() {
               <button onClick={() => setActiveTab('applications')}
                 className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
                 title={`${pendingCount} pending applications`}>
-                <Bell size={15} className="text-gray-400" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                <Bell size={15} className="text-gray-500" />
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
                   style={{ background: '#ef4444', boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}>
                   {pendingCount}
                 </span>
@@ -691,7 +691,7 @@ export default function AdminPanel() {
           )}
 
           {/* Divider */}
-          <div className="h-9 w-px hidden sm:block" style={{ background: '#f0effe' }} />
+          <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
 
           {/* Logout button */}
           <button onClick={() => setLogoutConfirm(true)}
@@ -714,7 +714,7 @@ export default function AdminPanel() {
                 style={{ background: '#fff7ed' }}>
                 <Inbox size={14} className="text-orange-500" />
               </div>
-              <p className="text-xs text-gray-400">Pending</p>
+              <p className="text-xs text-gray-500">Pending</p>
             </div>
             <p className="text-2xl font-black" style={{ color: '#f97316' }}>{pendingCount}</p>
             <p className="text-xs text-gray-500 mt-0.5">Applications</p>
@@ -726,7 +726,7 @@ export default function AdminPanel() {
                 style={{ background: '#f0fdf4' }}>
                 <CheckCircle size={14} className="text-emerald-500" />
               </div>
-              <p className="text-xs text-gray-400">Approved</p>
+              <p className="text-xs text-gray-500">Approved</p>
             </div>
             <p className="text-2xl font-black" style={{ color: '#22c55e' }}>{approvedCount}</p>
             <p className="text-xs text-gray-500 mt-0.5">Total approved</p>
@@ -735,12 +735,12 @@ export default function AdminPanel() {
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: '#f0effe' }}>
-                <Building2 size={14} style={{ color: '#5B54E8' }} />
+                style={{ background: 'var(--brand-soft)' }}>
+                <Building2 size={14} style={{ color: 'var(--brand)' }} />
               </div>
-              <p className="text-xs text-gray-400">Active</p>
+              <p className="text-xs text-gray-500">Active</p>
             </div>
-            <p className="text-2xl font-black" style={{ color: '#5B54E8' }}>{totalBarangaysWithUsers}</p>
+            <p className="text-2xl font-black" style={{ color: 'var(--brand)' }}>{totalBarangaysWithUsers}</p>
             <p className="text-xs text-gray-500 mt-0.5">Barangays w/ users</p>
           </div>
 
@@ -750,7 +750,7 @@ export default function AdminPanel() {
                 style={{ background: '#eff6ff' }}>
                 <Users size={14} className="text-blue-500" />
               </div>
-              <p className="text-xs text-gray-400">Total Users</p>
+              <p className="text-xs text-gray-500">Total Users</p>
             </div>
             <p className="text-2xl font-black" style={{ color: '#3b82f6' }}>{users.length}{users.length >= 100 ? '+' : ''}</p>
             <p className="text-xs text-gray-500 mt-0.5">Registered</p>
@@ -766,7 +766,7 @@ export default function AdminPanel() {
                 style={{ background: '#fef2f2' }}>
                 <AlertTriangle size={14} className="text-red-500" />
               </div>
-              <p className="text-xs text-gray-400">Incidents</p>
+              <p className="text-xs text-gray-500">Incidents</p>
             </div>
             <p className="text-2xl font-black" style={{ color: '#ef4444' }}>
               {incidentStats.pending}
@@ -790,14 +790,14 @@ export default function AdminPanel() {
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap"
               style={{
                 background: activeTab === value ? 'white' : 'rgba(255,255,255,0.15)',
-                color: activeTab === value ? '#5B54E8' : 'white',
+                color: activeTab === value ? 'var(--brand)' : 'white',
                 boxShadow: activeTab === value ? '0 4px 16px rgba(91,84,232,0.15)' : 'none',
               }}>
               <Icon size={13} /> {label}
               {count > 0 && (
-                <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full font-bold"
+                <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold"
                   style={{
-                    background: activeTab === value ? '#5B54E8' : 'rgba(255,255,255,0.25)',
+                    background: activeTab === value ? 'var(--brand)' : 'rgba(255,255,255,0.25)',
                     color: 'white',
                   }}>
                   {count}{countLabel ? ` ${countLabel}` : ''}
@@ -814,7 +814,7 @@ export default function AdminPanel() {
             <div className="white-card w-full min-w-0 overflow-hidden p-4">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input value={search} onChange={e => setSearch(e.target.value)}
                     placeholder="Search by name, email, or barangay..."
                     className="input-field w-full rounded-2xl pl-10 pr-4 py-2.5 text-sm text-gray-800" />
@@ -829,9 +829,9 @@ export default function AdminPanel() {
                     <button key={f.value} onClick={() => setStatusFilter(f.value)}
                       className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
                       style={{
-                        background: statusFilter === f.value ? f.color : '#fafaff',
+                        background: statusFilter === f.value ? f.color : 'var(--app-surface)',
                         color: statusFilter === f.value ? 'white' : '#6b7280',
-                        border: statusFilter === f.value ? 'none' : '1px solid #f0effe',
+                        border: statusFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
                       }}>
                       {f.label}
                     </button>
@@ -844,7 +844,7 @@ export default function AdminPanel() {
             {filteredApps.length === 0 ? (
               <div className="white-card p-12 text-center">
                 <Inbox size={36} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-400 text-sm">No applications match your filters</p>
+                <p className="text-gray-500 text-sm">No applications match your filters</p>
               </div>
             ) : (
               filteredApps.map(app => (
@@ -852,7 +852,7 @@ export default function AdminPanel() {
                   <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                         {app.full_name?.[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -866,8 +866,8 @@ export default function AdminPanel() {
                             {app.status}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5">{app.position}</p>
-                        <p className="text-xs text-gray-300 mt-1" title={fullDate(app.created_at)}>
+                        <p className="text-xs text-gray-500 mt-0.5">{app.position}</p>
+                        <p className="text-xs text-gray-500 mt-1" title={fullDate(app.created_at)}>
                           Applied {timeAgo(app.created_at)}
                         </p>
                       </div>
@@ -876,27 +876,27 @@ export default function AdminPanel() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-                      <Mail size={12} className="text-gray-400 flex-shrink-0" />
+                      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+                      <Mail size={12} className="text-gray-500 flex-shrink-0" />
                       <span className="text-gray-700 truncate">{app.email}</span>
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-                      <Phone size={12} className="text-gray-400 flex-shrink-0" />
+                      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+                      <Phone size={12} className="text-gray-500 flex-shrink-0" />
                       <span className="text-gray-700 truncate">{app.phone}</span>
                     </div>
                     <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-                      <MapPin size={12} style={{ color: '#5B54E8' }} className="flex-shrink-0" />
-                      <span className="min-w-0 break-words font-semibold" style={{ color: '#5B54E8' }}>
+                      style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+                      <MapPin size={12} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />
+                      <span className="min-w-0 break-words font-semibold" style={{ color: 'var(--brand)' }}>
                         {app.barangays?.name}, {app.barangays?.city}, {app.barangays?.province}
                       </span>
                     </div>
                   </div>
 
                   {app.message && (
-                    <div className="p-3 rounded-xl mb-3" style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-                      <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                    <div className="p-3 rounded-xl mb-3" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+                      <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
                         <MessageSquare size={10} /> Message
                       </p>
                       <p className="text-xs text-gray-700 italic">&quot;{app.message}&quot;</p>
@@ -908,7 +908,7 @@ export default function AdminPanel() {
                       style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
                       <CheckCircle size={14} className="text-emerald-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Generated Code</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Generated Code</p>
                         <p className="font-mono text-sm font-bold text-emerald-900">{app.generated_code}</p>
                       </div>
                       <button onClick={() => copyToClipboard(app.generated_code)}
@@ -923,7 +923,7 @@ export default function AdminPanel() {
                       style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
                       <XCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">Rejection Reason</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-red-700">Rejection Reason</p>
                         <p className="text-xs text-red-900 mt-0.5">{app.rejection_reason}</p>
                       </div>
                     </div>
@@ -962,7 +962,7 @@ export default function AdminPanel() {
             <div className="white-card flex w-full min-w-0 flex-wrap gap-2 p-2" role="tablist" aria-label="Incident views">
               <button role="tab" aria-selected={incidentView === 'list'} onClick={() => setIncidentView('list')}
                 className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
-                style={{ background: incidentView === 'list' ? '#5B54E8' : '#fafaff', color: incidentView === 'list' ? 'white' : '#6b7280' }}>
+                style={{ background: incidentView === 'list' ? 'var(--brand)' : 'var(--app-surface)', color: incidentView === 'list' ? 'white' : '#6b7280' }}>
                 <AlertTriangle size={14} /> Incident List
               </button>
               <button role="tab" aria-selected={incidentView === 'analytics'} onClick={() => {
@@ -970,7 +970,7 @@ export default function AdminPanel() {
                 loadIncidentAnalytics()
               }}
                 className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
-                style={{ background: incidentView === 'analytics' ? '#5B54E8' : '#fafaff', color: incidentView === 'analytics' ? 'white' : '#6b7280' }}>
+                style={{ background: incidentView === 'analytics' ? 'var(--brand)' : 'var(--app-surface)', color: incidentView === 'analytics' ? 'white' : '#6b7280' }}>
                 <BarChart3 size={14} /> Barangay Analytics
               </button>
             </div>
@@ -985,7 +985,7 @@ export default function AdminPanel() {
                 { label: 'Past response time', value: incidentStats.overdue, color: '#b45309', sub: 'Pending too long' },
               ].map(stat => (
                 <div key={stat.label} className="white-card p-4">
-                  <p className="text-xs text-gray-400">{stat.label}</p>
+                  <p className="text-xs text-gray-500">{stat.label}</p>
                   <p className="text-2xl font-black mt-1" style={{ color: stat.color }}>{stat.value}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{stat.sub}</p>
                 </div>
@@ -996,7 +996,7 @@ export default function AdminPanel() {
             <div className="white-card p-4 space-y-3">
               <div className="flex flex-col sm:flex-row gap-3">
                 <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input value={incidentSearch} onChange={e => setIncidentSearch(e.target.value)}
                     type="search"
                     aria-label="Search incidents"
@@ -1004,7 +1004,7 @@ export default function AdminPanel() {
                     className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
                   {incidentSearch && (
                     <button onClick={() => setIncidentSearch('')} aria-label="Clear search"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
                       <X size={13} />
                     </button>
                   )}
@@ -1033,15 +1033,15 @@ export default function AdminPanel() {
                       aria-pressed={incidentStatusFilter === f.value}
                       className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
                       style={{
-                        background: incidentStatusFilter === f.value ? f.color : '#fafaff',
+                        background: incidentStatusFilter === f.value ? f.color : 'var(--app-surface)',
                         color: incidentStatusFilter === f.value ? 'white' : '#6b7280',
-                        border: incidentStatusFilter === f.value ? 'none' : '1px solid #f0effe',
+                        border: incidentStatusFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
                       }}>
                       {f.label}
                     </button>
                   ))}
                 </div>
-                <div className="w-px self-stretch hidden sm:block" style={{ background: '#f0effe' }} />
+                <div className="w-px self-stretch hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
                 <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by priority">
                   {['all', 'Critical', 'High', 'Medium', 'Low'].map(level => {
                     const style = PRIORITY_STYLE[level]
@@ -1052,9 +1052,9 @@ export default function AdminPanel() {
                         aria-pressed={active}
                         className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
                         style={{
-                          background: active ? color : '#fafaff',
+                          background: active ? color : 'var(--app-surface)',
                           color: active ? 'white' : '#6b7280',
-                          border: active ? 'none' : '1px solid #f0effe',
+                          border: active ? 'none' : '1px solid var(--brand-soft)',
                         }}>
                         {style ? `${style.icon} ${style.label}` : 'All priorities'}
                       </button>
@@ -1068,7 +1068,7 @@ export default function AdminPanel() {
             {filteredIncidents.length === 0 ? (
               <div className="white-card p-12 text-center">
                 <AlertTriangle size={36} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-400 text-sm">
+                <p className="text-gray-500 text-sm">
                   {incidents.length === 0
                     ? 'No incidents have been reported on the platform yet.'
                     : 'No incidents match your filters'}
@@ -1077,7 +1077,7 @@ export default function AdminPanel() {
                   <button onClick={() => {
                     setIncidentSearch(''); setIncidentStatusFilter('all')
                     setIncidentPriorityFilter('all'); setIncidentBarangayFilter('all')
-                  }} className="mt-2 text-xs font-semibold" style={{ color: '#5B54E8' }}>
+                  }} className="mt-2 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
                     Clear filters →
                   </button>
                 )}
@@ -1106,16 +1106,16 @@ export default function AdminPanel() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <h3 className="font-bold text-gray-800 text-sm truncate">{inc.title}</h3>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                                 style={{ background: pri.bg, color: pri.color }}>
                                 {pri.icon} {pri.label}
                               </span>
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                                 style={{ background: st.bg, color: st.color }}>
                                 {st.label}
                               </span>
                               {standing.aged && standingStyle && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                                <span className="text-xs px-2 py-0.5 rounded-full font-bold"
                                   style={{ background: standingStyle.bg, color: standingStyle.color, border: `1px solid ${standingStyle.border}` }}>
                                   {standing.label}
                                 </span>
@@ -1125,11 +1125,11 @@ export default function AdminPanel() {
                             {/* The cross-barangay line — this is what the
                                 barangay-scoped dashboards cannot show. */}
                             <div className="flex items-center gap-1.5 mt-1.5">
-                              <Building2 size={11} className="text-gray-400 flex-shrink-0" />
-                              <p className="text-xs font-semibold truncate" style={{ color: '#5B54E8' }}>
+                              <Building2 size={11} className="text-gray-500 flex-shrink-0" />
+                              <p className="text-xs font-semibold truncate" style={{ color: 'var(--brand)' }}>
                                 {inc.barangays?.name || 'Unassigned barangay'}
                                 {inc.barangays?.city && (
-                                  <span className="font-normal text-gray-400">
+                                  <span className="font-normal text-gray-500">
                                     {' · '}{inc.barangays.city}, {inc.barangays.province}
                                   </span>
                                 )}
@@ -1137,20 +1137,20 @@ export default function AdminPanel() {
                             </div>
 
                             <div className="flex items-center gap-1.5 mt-1">
-                              <MapPin size={11} className="text-gray-400 flex-shrink-0" />
+                              <MapPin size={11} className="text-gray-500 flex-shrink-0" />
                               <p className="text-xs text-gray-500 truncate">{inc.location}</p>
                             </div>
 
                             {basis?.law && (
                               <div className="flex items-center gap-1.5 mt-1">
-                                <Scale size={11} className="flex-shrink-0" style={{ color: '#5B54E8' }} />
-                                <p className="text-[11px] text-gray-500 truncate">
+                                <Scale size={11} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
+                                <p className="text-xs text-gray-500 truncate">
                                   {inc.legal_basis || `${basis.law}${basis.sections ? `, ${basis.sections}` : ''} — ${basis.lawTitle}`}
                                 </p>
                               </div>
                             )}
 
-                            <p className="text-[11px] text-gray-400 mt-1.5" title={fullDate(inc.created_at)}>
+                            <p className="text-xs text-gray-500 mt-1.5" title={fullDate(inc.created_at)}>
                               Reported {timeAgo(inc.created_at)}
                               {inc.profiles?.full_name && ` by ${inc.profiles.full_name}`}
                             </p>
@@ -1171,7 +1171,7 @@ export default function AdminPanel() {
                   </div>
                   <button onClick={() => loadIncidentAnalytics(true)} disabled={loadingIncidentAnalytics}
                     className="inline-flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold disabled:opacity-60"
-                    style={{ color: '#5B54E8' }}>
+                    style={{ color: 'var(--brand)' }}>
                     <RefreshCw size={13} className={loadingIncidentAnalytics ? 'animate-spin' : ''} />
                     Refresh analytics
                   </button>
@@ -1179,7 +1179,7 @@ export default function AdminPanel() {
 
                 {loadingIncidentAnalytics ? (
                   <div className="white-card flex items-center justify-center gap-3 p-12 text-sm text-gray-500">
-                    <Loader2 size={18} className="animate-spin" style={{ color: '#5B54E8' }} />
+                    <Loader2 size={18} className="animate-spin" style={{ color: 'var(--brand)' }} />
                     Loading all incident records…
                   </div>
                 ) : incidentAnalyticsError ? (
@@ -1187,7 +1187,7 @@ export default function AdminPanel() {
                     <AlertTriangle size={28} className="mx-auto mb-2 text-red-500" />
                     <p className="text-sm font-semibold text-gray-700">Analytics could not be loaded</p>
                     <p className="mt-1 text-xs text-gray-500">{incidentAnalyticsError}</p>
-                    <button onClick={() => loadIncidentAnalytics(true)} className="mt-3 rounded-xl px-4 py-2 text-xs font-bold text-white" style={{ background: '#5B54E8' }}>
+                    <button onClick={() => loadIncidentAnalytics(true)} className="mt-3 rounded-xl px-4 py-2 text-xs font-bold text-white" style={{ background: 'var(--brand)' }}>
                       Try again
                     </button>
                   </div>
@@ -1202,7 +1202,7 @@ export default function AdminPanel() {
                         { label: 'Critical open', value: incidentAnalytics.critical, color: '#dc2626' },
                       ].map(stat => (
                         <div key={stat.label} className="white-card min-w-0 p-4">
-                          <p className="text-xs text-gray-400">{stat.label}</p>
+                          <p className="text-xs text-gray-500">{stat.label}</p>
                           <p className="mt-1 text-2xl font-black" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                       ))}
@@ -1211,16 +1211,16 @@ export default function AdminPanel() {
                     <div className="grid min-w-0 gap-3 lg:grid-cols-2">
                       <section className="white-card min-w-0 p-5">
                         <h3 className="font-bold text-gray-800">Reports by month</h3>
-                        <p className="mb-4 mt-1 text-xs text-gray-400">Created during the latest six calendar months</p>
+                        <p className="mb-4 mt-1 text-xs text-gray-500">Created during the latest six calendar months</p>
                         <div className="flex h-36 items-end gap-2" role="img" aria-label="Incident reports by month for the latest six months">
                           {incidentAnalytics.monthly.map(month => {
                             const maximum = Math.max(1, ...incidentAnalytics.monthly.map(item => item.total))
                             const height = month.total ? Math.max(8, (month.total / maximum) * 100) : 3
                             return (
                               <div key={month.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                                <span className="text-[10px] font-semibold text-gray-500">{month.total}</span>
-                                <div className="w-full rounded-t-lg" style={{ height: `${height}%`, minHeight: 3, background: 'linear-gradient(180deg, #7c75f0, #5B54E8)' }} />
-                                <span className="text-center text-[9px] text-gray-400">{month.label}</span>
+                                <span className="text-xs font-semibold text-gray-500">{month.total}</span>
+                                <div className="w-full rounded-t-lg" style={{ height: `${height}%`, minHeight: 3, background: 'linear-gradient(180deg, var(--brand-light), var(--brand))' }} />
+                                <span className="text-center text-[11px] text-gray-500">{month.label}</span>
                               </div>
                             )
                           })}
@@ -1229,8 +1229,8 @@ export default function AdminPanel() {
 
                       <section className="white-card min-w-0 p-5">
                         <h3 className="font-bold text-gray-800">Reports by category</h3>
-                        <p className="mb-4 mt-1 text-xs text-gray-400">All reported incident categories</p>
-                        {incidentAnalytics.categories.length === 0 ? <p className="text-sm text-gray-400">No category data yet.</p> : (
+                        <p className="mb-4 mt-1 text-xs text-gray-500">All reported incident categories</p>
+                        {incidentAnalytics.categories.length === 0 ? <p className="text-sm text-gray-500">No category data yet.</p> : (
                           <div className="space-y-3">
                             {incidentAnalytics.categories.slice(0, 8).map(category => (
                               <div key={category.name}>
@@ -1239,7 +1239,7 @@ export default function AdminPanel() {
                                   <span className="font-bold text-gray-700">{category.total}</span>
                                 </div>
                                 <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-                                  <div className="h-full rounded-full" style={{ width: `${Math.max(3, (category.total / incidentAnalytics.total) * 100)}%`, background: '#5B54E8' }} />
+                                  <div className="h-full rounded-full" style={{ width: `${Math.max(3, (category.total / incidentAnalytics.total) * 100)}%`, background: 'var(--brand)' }} />
                                 </div>
                               </div>
                             ))}
@@ -1250,11 +1250,11 @@ export default function AdminPanel() {
 
                     <section className="white-card min-w-0 overflow-hidden p-5">
                       <h3 className="font-bold text-gray-800">Incident reports by barangay</h3>
-                      <p className="mb-4 mt-1 text-xs text-gray-400">Every registered barangay, including those with no reports, ranked by total reports</p>
-                      {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-400">No incident reports yet.</p> : (
+                      <p className="mb-4 mt-1 text-xs text-gray-500">Every registered barangay, including those with no reports, ranked by total reports</p>
+                      {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-500">No incident reports yet.</p> : (
                         <div className="max-h-[480px] overflow-auto">
                           <table className="w-full min-w-[600px] text-left text-xs">
-                            <thead className="sticky top-0 bg-white text-gray-400">
+                            <thead className="sticky top-0 bg-white text-gray-500">
                               <tr>
                                 <th className="py-2 pr-3 font-semibold">Barangay</th>
                                 <th className="py-2 pr-3 font-semibold">City / Municipality</th>
@@ -1293,12 +1293,12 @@ export default function AdminPanel() {
             <div className="white-card p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: '#f0effe' }}>
-                  <KeyRound size={18} style={{ color: '#5B54E8' }} />
+                  style={{ background: 'var(--brand-soft)' }}>
+                  <KeyRound size={18} style={{ color: 'var(--brand)' }} />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800">Quick Code Generator</h3>
-                  <p className="text-xs text-gray-400">Generate invite codes for any barangay</p>
+                  <p className="text-xs text-gray-500">Generate invite codes for any barangay</p>
                 </div>
               </div>
 
@@ -1307,7 +1307,7 @@ export default function AdminPanel() {
                 <label className="block">
                   <span className="block text-xs font-semibold text-gray-500 mb-1.5">Barangay name</span>
                   <div className="relative">
-                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input value={barangaySearch} onChange={e => {
                       setBarangaySearch(e.target.value)
                       setBarangayPage(1)
@@ -1345,17 +1345,17 @@ export default function AdminPanel() {
                 </label>
               </div>
               <div className="flex items-center justify-between gap-3 mb-3 min-h-5">
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-500">
                   Fill in multiple fields to narrow the results. For example: Poblacion + Toledo + Cebu.
                 </p>
-                {searchingBarangays && <Loader2 size={15} className="text-gray-400 animate-spin flex-shrink-0" aria-label="Searching barangays" />}
+                {searchingBarangays && <Loader2 size={15} className="text-gray-500 animate-spin flex-shrink-0" aria-label="Searching barangays" />}
               </div>
 
               <div className="space-y-2">
                 {barangayResults.length === 0 && !searchingBarangays && (
                   <div className="text-center py-6">
                     <Building2 size={28} className="mx-auto text-gray-300 mb-2" />
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {barangaySearch || barangayCitySearch || barangayProvinceSearch
                         ? 'No barangays match these filters. Try removing a filter or checking the spelling.'
                         : 'No barangays found'}
@@ -1364,11 +1364,11 @@ export default function AdminPanel() {
                 )}
                 {barangayResults.map(b => (
                   <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
-                    <Building2 size={14} className="text-gray-400 flex-shrink-0" />
+                    style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
+                    <Building2 size={14} className="text-gray-500 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">{b.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{b.city}, {b.province}</p>
+                      <p className="text-xs text-gray-500 truncate">{b.city}, {b.province}</p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
                       <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
@@ -1389,16 +1389,16 @@ export default function AdminPanel() {
                     <button onClick={() => setBarangayPage(page => Math.max(1, page - 1))}
                       disabled={barangayPage === 1 || searchingBarangays}
                       className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
-                      style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                      style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                       ← Previous
                     </button>
-                    <p className="text-xs text-gray-400" aria-live="polite">
+                    <p className="text-xs text-gray-500" aria-live="polite">
                       Page {barangayPage}{searchingBarangays ? ' · Loading…' : ''}
                     </p>
                     <button onClick={() => setBarangayPage(page => page + 1)}
                       disabled={!barangayHasMore || searchingBarangays}
                       className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
-                      style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                      style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                       Next →
                     </button>
                   </div>
@@ -1411,23 +1411,23 @@ export default function AdminPanel() {
               <div className="space-y-2">
                 {inviteCodes.slice(0, 30).map(code => (
                   <div key={code.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{ background: code.used ? '#f9fafb' : '#f0effe', border: `1px solid ${code.used ? '#e5e7eb' : '#e8e3ff'}` }}>
+                    style={{ background: code.used ? '#f9fafb' : 'var(--brand-soft)', border: `1px solid ${code.used ? '#e5e7eb' : 'var(--brand-border)'}` }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-bold" style={{ color: code.used ? '#9ca3af' : '#5B54E8' }}>
+                        <span className="font-mono text-sm font-bold" style={{ color: code.used ? '#9ca3af' : 'var(--brand)' }}>
                           {code.code}
                         </span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
                           code.role === 'official' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
                         }`}>{code.role}</span>
-                        {code.used && <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">used</span>}
+                        {code.used && <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">used</span>}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{code.barangays?.name}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{code.barangays?.name}</p>
                     </div>
                     {!code.used && (
                       <button onClick={() => copyToClipboard(code.code)}
                         className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
-                        <Copy size={12} style={{ color: '#5B54E8' }} />
+                        <Copy size={12} style={{ color: 'var(--brand)' }} />
                       </button>
                     )}
                   </div>
@@ -1451,8 +1451,8 @@ export default function AdminPanel() {
 
                 return (
                   <div key={bId} className="flex items-center gap-3 px-3 py-3 rounded-xl"
-                    style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
-                    <Building2 size={16} style={{ color: '#5B54E8' }} className="flex-shrink-0" />
+                    style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
+                    <Building2 size={16} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-gray-800 truncate">{b?.name}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
@@ -1488,7 +1488,7 @@ export default function AdminPanel() {
                       <Users size={16} style={{ color: rc.color }} />
                     </div>
                     <p className="text-2xl font-black" style={{ color: rc.color }}>{count}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{r.label}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
                   </div>
                 )
               })}
@@ -1500,7 +1500,7 @@ export default function AdminPanel() {
               {users.length === 0 ? (
                 <div className="text-center py-8">
                   <Users size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-400">No users yet</p>
+                  <p className="text-sm text-gray-500">No users yet</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -1508,7 +1508,7 @@ export default function AdminPanel() {
                     const rc = ROLE_CONFIG[u.role] || ROLE_CONFIG.resident
                     return (
                       <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                        style={{ background: '#fafafa', border: '1px solid #f0effe' }}>
+                        style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
                         <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
                           style={{ background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)` }}>
                           {u.avatar_url ? (
@@ -1519,7 +1519,7 @@ export default function AdminPanel() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
-                          <p className="text-xs text-gray-400 truncate">{u.barangays?.name || 'No barangay'}</p>
+                          <p className="text-xs text-gray-500 truncate">{u.barangays?.name || 'No barangay'}</p>
                         </div>
                         <span className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
                           style={{ background: rc.bg, color: rc.color }}>
@@ -1552,7 +1552,7 @@ export default function AdminPanel() {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-gray-800">Reject Application</h2>
-                  <p className="text-xs text-gray-400">{reviewing.full_name}</p>
+                  <p className="text-xs text-gray-500">{reviewing.full_name}</p>
                 </div>
               </div>
 
@@ -1563,12 +1563,12 @@ export default function AdminPanel() {
                 rows={4} maxLength={300}
                 placeholder="Explain why this application is being rejected..."
                 className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none" />
-              <p className="text-xs text-gray-400 text-right mt-1">{rejectReason.length}/300</p>
+              <p className="text-xs text-gray-500 text-right mt-1">{rejectReason.length}/300</p>
 
               <div className="flex gap-3 mt-5">
                 <button onClick={() => { setReviewing(null); setRejectReason('') }}
                   className="flex-1 py-3 rounded-2xl text-sm font-bold transition-colors hover:bg-gray-50"
-                  style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                  style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                   Cancel
                 </button>
                 <button onClick={() => handleReject(reviewing, rejectReason)}

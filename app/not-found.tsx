@@ -56,7 +56,7 @@ export default function NotFound() {
           <p
             className="text-[90px] sm:text-[110px] font-black leading-none select-none"
             style={{
-              background: 'linear-gradient(135deg, #f0effe, #e8e3ff)',
+              background: 'linear-gradient(135deg, var(--brand-soft), var(--brand-border))',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               letterSpacing: '-4px',
@@ -73,7 +73,7 @@ export default function NotFound() {
           </div>
         </div>
 
-        <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+        <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
           Page not found
         </p>
         <h1 className="text-2xl font-black text-gray-800 mb-2" style={{ letterSpacing: '-0.5px' }}>
@@ -87,14 +87,14 @@ export default function NotFound() {
           <Link
             href="/"
             className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
+            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
           >
             <Home size={14} /> Back to Home
           </Link>
           <Link
             href="/help"
             className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
           >
             <ArrowLeft size={14} /> Get Help
           </Link>
@@ -102,8 +102,8 @@ export default function NotFound() {
 
         {/* Bouncing dots — the app's signature trio */}
         <div className="mt-8 flex items-center justify-center gap-1.5">
-          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#5B54E8', animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#7C75F0', animationDelay: '150ms' }} />
+          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
+          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
           <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
         </div>
       </div>

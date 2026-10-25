@@ -2,8 +2,8 @@
    Every colour is a token here, so night mode is one attribute flip. */
 
 .console {
-  --cm-surface: #ffffff; --cm-raised: #fafaff; --cm-soft: #f0effe; --cm-line: #f0effe; --cm-line-strong: #e8e3ff;
-  --cm-text: #292338; --cm-sub: #70677d; --cm-body: #514765; --cm-accent: #5B54E8; --cm-accent-strong: #4A43D4;
+  --cm-surface: #ffffff; --cm-raised: var(--app-surface); --cm-soft: var(--brand-soft); --cm-line: var(--brand-soft); --cm-line-strong: var(--brand-border);
+  --cm-text: #292338; --cm-sub: #70677d; --cm-body: #514765; --cm-accent: var(--brand); --cm-accent-strong: var(--brand-dark);
   --cm-on-accent: #ffffff; --cm-selected-line: #c9c2fb; --cm-shadow: 0 4px 14px rgba(41,35,56,.12);
   --cm-danger-bg: #fef2f2; --cm-danger: #b91c1c; --cm-danger-line: #fde2e2;
   --cm-high-bg: #fff7ed; --cm-high: #c2410c; --cm-high-line: #fed7aa; --cm-refer: #9a3412;
@@ -212,7 +212,7 @@
 .responderBest { background: var(--cm-ok-bg); border-color: var(--cm-ok-line); }
 .responderBest .personMeta { color: var(--cm-ok); }
 .responderRow { display: flex; align-items: center; gap: 10px; }
-.nearest { padding: 2px 7px; border-radius: 8px; background: #16a34a; color: #fff; font-size: 11px; font-weight: 700; }
+.nearest { padding: 2px 7px; border-radius: 8px; background: #16a34a; color: #fff; font-size: 12px; font-weight: 700; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px;
   border-radius: 14px; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none; box-sizing: border-box;

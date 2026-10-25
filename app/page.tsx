@@ -173,7 +173,7 @@ export default function LandingPage() {
           background: scrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
           backdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
           WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
-          borderBottom: scrolled ? '1px solid #f0effe' : '1px solid transparent',
+          borderBottom: scrolled ? '1px solid var(--brand-soft)' : '1px solid transparent',
           boxShadow: scrolled ? '0 2px 12px rgba(91,84,232,0.06)' : 'none',
         }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
@@ -183,7 +183,7 @@ export default function LandingPage() {
             </div>
             <div>
               <p className={`font-bold text-sm leading-tight transition-colors duration-300 ${scrolled ? 'text-gray-800' : 'text-white'}`}>BH360</p>
-              <p className={`text-xs leading-tight hidden sm:block transition-colors duration-300 ${scrolled ? 'text-gray-400' : 'text-purple-200'}`}>Barangay Management</p>
+              <p className={`text-xs leading-tight hidden sm:block transition-colors duration-300 ${scrolled ? 'text-gray-500' : 'text-purple-200'}`}>Barangay Management</p>
             </div>
           </div>
           {/* Real links (crawlable, prefetched, cmd/long-press-able)
@@ -195,7 +195,7 @@ export default function LandingPage() {
             </Link>
             <Link href="/register"
               className="text-sm font-semibold text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl transition-all hover:scale-105 flex items-center gap-1.5"
-              style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.4)' }}>
+              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.4)' }}>
               Get Started <ArrowRight size={14} />
             </Link>
           </div>
@@ -236,7 +236,7 @@ export default function LandingPage() {
             <div className="flex items-center justify-center gap-3 fade-up-3 flex-wrap mb-6">
               <Link href="/register"
                 className="flex items-center gap-2 px-7 py-4 rounded-2xl text-sm font-bold transition-all hover:scale-105"
-                style={{ background: 'white', color: '#5B54E8', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
+                style={{ background: 'white', color: 'var(--brand)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
                 Get Started Free <ArrowRight size={16} />
               </Link>
               <Link href="/login"
@@ -288,11 +288,11 @@ export default function LandingPage() {
               <div className="p-6 bg-white">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>Welcome back</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Welcome back</p>
                     <h3 className="text-xl font-bold text-gray-800">Captain Santos 👋</h3>
                   </div>
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>S</div>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>S</div>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-5">
@@ -302,10 +302,10 @@ export default function LandingPage() {
                     { label: 'Tickets', value: '7', color: '#f97316', icon: FileText },
                     { label: 'Response', value: '2m', color: '#f43f5e', icon: TrendingUp },
                   ].map((s) => (
-                    <div key={s.label} className="rounded-2xl p-3 border" style={{ borderColor: '#f0effe' }}>
+                    <div key={s.label} className="rounded-2xl p-3 border" style={{ borderColor: 'var(--brand-soft)' }}>
                       <s.icon size={14} style={{ color: s.color }} />
                       <p className="text-xl font-bold mt-2" style={{ color: s.color }}>{s.value}</p>
-                      <p className="text-xs text-gray-400">{s.label}</p>
+                      <p className="text-xs text-gray-500">{s.label}</p>
                     </div>
                   ))}
                 </div>
@@ -316,7 +316,7 @@ export default function LandingPage() {
                     { title: 'Noise complaint — Block 5', status: 'assigned' },
                     { title: 'Flooding report — Riverside', status: 'resolved' },
                   ].map((inc) => (
-                    <div key={inc.title} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ borderColor: '#f0effe' }}>
+                    <div key={inc.title} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ borderColor: 'var(--brand-soft)' }}>
                       <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#fff7ed' }}>
                         <AlertTriangle size={14} className="text-orange-500" />
                       </div>
@@ -336,18 +336,18 @@ export default function LandingPage() {
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-800">Live updates</p>
-                <p className="text-[10px] text-gray-400">Real-time data</p>
+                <p className="text-xs text-gray-500">Real-time data</p>
               </div>
             </div>
 
             <div className="absolute -bottom-4 -right-4 px-4 py-2 rounded-2xl items-center gap-2 hidden sm:flex"
               style={{ background: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', animation: 'floatReverse 5s ease-in-out infinite' }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#f0effe' }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'var(--brand-soft)' }}>
                 <Image src="/logo.png" alt="" width={20} height={20} className="object-contain" />
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-800">AI Powered</p>
-                <p className="text-[10px] text-gray-400">Claude AI</p>
+                <p className="text-xs text-gray-500">Claude AI</p>
               </div>
             </div>
           </div>
@@ -363,14 +363,14 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {stats.map(({ icon: Icon, value, label, desc }) => (
               <div key={label} className="text-center p-5 rounded-3xl transition-all hover:scale-105"
-                style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
                 <div className="w-10 h-10 rounded-2xl mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                   <Icon size={18} className="text-white" />
                 </div>
-                <p className="text-3xl font-black" style={{ color: '#5B54E8', letterSpacing: '-1px' }}>{value}</p>
+                <p className="text-3xl font-black" style={{ color: 'var(--brand)', letterSpacing: '-1px' }}>{value}</p>
                 <p className="text-sm font-bold text-gray-700 mt-1">{label}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
               </div>
             ))}
           </div>
@@ -378,13 +378,13 @@ export default function LandingPage() {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, #fafaff 100%)' }}>
+      <section className="py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, var(--app-surface) 100%)' }}>
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
-              style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-              <Zap size={12} style={{ color: '#5B54E8' }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>Features</span>
+              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+              <Zap size={12} style={{ color: 'var(--brand)' }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>Features</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-800 mb-4"
               style={{ letterSpacing: '-2px' }}>
@@ -398,7 +398,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {features.map(({ icon: Icon, title, desc, color, bg }) => (
               <div key={title} className="group p-4 sm:p-6 rounded-3xl transition-all hover:scale-105 cursor-default"
-                style={{ background: 'white', border: '1px solid #f0effe', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
+                style={{ background: 'white', border: '1px solid var(--brand-soft)', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 transition-transform group-hover:scale-110"
                   style={{ background: bg }}>
                   <Icon size={24} style={{ color }} />
@@ -416,9 +416,9 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
-              style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-              <Activity size={12} style={{ color: '#5B54E8' }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>How It Works</span>
+              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+              <Activity size={12} style={{ color: 'var(--brand)' }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>How It Works</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-800 mb-4"
               style={{ letterSpacing: '-2px' }}>
@@ -434,16 +434,16 @@ export default function LandingPage() {
               { step: '04', title: 'Grow with insights', desc: 'AI-powered analytics show trends, hotspots, and recommendations to improve.', icon: TrendingUp },
             ].map(({ step, title, desc, icon: Icon }) => (
               <div key={step} className="flex items-center gap-5 p-4 sm:p-6 rounded-3xl transition-all hover:scale-[1.02]"
-                style={{ background: 'white', border: '1px solid #f0effe', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
+                style={{ background: 'white', border: '1px solid var(--brand-soft)', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
                 <div className="w-16 h-16 rounded-3xl flex items-center justify-center flex-shrink-0 text-white font-black"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
                   {step}
                 </div>
                 <div className="flex-1">
                   <h3 className="font-bold text-gray-800 text-lg mb-1">{title}</h3>
                   <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
                 </div>
-                <Icon size={20} className="hidden sm:block flex-shrink-0" style={{ color: '#5B54E8', opacity: 0.3 }} />
+                <Icon size={20} className="hidden sm:block flex-shrink-0" style={{ color: 'var(--brand)', opacity: 0.3 }} />
               </div>
             ))}
           </div>
@@ -451,13 +451,13 @@ export default function LandingPage() {
       </section>
 
       {/* Roles */}
-      <section className="py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, #fafaff 100%)' }}>
+      <section className="py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, var(--app-surface) 100%)' }}>
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
-              style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-              <Users size={12} style={{ color: '#5B54E8' }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>For Everyone</span>
+              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+              <Users size={12} style={{ color: 'var(--brand)' }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>For Everyone</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-800 mb-4"
               style={{ letterSpacing: '-2px' }}>
@@ -474,7 +474,7 @@ export default function LandingPage() {
               <div key={role} className={`p-7 rounded-3xl transition-all hover:scale-105 relative ${featured ? 'ring-2' : ''}`}
                 style={{
                   background: 'white',
-                  border: `1px solid ${featured ? color : '#f0effe'}`,
+                  border: `1px solid ${featured ? color : 'var(--brand-soft)'}`,
                   boxShadow: featured ? `0 12px 40px ${color}25` : '0 4px 20px rgba(91,84,232,0.06)',
                 }}>
                 {featured && (
@@ -487,7 +487,7 @@ export default function LandingPage() {
                   {emoji}
                 </div>
                 <h3 className="font-bold text-lg mb-1" style={{ color }}>{role}</h3>
-                <p className="text-xs text-gray-400 mb-4">{subtitle}</p>
+                <p className="text-xs text-gray-500 mb-4">{subtitle}</p>
                 <div className="space-y-2.5">
                   {perks.map(perk => (
                     <div key={perk} className="flex items-center gap-2 text-sm text-gray-600">
@@ -509,9 +509,9 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
-              style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-              <Star size={12} style={{ color: '#5B54E8' }} fill="#5B54E8" />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>Loved by Communities</span>
+              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+              <Star size={12} style={{ color: 'var(--brand)' }} fill="#5B54E8" />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>Loved by Communities</span>
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-800 mb-4"
               style={{ letterSpacing: '-2px' }}>
@@ -522,7 +522,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {testimonials.map((t) => (
               <div key={t.name} className="p-6 rounded-3xl transition-all hover:scale-105"
-                style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
                 <div className="flex gap-1 mb-4" role="img" aria-label={`${t.rating} out of 5 stars`}>
                   {[...Array(t.rating)].map((_, i) => (
                     <Star key={i} size={14} fill="#fbbf24" className="text-yellow-400" aria-hidden="true" />
@@ -531,12 +531,12 @@ export default function LandingPage() {
                 <p className="text-gray-700 text-sm leading-relaxed mb-5 italic">&quot;{t.text}&quot;</p>
                 <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
                     {t.name[0]}
                   </div>
                   <div>
                     <p className="text-sm font-bold text-gray-800">{t.name}</p>
-                    <p className="text-xs text-gray-400">{t.role}</p>
+                    <p className="text-xs text-gray-500">{t.role}</p>
                   </div>
                 </div>
               </div>
@@ -570,7 +570,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-center gap-3 flex-wrap mb-6">
             <Link href="/register"
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl text-sm font-bold transition-all hover:scale-105"
-              style={{ background: 'white', color: '#5B54E8', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
+              style={{ background: 'white', color: 'var(--brand)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
               Get Started Free <ArrowRight size={16} />
             </Link>
             <Link href="/login"
@@ -613,10 +613,10 @@ export default function LandingPage() {
               </div>
               <div>
                 <p className="text-sm font-bold text-gray-800">BarangayHub 360</p>
-                <p className="text-xs text-gray-400">Smart Barangay Management</p>
+                <p className="text-xs text-gray-500">Smart Barangay Management</p>
               </div>
             </div>
-            <p className="text-xs text-gray-400 text-center">
+            <p className="text-xs text-gray-500 text-center">
               © 2026 BH360 · Empowering Filipino Communities with AI
             </p>
           </div>

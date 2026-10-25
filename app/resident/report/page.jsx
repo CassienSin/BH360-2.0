@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { KINDS } from '@/lib/offline/outbox'
 import { enqueue } from '@/lib/offline/sync'
-import { ArrowLeft, AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Scale, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Scale, ShieldAlert } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
@@ -12,6 +12,7 @@ import { CATEGORY_LIST, getPriority, getBasis, citationDetail, PRIORITY_STYLE } 
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { AvailabilityStrip, EmergencyContacts, ReportOutcome } from '@/components/ResponderAvailability'
 import styles from './report.module.css'
+import { PageHeader } from '@/components/AppUI'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -70,7 +71,7 @@ const MapPicker = dynamic(() => import('@/components/MapPicker'), {
   loading: () => (
     <div
       className="rounded-2xl flex items-center justify-center"
-      style={{ height: '250px', background: '#fafaff', border: '1px solid #f0effe' }}
+      style={{ height: '250px', background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
     >
       <Loader2 size={20} className="animate-spin text-purple-500" />
     </div>
@@ -97,12 +98,12 @@ function PriorityGuidance({ basis }) {
                 <div className="px-4 py-3" style={{ background: 'white' }}>
                   {basis.law && (
                     <div className="flex items-start gap-2 mb-2">
-                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} aria-hidden="true" />
                       <div className="min-w-0">
                         <p className="text-xs leading-relaxed text-gray-700">
-                          <strong style={{ color: '#5B54E8' }}>{basis.law}</strong>
+                          <strong style={{ color: 'var(--brand)' }}>{basis.law}</strong>
                           {basis.sections && (
-                            <span className="font-semibold" style={{ color: '#5B54E8' }}>{', '}{basis.sections}</span>
+                            <span className="font-semibold" style={{ color: 'var(--brand)' }}>{', '}{basis.sections}</span>
                           )}
                           {' — '}{basis.lawTitle}
                         </p>
@@ -110,15 +111,15 @@ function PriorityGuidance({ basis }) {
                             this the citation is decoration — residents (and
                             officials on review) can check the claim. */}
                         {basis.provision && (
-                          <p className="text-[11px] text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
+                          <p className="text-xs text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
                         )}
                         {basis.source && (
                           <a
                             href={basis.source}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-block text-[11px] font-semibold mt-1 underline"
-                            style={{ color: '#5B54E8' }}
+                            className="inline-block text-xs font-semibold mt-1 underline"
+                            style={{ color: 'var(--brand)' }}
                           >
                             Read the law
                           </a>
@@ -126,7 +127,7 @@ function PriorityGuidance({ basis }) {
                       </div>
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-500 leading-relaxed">{basis.reason}</p>
+                  <p className="text-xs text-gray-500 leading-relaxed">{basis.reason}</p>
 
                   {basis.responseMode === 'refer_to_agency' && basis.agency && (
                     <div
@@ -134,7 +135,7 @@ function PriorityGuidance({ basis }) {
                       style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
                     >
                       <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
-                      <p className="text-[11px] text-orange-800 leading-relaxed">
+                      <p className="text-xs text-orange-800 leading-relaxed">
                         This will be referred to <strong>{basis.agency}</strong>.
                       </p>
                     </div>
@@ -453,26 +454,14 @@ export default function ReportIncident() {
         />
       </div>
 
-      <header
-        className={`bg-white relative z-10 px-6 py-4 flex items-center gap-3 ${styles.header}`}
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-      >
-        <button
-          onClick={() => (outcome ? router.replace('/resident') : router.back())}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
-        >
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div>
-          <h1 className="text-base font-bold text-gray-800">
-            {outcome ? 'Report submitted' : 'Report an Incident'}
-          </h1>
-          <p className="text-xs text-gray-400">
-            {outcome ? 'What happens next' : 'Notify the barangay immediately'}
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        title={outcome ? 'Report submitted' : 'Report an Incident'}
+        description={outcome ? 'What happens next' : 'Notify the barangay immediately'}
+        icon={AlertTriangle}
+        onBack={() => (outcome ? router.replace('/resident') : router.back())}
+        backLabel={outcome ? 'Back to dashboard' : 'Go back'}
+        maxWidth={outcome ? 688 : 1376}
+      />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-8 ${!outcome ? styles.main : ''}`}>
         {!outcome && (
@@ -549,8 +538,8 @@ export default function ReportIncident() {
                       onClick={() => setForm(prev => ({ ...prev, category: cat.value }))}
                       className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 text-center transition-all hover:scale-105 ${styles.categoryButton}`}
                       style={{
-                        background: selected ? cat.bg : '#fafaff',
-                        border: `2px solid ${selected ? cat.color : '#f0effe'}`,
+                        background: selected ? cat.bg : 'var(--app-surface)',
+                        border: `2px solid ${selected ? cat.color : 'var(--brand-soft)'}`,
                         boxShadow: selected ? `0 4px 12px ${cat.color}25` : 'none',
                       }}
                     >
@@ -578,7 +567,7 @@ export default function ReportIncident() {
                 <div className={`px-4 py-3 flex items-center gap-3 ${styles.priorityHeader}`} style={{ background: priorityStyle.bg }}>
                   <span className="text-2xl" aria-hidden="true">{priorityStyle.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: priorityStyle.color }}>
+                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: priorityStyle.color }}>
                       Priority assigned automatically
                     </p>
                     <p className="text-base font-black leading-tight" style={{ color: priorityStyle.color }}>
@@ -616,7 +605,7 @@ export default function ReportIncident() {
                 Incident Title <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <AlertTriangle size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                <AlertTriangle size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input
                   id="incident-title"
                   name="title"
@@ -636,7 +625,7 @@ export default function ReportIncident() {
                 Description <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <FileText size={15} className="absolute left-3.5 top-3.5 text-gray-400" aria-hidden="true" />
+                <FileText size={15} className="absolute left-3.5 top-3.5 text-gray-500" aria-hidden="true" />
                 <textarea
                   id="incident-description"
                   name="description"
@@ -649,7 +638,7 @@ export default function ReportIncident() {
                   placeholder="Describe the incident in detail..."
                 />
               </div>
-              <p className="text-xs text-gray-400 text-right mt-1">{form.description.length}/{DESC_MAX}</p>
+              <p className="text-xs text-gray-500 text-right mt-1">{form.description.length}/{DESC_MAX}</p>
             </div>
 
             </div>
@@ -669,7 +658,7 @@ export default function ReportIncident() {
                 Location Description <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input
                   id="incident-location"
                   name="location"
@@ -686,7 +675,7 @@ export default function ReportIncident() {
             {/* Map Picker */}
             <div className={styles.mapSection}>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <MapPin size={11} /> Pin on Map <span className="text-gray-300 font-normal">(Optional but helpful)</span>
+                <MapPin size={11} /> Pin on Map <span className="text-gray-500 font-normal">(Optional but helpful)</span>
               </p>
 
               <div className="flex gap-2 mb-3 flex-wrap">
@@ -695,7 +684,7 @@ export default function ReportIncident() {
                   onClick={useMyLocation}
                   disabled={gettingLocation}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', color: 'white', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', color: 'white', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
                 >
                   {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <Crosshair size={12} />}
                   {gettingLocation ? 'Getting location...' : 'Use My Location'}
@@ -718,7 +707,7 @@ export default function ReportIncident() {
 
               {coords && (
                 <div className="mt-2 flex items-center justify-between flex-wrap gap-2 fade-up">
-                  <p className="text-xs flex items-center gap-1.5" style={{ color: '#5B54E8' }}>
+                  <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--brand)' }}>
                     📍 <strong>Pinned:</strong> {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
                   </p>
                   {coords.accuracy != null && (
@@ -739,39 +728,39 @@ export default function ReportIncident() {
             {/* Image Upload */}
             <div className={styles.photoSection}>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Camera size={11} /> Photo Evidence <span className="text-gray-300 font-normal">(Optional)</span>
+                <Camera size={11} /> Photo Evidence <span className="text-gray-500 font-normal">(Optional)</span>
               </p>
 
               {compressing ? (
                 <div
                   className={`rounded-2xl p-8 text-center ${styles.uploadPanel}`}
-                  style={{ background: '#fafaff', border: '2px dashed #e8e3ff' }}
+                  style={{ background: 'var(--app-surface)', border: '2px dashed var(--brand-border)' }}
                   role="status"
                 >
                   <div
                     className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
                   >
                     <Loader2 size={20} className="animate-spin text-white" />
                   </div>
                   <p className="text-sm font-bold text-gray-800 mb-1">Optimizing photo...</p>
-                  <p className="text-xs text-gray-400">Shrinking the file so it uploads faster</p>
+                  <p className="text-xs text-gray-500">Shrinking the file so it uploads faster</p>
                 </div>
               ) : !imagePreview ? (
                 <label className="block cursor-pointer">
                   <div
                     className={`rounded-2xl p-8 text-center transition-all hover:scale-[1.01] ${styles.uploadPanel}`}
-                    style={{ background: '#fafaff', border: '2px dashed #e8e3ff' }}
+                    style={{ background: 'var(--app-surface)', border: '2px dashed var(--brand-border)' }}
                   >
                     <div
                       className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
                     >
                       <Upload size={20} className="text-white" />
                     </div>
                     <p className="text-sm font-bold text-gray-800 mb-1">Click to upload photo</p>
-                    <p className="text-xs text-gray-400">JPG, PNG, GIF, WebP — large photos are optimized automatically</p>
-                    <p className="text-[10px] text-gray-300 mt-2">A photo helps officials respond faster</p>
+                    <p className="text-xs text-gray-500">JPG, PNG, GIF, WebP — large photos are optimized automatically</p>
+                    <p className="text-xs text-gray-500 mt-2">A photo helps officials respond faster</p>
                   </div>
                   <input
                     ref={fileInputRef}
@@ -782,7 +771,7 @@ export default function ReportIncident() {
                   />
                 </label>
               ) : (
-                <div className="relative rounded-2xl overflow-hidden group fade-up" style={{ border: '2px solid #e8e3ff' }}>
+                <div className="relative rounded-2xl overflow-hidden group fade-up" style={{ border: '2px solid var(--brand-border)' }}>
                   <img src={imagePreview} alt="Selected photo preview" className={`w-full max-h-80 object-cover ${styles.photoPreview}`} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   <div className="absolute top-3 right-3 flex gap-2">

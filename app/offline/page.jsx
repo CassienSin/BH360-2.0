@@ -48,11 +48,11 @@ function OfflineInner() {
         <button onClick={() => { window.location.href = from || '/' }}
           className="mt-5 w-full py-3 rounded-2xl text-sm font-bold text-white
             flex items-center justify-center gap-2 transition-transform active:scale-95"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
           <RefreshCw size={15} /> {from ? 'Try that page again' : 'Try again'}
         </button>
 
-        <p className="text-[11px] mt-3" style={{ color: '#9ca3af' }}>
+        <p className="text-xs mt-3" style={{ color: 'var(--app-text-muted)' }}>
           In a real emergency, call the barangay directly rather than waiting for a signal.
         </p>
       </div>

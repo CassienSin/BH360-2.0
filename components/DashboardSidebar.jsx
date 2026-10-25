@@ -176,7 +176,7 @@ export default function DashboardSidebar({
 
       {/* Logo / Brand — when collapsed, tapping the logo expands the sidebar */}
       <div className={`flex items-center gap-3 px-4 py-4 ${!sidebarOpen && 'justify-center'}`}
-        style={{ borderBottom: '1px solid #f0effe' }}>
+        style={{ borderBottom: '1px solid var(--brand-soft)' }}>
         <button
           onClick={() => !sidebarOpen && setSidebarOpen(true)}
           className={`w-9 h-9 relative flex-shrink-0 ${!sidebarOpen ? 'cursor-pointer transition-transform hover:scale-110' : 'cursor-default'}`}
@@ -189,7 +189,7 @@ export default function DashboardSidebar({
         {sidebarOpen && (
           <div className="min-w-0 flex-1">
             <p className="font-bold text-sm text-gray-800">BH360</p>
-            <p className="text-xs text-gray-400 truncate">{profile?.barangays?.name || 'Portal'}</p>
+            <p className="text-xs text-gray-500 truncate">{profile?.barangays?.name || 'Portal'}</p>
           </div>
         )}
         {sidebarOpen && (
@@ -205,10 +205,10 @@ export default function DashboardSidebar({
       {sidebarOpen && stats.length > 0 && (
         <div className="px-3 py-3 border-b border-gray-100">
           <div className="rounded-2xl p-3"
-            style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
+            style={{ background: 'linear-gradient(135deg, var(--app-surface), var(--brand-soft))', border: '1px solid var(--brand-border)' }}>
             <div className="flex items-center gap-1.5 mb-2">
-              <Activity size={11} style={{ color: '#5B54E8' }} aria-hidden="true" />
-              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#5B54E8' }}>
+              <Activity size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
+              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
                 Quick Stats
               </p>
             </div>
@@ -221,7 +221,7 @@ export default function DashboardSidebar({
                   className="text-left p-2 rounded-xl transition-all hover:scale-105 disabled:hover:scale-100"
                   style={{ background: 'white', border: `1px solid ${stat.color}20` }}>
                   <p className="text-lg font-black leading-none" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-[10px] text-gray-500 mt-1 truncate">{stat.label}</p>
+                  <p className="text-xs text-gray-500 mt-1 truncate">{stat.label}</p>
                 </button>
               ))}
             </div>
@@ -233,7 +233,7 @@ export default function DashboardSidebar({
       {sidebarOpen && (
         <div className="px-3 py-3 border-b border-gray-100">
           <div className="relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
             <input
               ref={searchRef}
               value={search}
@@ -250,7 +250,7 @@ export default function DashboardSidebar({
               placeholder="Find a page…"
               aria-label="Filter navigation items"
               className={`w-full pl-8 pr-10 py-2 text-xs rounded-xl outline-none transition-all ${styles.search}`}
-              style={{ background: '#fafaff', border: '1px solid #f0effe' }}
+              style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
               onFocus={e => e.target.style.borderColor = '#5B54E8'}
               onBlur={e => e.target.style.borderColor = '#f0effe'}
             />
@@ -262,7 +262,7 @@ export default function DashboardSidebar({
       {/* Pinned section */}
       {sidebarOpen && pinnedItems.length > 0 && !q && (
         <div className="px-3 py-2 border-b border-gray-100">
-          <p className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-400 flex items-center gap-1">
+          <p className="text-xs font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-500 flex items-center gap-1">
             <Pin size={9} aria-hidden="true" /> Pinned
           </p>
           <div className="space-y-0.5">
@@ -275,19 +275,19 @@ export default function DashboardSidebar({
                 } : {}}>
                 {activeSection === key && (
                   <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
-                    style={{ background: 'linear-gradient(180deg, #5B54E8, #7C75F0)', boxShadow: '0 0 12px rgba(91,84,232,0.5)' }} />
+                    style={{ background: 'linear-gradient(180deg, var(--brand), var(--brand-light))', boxShadow: '0 0 12px rgba(91,84,232,0.5)' }} />
                 )}
-                <Icon size={15} style={{ color: activeSection === key ? '#5B54E8' : '#9ca3af', flexShrink: 0 }} aria-hidden="true" />
+                <Icon size={15} style={{ color: activeSection === key ? 'var(--brand)' : '#9ca3af', flexShrink: 0 }} aria-hidden="true" />
                 <span className="text-xs flex-1 text-left"
-                  style={{ color: activeSection === key ? '#5B54E8' : '#6b7280', fontWeight: activeSection === key ? 700 : 500 }}>
+                  style={{ color: activeSection === key ? 'var(--brand)' : '#6b7280', fontWeight: activeSection === key ? 700 : 500 }}>
                   {label}
                 </span>
                 {hasNew && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />}
                 {count > 0 && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                  <span className="text-xs px-1.5 py-0.5 rounded-md font-bold"
                     style={{
-                      background: activeSection === key ? '#5B54E8' : '#ede9fe',
-                      color: activeSection === key ? 'white' : '#5B54E8',
+                      background: activeSection === key ? 'var(--brand)' : '#ede9fe',
+                      color: activeSection === key ? 'white' : 'var(--brand)',
                     }}>
                     {count}
                   </span>
@@ -303,7 +303,7 @@ export default function DashboardSidebar({
         {filteredNavItems.map(({ section, items }) => (
           <div key={section}>
             {sidebarOpen && (
-              <p className="text-[10px] font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-400 flex items-center gap-1.5">
+              <p className="text-xs font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-500 flex items-center gap-1.5">
                 <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
                 {section}
               </p>
@@ -334,13 +334,13 @@ export default function DashboardSidebar({
                       {isActive && (
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full"
                           style={{
-                            background: 'linear-gradient(180deg, #5B54E8, #7C75F0)',
+                            background: 'linear-gradient(180deg, var(--brand), var(--brand-light))',
                             boxShadow: '0 0 16px rgba(91,84,232,0.6)',
                           }} />
                       )}
 
                       <div className="relative flex-shrink-0">
-                        <Icon size={17} style={{ color: isActive ? '#5B54E8' : '#9ca3af' }} aria-hidden="true" />
+                        <Icon size={17} style={{ color: isActive ? 'var(--brand)' : '#6b7280' }} aria-hidden="true" />
                         {hasNew && (
                           <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
                         )}
@@ -349,22 +349,22 @@ export default function DashboardSidebar({
                       {sidebarOpen && (
                         <>
                           <span className="text-sm flex-1 text-left"
-                            style={{ color: isActive ? '#5B54E8' : '#6b7280', fontWeight: isActive ? 700 : 500 }}>
+                            style={{ color: isActive ? 'var(--brand)' : '#6b7280', fontWeight: isActive ? 700 : 500 }}>
                             {label}
                           </span>
 
                           {badge && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                            <span className="text-[11px] leading-4 px-1 py-0.5 rounded-md font-bold flex-shrink-0"
                               style={{ background: '#fef3c7', color: '#92400e' }}>
                               {badge}
                             </span>
                           )}
 
                           {count > 0 && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold min-w-[18px] text-center"
+                            <span className="text-xs px-1.5 py-0.5 rounded-md font-bold min-w-[18px] text-center flex-shrink-0"
                               style={{
-                                background: isActive ? '#5B54E8' : '#ede9fe',
-                                color: isActive ? 'white' : '#5B54E8',
+                                background: isActive ? 'var(--brand)' : '#ede9fe',
+                                color: isActive ? 'white' : 'var(--brand)',
                               }}>
                               {count}
                             </span>
@@ -401,7 +401,7 @@ export default function DashboardSidebar({
           <div className="px-3 py-6 text-center">
             <p className="text-xs text-gray-500" role="status">No pages match “{search}”. Try a different name.</p>
             <button onClick={() => setSearch('')}
-              className="mt-2 text-xs font-semibold" style={{ color: '#5B54E8' }}>
+              className="mt-2 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
               Clear search
             </button>
           </div>
@@ -411,10 +411,10 @@ export default function DashboardSidebar({
 
       {/* User Profile Footer */}
       <div className={`px-3 py-3 ${!sidebarOpen && 'flex justify-center'}`}
-        style={{ borderTop: '1px solid #f0effe', background: 'linear-gradient(180deg, white, #fafaff)' }}>
+        style={{ borderTop: '1px solid var(--brand-soft)', background: 'linear-gradient(180deg, white, var(--app-surface))' }}>
         {sidebarOpen ? (
           <div className="rounded-2xl p-2.5"
-            style={{ background: 'white', border: '1px solid #f0effe' }}>
+            style={{ background: 'white', border: '1px solid var(--brand-soft)' }}>
             <div className="flex items-center gap-2.5">
               <div className="relative flex-shrink-0">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
@@ -432,12 +432,12 @@ export default function DashboardSidebar({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-bold text-gray-800 truncate">{profile?.full_name}</p>
-                <p className="text-[10px] truncate" style={{ color: rc.color, fontWeight: 600 }}>
+                <p className="text-xs truncate" style={{ color: rc.color, fontWeight: 600 }}>
                   {roleLabel}{!online && ' · Offline'}
                 </p>
               </div>
               <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0 disabled:opacity-50"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0 disabled:opacity-50"
                 title="Sign out">
                 <LogOut size={12} />
               </button>
@@ -445,7 +445,7 @@ export default function DashboardSidebar({
           </div>
         ) : (
           <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
             title="Sign out">
             <LogOut size={14} />
           </button>

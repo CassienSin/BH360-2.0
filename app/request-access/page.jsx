@@ -181,8 +181,8 @@ export default function RequestAccess() {
           </p>
 
           <div className="rounded-2xl p-4 mb-6"
-            style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>What&apos;s Next?</p>
+            style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>What&apos;s Next?</p>
             <ol className="text-xs text-gray-700 space-y-1.5 text-left">
               <li>✓ Our team verifies your barangay credentials</li>
               <li>✓ You receive an invite code via email</li>
@@ -210,7 +210,7 @@ export default function RequestAccess() {
       </div>
 
       <header className={`bg-white relative z-10 px-6 py-4 flex items-center gap-3 ${desktop.header}`}
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
+        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}>
         <button onClick={() => router.push('/')} aria-label="Back to home"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100">
           <ArrowLeft size={18} className="text-gray-600" />
@@ -221,7 +221,7 @@ export default function RequestAccess() {
           </div>
           <div>
             <h1 className="text-base font-bold text-gray-800">Request Access</h1>
-            <p className="text-xs text-gray-400">For Barangay Officials</p>
+            <p className="text-xs text-gray-500">For Barangay Officials</p>
           </div>
         </div>
       </header>
@@ -248,7 +248,7 @@ export default function RequestAccess() {
                 Full Name <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input id="ra-name" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })}
                   required maxLength={100} autoComplete="name"
                   className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
@@ -263,7 +263,7 @@ export default function RequestAccess() {
                   Email <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input id="ra-email" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
                     required autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
                     className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
@@ -276,7 +276,7 @@ export default function RequestAccess() {
                   Phone <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
-                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                   <input id="ra-phone" type="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
                     required maxLength={11} autoComplete="tel-national" inputMode="numeric"
                     className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
@@ -291,7 +291,7 @@ export default function RequestAccess() {
                 Position / Title <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <Briefcase size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Briefcase size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input id="ra-position" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })}
                   required maxLength={100} autoComplete="organization-title"
                   className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
@@ -345,16 +345,16 @@ export default function RequestAccess() {
             {/* Message */}
             <div className={desktop.accessMessage}>
               <label htmlFor="ra-message" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
-                Additional Message <span className="text-gray-300 font-normal">(Optional)</span>
+                Additional Message <span className="text-gray-500 font-normal">(Optional)</span>
               </label>
               <div className="relative">
-                <MessageSquare size={15} className="absolute left-3.5 top-3.5 text-gray-400" />
+                <MessageSquare size={15} className="absolute left-3.5 top-3.5 text-gray-500" />
                 <textarea id="ra-message" value={form.message} onChange={e => setForm({ ...form, message: e.target.value })}
                   rows={3} maxLength={500}
                   className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800 resize-none"
                   placeholder="Tell us why you'd like to onboard your barangay..." />
               </div>
-              <p className="text-xs text-gray-400 text-right mt-1">{form.message.length}/500</p>
+              <p className="text-xs text-gray-500 text-right mt-1">{form.message.length}/500</p>
             </div>
 
             <button type="submit" disabled={submitting}
@@ -371,8 +371,8 @@ export default function RequestAccess() {
               )}
             </button>
 
-            <p className="text-xs text-gray-400 text-center pt-2">
-              Already have an invite code? <a href="/register" className="font-semibold" style={{ color: '#5B54E8' }}>Register here →</a>
+            <p className="text-xs text-gray-500 text-center pt-2">
+              Already have an invite code? <a href="/register" className="font-semibold" style={{ color: 'var(--brand)' }}>Register here →</a>
             </p>
           </form>
         </div>

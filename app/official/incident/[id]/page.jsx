@@ -4,7 +4,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
-  ArrowLeft, MapPin, Phone, Clock, Shield, Scale, ShieldAlert, Check, Send,
+  MapPin, Phone, Clock, Shield, Scale, ShieldAlert, Check, Send,
   Pencil, Star, User, Loader2, X, Navigation, FileText, Bell, AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -12,6 +12,8 @@ import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS } from '@/lib/legalBasis'
 import { computeStanding, activeWindowLabel } from '@/lib/triage'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
+import { PageHeader } from '@/components/AppUI'
+import { CategoryIcon } from '@/lib/categoryIcons'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -292,7 +294,7 @@ export default function IncidentDetail() {
         <div className="white-card p-8 text-center max-w-sm">
           <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
           <h1 className="text-lg font-bold text-gray-800">Incident not found</h1>
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 mt-1">
             It may have been deleted, or the link is wrong.
           </p>
           <button onClick={() => router.replace('/official')}
@@ -311,7 +313,7 @@ export default function IncidentDetail() {
       <style>{`
         .idt-line::before {
           content: ''; position: absolute; left: 15px; top: 30px; bottom: -14px;
-          width: 2px; background: #e8e3ff;
+          width: 2px; background: var(--brand-border);
         }
         .idt-item:last-child .idt-line::before { display: none; }
         .idt-press { transition: transform 120ms ease; }
@@ -323,27 +325,19 @@ export default function IncidentDetail() {
       `}</style>
 
       {/* Header */}
-      <header className="bg-white sticky top-0 z-30 px-4 sm:px-6 py-3 flex items-center gap-3"
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
-        <button onClick={() => router.back()} aria-label="Go back"
-          className="idt-press w-9 h-9 rounded-xl flex items-center justify-center hover:bg-gray-100 flex-shrink-0">
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ background: `${cat.color}18`, fontSize: 17 }}>
-          {cat.icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-bold text-gray-800 truncate">{incident.title}</h1>
-          <p className="text-[11px] text-gray-400">
-            {incident.category} · reported {timeAgo(incident.created_at)}
-          </p>
-        </div>
-        <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+      <PageHeader
+        title={incident.title}
+        description={`${incident.category} · reported ${timeAgo(incident.created_at)}`}
+        iconElement={<CategoryIcon category={incident.category} size={21} />}
+        iconStyle={{ background: `${cat.color}18`, color: cat.color }}
+        onBack={() => router.back()}
+        actionsDesktopOnly
+        maxWidth={1040}
+        actions={<>
           <Pill bg={pri.bg} color={pri.color}>{pri.icon} {incident.priority}</Pill>
           <Pill bg={st.bg} color={st.color}>{st.label}</Pill>
-        </div>
-      </header>
+        </>}
+      />
 
       <main className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
         {/* Mobile pills */}
@@ -367,7 +361,7 @@ export default function IncidentDetail() {
                 <Clock size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
                 <div>
                   <p className="text-xs font-black text-amber-800">{standing.label}</p>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
+                  <p className="text-xs text-amber-700 mt-0.5">
                     {incident.priority} incidents target {activeWindowLabel(incident)}.
                     This one has been waiting {timeAgo(incident.created_at).replace(' ago', '')}.
                     {standing.phase === 'response' && ' Nobody has acknowledged it or chosen the responder yet — an automatic assignment does not count.'}
@@ -377,7 +371,7 @@ export default function IncidentDetail() {
             )}
 
             <div className="white-card p-5">
-              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">
+              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
                 What was reported
               </p>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
@@ -401,7 +395,7 @@ export default function IncidentDetail() {
             {/* Photos */}
             {(incident.image_url || incident.resolution_image_url) && (
               <div className="white-card p-5">
-                <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-3">Photos</p>
+                <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-3">Photos</p>
                 <div className="grid grid-cols-2 gap-3">
                   {incident.image_url && (
                     <PhotoCard src={incident.image_url} label="Reported by resident"
@@ -417,7 +411,7 @@ export default function IncidentDetail() {
 
             {/* Location */}
             <div className="white-card p-5">
-              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">Location</p>
+              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Location</p>
               <p className="text-sm text-gray-700 flex items-start gap-1.5 mb-3">
                 <MapPin size={14} className="flex-shrink-0 mt-0.5" style={{ color: cat.color }} />
                 {incident.location || 'No location description given'}
@@ -428,13 +422,13 @@ export default function IncidentDetail() {
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${incident.latitude},${incident.longitude}`}
                     target="_blank" rel="noopener noreferrer"
                     className="idt-press mt-3 flex items-center justify-center gap-2 h-10 rounded-2xl text-xs font-bold"
-                    style={{ background: '#fafaff', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                     <Navigation size={13} /> Open directions
                   </a>
                 </>
               ) : (
-                <p className="text-xs text-gray-400 px-3 py-6 rounded-2xl text-center"
-                  style={{ background: '#fafaff', border: '1px dashed #e8e3ff' }}>
+                <p className="text-xs text-gray-500 px-3 py-6 rounded-2xl text-center"
+                  style={{ background: 'var(--app-surface)', border: '1px dashed var(--brand-border)' }}>
                   No map pin — this was reported without coordinates.
                 </p>
               )}
@@ -448,24 +442,24 @@ export default function IncidentDetail() {
             {basis?.law && (
               <div className="white-card p-4">
                 <div className="flex items-start gap-2">
-                  <Scale size={14} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
+                  <Scale size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#5B54E8' }}>
+                    <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
                       Legal basis
                     </p>
                     <p className="text-xs font-bold text-gray-800 mt-1">
                       {basis.law}{basis.sections ? `, ${basis.sections}` : ''}
                     </p>
-                    <p className="text-[11px] text-gray-500">{basis.lawTitle}</p>
+                    <p className="text-xs text-gray-500">{basis.lawTitle}</p>
                     {/* The text of the cited provision, so an official can
                         check the classification instead of trusting it. */}
                     {basis.provision && (
-                      <p className="text-[11px] text-gray-600 mt-2 leading-relaxed">{basis.provision}</p>
+                      <p className="text-xs text-gray-600 mt-2 leading-relaxed">{basis.provision}</p>
                     )}
-                    <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">{basis.reason}</p>
+                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">{basis.reason}</p>
                     {basis.source && (
                       <a href={basis.source} target="_blank" rel="noopener noreferrer"
-                        className="inline-block text-[11px] font-semibold mt-2 underline" style={{ color: '#5B54E8' }}>
+                        className="inline-block text-xs font-semibold mt-2 underline" style={{ color: 'var(--brand)' }}>
                         Read the law
                       </a>
                     )}
@@ -476,7 +470,7 @@ export default function IncidentDetail() {
                   <div className="mt-3 px-3 py-2 rounded-xl flex items-start gap-2"
                     style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
                     <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" />
-                    <p className="text-[11px] text-orange-800 leading-relaxed">
+                    <p className="text-xs text-orange-800 leading-relaxed">
                       <strong>{basis.agency}</strong> has authority here. Tanods document and assist only.
                     </p>
                   </div>
@@ -487,7 +481,7 @@ export default function IncidentDetail() {
             {/* Assigned responder */}
             {assignedTanod && (
               <div className="white-card p-4">
-                <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-2">
+                <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
                   Assigned responder
                 </p>
                 <div className="flex items-center gap-2.5">
@@ -497,7 +491,7 @@ export default function IncidentDetail() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-bold text-gray-800 truncate">{assignedTanod.full_name}</p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {assignedTanod.on_duty ? 'On duty' : 'Off duty'}
                       {incident.assignment_method === 'auto' && ' · auto-assigned'}
                       {incident.assignment_method === 'auto_offduty' && ' · fallback assignment'}
@@ -518,7 +512,7 @@ export default function IncidentDetail() {
 
             {/* ===== THE TIMELINE — the reason this page exists ===== */}
             <div className="white-card p-5">
-              <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 mb-4">
+              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-4">
                 What happened, in order
               </p>
               <div className="space-y-4">
@@ -538,22 +532,22 @@ export default function IncidentDetail() {
                         <div className="flex items-baseline gap-2 flex-wrap">
                           <p className="text-xs font-black text-gray-800">{e.title}</p>
                           {e.at && (
-                            <time className="text-[10px] text-gray-400 flex-shrink-0" title={fullDate(e.at)}>
+                            <time className="text-xs text-gray-500 flex-shrink-0" title={fullDate(e.at)}>
                               {timeAgo(e.at)}
                             </time>
                           )}
                         </div>
                         {e.body && (
-                          <p className="text-[11px] text-gray-500 mt-0.5 leading-relaxed">{e.body}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{e.body}</p>
                         )}
                         {e.quote && (
-                          <p className="text-[11px] italic mt-1.5 px-2.5 py-1.5 rounded-lg"
+                          <p className="text-xs italic mt-1.5 px-2.5 py-1.5 rounded-lg"
                             style={{ background: tone.bg, color: tone.dot }}>
                             &quot;{e.quote}&quot;
                           </p>
                         )}
                         {e.note && (
-                          <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">{e.note}</p>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{e.note}</p>
                         )}
                         {e.photo && (
                           <TimelinePhoto stored={e.photo}
@@ -568,10 +562,10 @@ export default function IncidentDetail() {
                 {incident.status !== 'resolved' && (
                   <div className="relative flex gap-3">
                     <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
-                      style={{ background: '#fafaff', border: '1px dashed #e8e3ff' }}>
+                      style={{ background: 'var(--app-surface)', border: '1px dashed var(--brand-border)' }}>
                       <Clock size={13} className="text-gray-300" />
                     </div>
-                    <p className="text-[11px] text-gray-400 self-center">
+                    <p className="text-xs text-gray-500 self-center">
                       {incident.status === 'pending' ? 'Waiting for a responder…' : 'Response in progress…'}
                     </p>
                   </div>
@@ -588,7 +582,7 @@ export default function IncidentDetail() {
           style={{
             background: 'rgba(255,255,255,0.96)',
             backdropFilter: 'blur(10px)',
-            borderTop: '1px solid #f0effe',
+            borderTop: '1px solid var(--brand-soft)',
             paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
           }}>
           <div className="flex gap-2 max-w-5xl mx-auto">
@@ -629,7 +623,7 @@ export default function IncidentDetail() {
 
 function Pill({ children, bg, color }) {
   return (
-    <span className="px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1 flex-shrink-0"
+    <span className="px-2 py-1 rounded-lg text-xs font-black flex items-center gap-1 flex-shrink-0"
       style={{ background: bg, color }}>
       {children}
     </span>
@@ -639,11 +633,11 @@ function Pill({ children, bg, color }) {
 function Meta({ icon: Icon, label, value }) {
   return (
     <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl"
-      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-      <Icon size={12} className="text-gray-400 flex-shrink-0" />
+      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+      <Icon size={12} className="text-gray-500 flex-shrink-0" />
       <div className="min-w-0">
-        <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400 leading-none">{label}</p>
-        <p className="text-[11px] font-semibold text-gray-700 truncate mt-0.5">{value}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 leading-none">{label}</p>
+        <p className="text-xs font-semibold text-gray-700 truncate mt-0.5">{value}</p>
       </div>
     </div>
   )
@@ -656,9 +650,9 @@ function PhotoCard({ src, label, onOpen }) {
   if (!signed) return null
   return (
     <button onClick={() => onOpen(signed)} className="idt-press text-left rounded-2xl overflow-hidden w-full"
-      style={{ border: '1px solid #f0effe' }}>
+      style={{ border: '1px solid var(--brand-soft)' }}>
       <img src={signed} alt={label} className="w-full h-32 object-cover" loading="lazy" />
-      <p className="text-[10px] font-bold text-gray-500 px-2.5 py-1.5" style={{ background: '#fafaff' }}>
+      <p className="text-xs font-bold text-gray-500 px-2.5 py-1.5" style={{ background: 'var(--app-surface)' }}>
         {label}
       </p>
     </button>
@@ -672,7 +666,7 @@ function TimelinePhoto({ stored, onOpen }) {
     <button onClick={() => onOpen(signed)}
       aria-label="View resolution photo"
       className="idt-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
-      style={{ border: '1px solid #f0effe' }}>
+      style={{ border: '1px solid var(--brand-soft)' }}>
       <img loading="lazy" decoding="async" src={signed} alt="" className="w-full h-full object-cover" />
     </button>
   )
@@ -690,7 +684,7 @@ function TanodSelect({ tanods, onPick, busy }) {
     <>
       <button onClick={() => setOpen(true)} disabled={busy}
         className="idt-press flex-1 h-11 rounded-2xl text-xs font-black flex items-center justify-center gap-1.5 disabled:opacity-50"
-        style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+        style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
         <Send size={14} /> Dispatch tanod
       </button>
 
@@ -702,16 +696,16 @@ function TanodSelect({ tanods, onPick, busy }) {
             className="w-full sm:max-w-sm bg-white flex flex-col"
             style={{ borderRadius: '24px 24px 0 0', maxHeight: '80vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
-              style={{ borderBottom: '1px solid #f0effe' }}>
+              style={{ borderBottom: '1px solid var(--brand-soft)' }}>
               <h3 className="text-sm font-bold text-gray-800">Dispatch a tanod</h3>
               <button onClick={() => setOpen(false)} aria-label="Close"
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100">
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100">
                 <X size={16} />
               </button>
             </div>
             <div className="overflow-y-auto flex-1">
               {sorted.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-gray-400">No tanods registered.</p>
+                <p className="px-4 py-8 text-center text-sm text-gray-500">No tanods registered.</p>
               )}
               {sorted.map(t => (
                 <button key={t.id} onClick={() => { onPick(t.id); setOpen(false) }}
@@ -722,9 +716,9 @@ function TanodSelect({ tanods, onPick, busy }) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-800 truncate">{t.full_name}</p>
-                    <p className="text-[11px] text-gray-400">{t.phone || 'No phone on file'}</p>
+                    <p className="text-xs text-gray-500">{t.phone || 'No phone on file'}</p>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold flex-shrink-0"
+                  <span className="text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0"
                     style={{
                       background: t.on_duty ? '#f0fdf4' : '#f3f4f6',
                       color: t.on_duty ? '#16a34a' : '#9ca3af',

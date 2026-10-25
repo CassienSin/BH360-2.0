@@ -1,9 +1,9 @@
 .overlay { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(32,24,53,.48); backdrop-filter: blur(5px); }
 .panel { position: relative; width: 100%; max-width: 440px; max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; border-radius: 24px; background: white; color: #292338; box-shadow: 0 24px 72px #20183540; outline: none; }
 .close { position: absolute; top: 10px; right: 10px; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; color: #70677d; cursor: pointer; }
-.close:hover { background: #f0effe; }
+.close:hover { background: var(--brand-soft); }
 .close:disabled { opacity: .45; cursor: not-allowed; }
-.close:focus-visible { outline: 2px solid #5b54e8; outline-offset: -2px; }
+.close:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
 .content { padding: 32px 28px 24px; text-align: center; }
 .icon { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 18px; margin: 0 auto 18px; }
 .content h2 { margin: 0; font-size: 20px; line-height: 1.4; font-weight: 750; letter-spacing: -.3px; overflow-wrap: anywhere; }

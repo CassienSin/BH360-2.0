@@ -153,16 +153,16 @@ export default function DutyToggle({ profile, onStatusChange }) {
       aria-label={onDuty ? 'Go off duty' : 'Go on duty'}
       className="w-full sm:w-auto flex items-center gap-3 px-4 py-3 rounded-2xl transition-all disabled:opacity-60"
       style={{
-        background: onDuty ? '#f0fdf4' : '#fafaff',
-        border: `2px solid ${onDuty ? '#22c55e' : '#e8e3ff'}`,
+        background: onDuty ? '#f0fdf4' : 'var(--app-surface)',
+        border: `2px solid ${onDuty ? '#22c55e' : 'var(--brand-border)'}`,
         boxShadow: onDuty ? '0 0 0 4px rgba(34,197,94,0.08)' : 'none',
       }}>
 
       <div className="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-        style={{ background: onDuty ? '#22c55e' : '#e8e3ff' }}>
+        style={{ background: onDuty ? '#22c55e' : 'var(--brand-border)' }}>
         {onDuty
           ? <Shield size={16} className="text-white" />
-          : <ShieldOff size={16} style={{ color: '#5B54E8' }} />}
+          : <ShieldOff size={16} style={{ color: 'var(--brand)' }} />}
         {onDuty && (
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
         )}
@@ -172,7 +172,7 @@ export default function DutyToggle({ profile, onStatusChange }) {
         <p className="text-sm font-bold" style={{ color: onDuty ? '#15803d' : '#6b7280' }}>
           {onDuty ? 'On Duty' : 'Off Duty'}
         </p>
-        <p className="text-[11px] text-gray-400 flex items-center gap-1">
+        <p className="text-xs text-gray-500 flex items-center gap-1">
           {saving ? 'Updating…'
             : onDuty
               ? (<>

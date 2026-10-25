@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
 import styles from './calendar.module.css'
+import { PageHeader, AppButton } from '@/components/AppUI'
 
 const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: '#087f8c' }, incidents: { label: 'Incidents', singular: 'Incident', color: '#d97706' }, announcements: { label: 'Announcements', singular: 'Announcement', color: '#6554dc' } }
 const PRIORITIES = { Low: '#15803d', Medium: '#2563eb', High: '#c2410c', Critical: '#dc2626' }
@@ -97,15 +98,17 @@ export default function CalendarView() {
   }
 
   return <div className={styles.page}>
-    <header className={styles.header}>
-      <button className={styles.iconButton} onClick={() => router.push('/official')} aria-label="Back to dashboard"><ArrowLeft size={19} /></button>
-      <span className={styles.logo}><CalendarDays size={21} /></span>
-      <div className={styles.heading}><h1>Barangay calendar</h1><p>{profile?.barangays?.name || 'Schedule and activity'} · Philippine time</p></div>
-      <div className={styles.headerActions}>
-        <button className={styles.secondary} aria-label="View appointments" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={16} /><span>Appointments</span></button>
-        <button className={styles.primary} aria-label="New appointment" onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} /><span>New appointment</span></button>
-      </div>
-    </header>
+    <PageHeader
+      title="Barangay calendar"
+      description={`${profile?.barangays?.name || 'Schedule and activity'} · Philippine time`}
+      icon={CalendarDays}
+      onBack={() => router.push('/official')}
+      backLabel="Back to dashboard"
+      actions={<>
+        <AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={15} aria-hidden="true" />Appointments</AppButton>
+        <AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={15} aria-hidden="true" />New appointment</AppButton>
+      </>}
+    />
 
     <main className={styles.main}>
       <div className={styles.intro}><div><p className={styles.eyebrow}>MONTHLY OVERVIEW</p><h2>Plan the day. Keep track of your barangay.</h2></div><p>Appointments, reported incidents, and posted announcements in one place.</p></div>

@@ -231,7 +231,7 @@ export default function OfficialTicketChat() {
           <button
             onClick={() => router.back()}
             className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: 'white', color: '#5B54E8' }}
+            style={{ background: 'white', color: 'var(--brand)' }}
           >
             Go back
           </button>
@@ -262,19 +262,19 @@ export default function OfficialTicketChat() {
       {/* Header */}
       <header
         className={`bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
+        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
       >
         <button
           onClick={() => router.back()}
           aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
         >
           <ArrowLeft size={18} />
         </button>
 
         <div
           className="w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
+          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
         >
           {ticket?.profiles?.avatar_url ? (
             <img loading="lazy" decoding="async" src={ticket.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -288,12 +288,12 @@ export default function OfficialTicketChat() {
             {ticket?.title}
           </h1>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <p className="text-[11px] sm:text-xs text-gray-400 truncate">
+            <p className="text-xs text-gray-500 truncate">
               <span className="text-gray-500 font-semibold">{ticket?.profiles?.full_name || 'Unknown resident'}</span>
             </p>
             {ticket && (
               <span
-                className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
+                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
                 style={{ background: sc.bg, color: sc.color }}
               >
                 <StatusIcon size={9} />
@@ -302,7 +302,7 @@ export default function OfficialTicketChat() {
             )}
             {cat && (
               <span
-                className="text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
+                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
                 style={{ background: cat.bg, color: cat.color }}
               >
                 <CategoryIcon size={9} />
@@ -316,7 +316,7 @@ export default function OfficialTicketChat() {
           onClick={() => setShowDetails(v => !v)}
           aria-label="Toggle ticket details"
           aria-expanded={showDetails}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
           title="Ticket details"
         >
           <Sparkles size={14} />
@@ -337,33 +337,33 @@ export default function OfficialTicketChat() {
 
       {/* Details panel (collapsible) */}
       {showDetails && ticket && (
-        <div className={`bg-white relative z-10 px-4 sm:px-6 py-3 fade-up ${desktop.chatDetails}`} style={{ borderBottom: '1px solid #f0effe' }}>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Original Description</p>
+        <div className={`bg-white relative z-10 px-4 sm:px-6 py-3 fade-up ${desktop.chatDetails}`} style={{ borderBottom: '1px solid var(--brand-soft)' }}>
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Original Description</p>
           <p className="text-sm text-gray-700 leading-relaxed">{ticket.description}</p>
 
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">Resident Info</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Resident Info</p>
             <div className="space-y-1.5">
               <div className="flex items-center gap-2 text-xs">
-                <User size={11} className="text-gray-400 flex-shrink-0" />
+                <User size={11} className="text-gray-500 flex-shrink-0" />
                 <span className="font-semibold text-gray-700">{ticket.profiles?.full_name || 'Unknown resident'}</span>
               </div>
               {ticket.profiles?.phone && (
-                <a href={`tel:${ticket.profiles.phone}`} className="flex items-center gap-2 text-xs hover:underline" style={{ color: '#5B54E8' }}>
-                  <Phone size={11} className="text-gray-400 flex-shrink-0" />
+                <a href={`tel:${ticket.profiles.phone}`} className="flex items-center gap-2 text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+                  <Phone size={11} className="text-gray-500 flex-shrink-0" />
                   <span>{ticket.profiles.phone}</span>
                 </a>
               )}
               {ticket.profiles?.address && (
                 <div className="flex items-start gap-2 text-xs">
-                  <MapPin size={11} className="text-gray-400 flex-shrink-0 mt-0.5" />
+                  <MapPin size={11} className="text-gray-500 flex-shrink-0 mt-0.5" />
                   <span className="text-gray-600">{ticket.profiles.address}</span>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
+          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <Clock size={11} />
               Created {new Date(ticket.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -404,7 +404,7 @@ export default function OfficialTicketChat() {
                 {showDaySeparator && (
                   <div className="flex items-center justify-center my-4">
                     <span
-                      className="text-[10px] font-bold px-3 py-1 rounded-full text-white"
+                      className="text-xs font-bold px-3 py-1 rounded-full text-white"
                       style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}
                     >
                       {dayLabel(msg.created_at)}
@@ -415,8 +415,8 @@ export default function OfficialTicketChat() {
                 <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2`}>
                   {!isMe && showSender && (
                     <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 overflow-hidden mb-1"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden mb-1"
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
                     >
                       {msg.profiles?.avatar_url ? (
                         <img loading="lazy" decoding="async" src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -438,17 +438,17 @@ export default function OfficialTicketChat() {
                     }
                   >
                     {!isMe && showSender && (
-                      <p className="text-[10px] font-bold mb-1 flex items-center gap-1" style={{ color: '#5B54E8' }}>
+                      <p className="text-xs font-bold mb-1 flex items-center gap-1" style={{ color: 'var(--brand)' }}>
                         {msg.profiles?.full_name || 'Unknown user'}
                         {isResident && (
-                          <span className="text-[9px] px-1 py-0.5 rounded-md font-bold" style={{ background: '#f0effe', color: '#5B54E8' }}>
+                          <span className="text-xs px-1 py-0.5 rounded-md font-bold" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                             Resident
                           </span>
                         )}
                       </p>
                     )}
                     <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.message}</p>
-                    <p className={`text-[10px] mt-1 ${isMe ? 'text-purple-200' : 'text-gray-400'}`}>
+                    <p className={`text-xs mt-1 ${isMe ? 'text-purple-200' : 'text-gray-500'}`}>
                       {new Date(msg.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
@@ -469,7 +469,7 @@ export default function OfficialTicketChat() {
                     key={i}
                     type="button"
                     onClick={() => applyQuickReply(reply)}
-                    className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold text-white transition-all hover:scale-105 max-w-[240px] truncate"
+                    className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-white transition-all hover:scale-105 max-w-[240px] truncate"
                     style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(10px)' }}
                     title={reply}
                   >
@@ -508,7 +508,7 @@ export default function OfficialTicketChat() {
                 disabled={sending || !newMessage.trim()}
                 aria-label="Send message"
                 className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-50 transition-all hover:scale-105"
-                style={{ background: 'white', color: '#5B54E8', boxShadow: '0 8px 24px rgba(255,255,255,0.3)' }}
+                style={{ background: 'white', color: 'var(--brand)', boxShadow: '0 8px 24px rgba(255,255,255,0.3)' }}
               >
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>

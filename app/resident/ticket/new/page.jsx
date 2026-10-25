@@ -1,9 +1,10 @@
 'use client'
+import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, FileText, AlignLeft, Tag, CheckCircle, Send, Sparkles, HelpCircle, Loader2, Lightbulb, FileQuestion, AlertCircle, Star } from 'lucide-react'
+import { FileText, AlignLeft, Tag, CheckCircle, Send, Sparkles, HelpCircle, Loader2, Lightbulb, FileQuestion, AlertCircle, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TITLE_MIN = 3
@@ -170,10 +171,10 @@ export default function NewTicket() {
           </div>
           <h2 className="text-2xl font-black text-gray-800 mb-2" style={{ letterSpacing: '-0.5px' }}>Ticket Created!</h2>
           <p className="text-sm text-gray-500 mb-2">Your ticket has been submitted to your barangay officials.</p>
-          <p className="text-xs text-gray-400">Redirecting to chat...</p>
+          <p className="text-xs text-gray-500">Redirecting to chat...</p>
           <div className="mt-6 flex items-center justify-center gap-1.5">
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#5B54E8', animationDelay: '0ms' }} />
-            <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#7C75F0', animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
             <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
           </div>
         </div>
@@ -195,28 +196,12 @@ export default function NewTicket() {
         />
       </div>
 
-      <header
-        className={`bg-white relative z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}
-      >
-        <button
-          onClick={() => router.back()}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>Create New Ticket</h1>
-          <p className="text-xs text-gray-400 truncate">A barangay official will respond shortly</p>
-        </div>
-        <div
-          className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-        >
-          <FileText size={16} className="text-white" />
-        </div>
-      </header>
+      <PageHeader
+        title="Create New Ticket"
+        description="A barangay official will respond shortly"
+        icon={FileText}
+        onBack={() => router.back()}
+      />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${desktop.ticketPage}`}>
 
@@ -277,8 +262,8 @@ export default function NewTicket() {
                       onClick={() => setForm(prev => ({ ...prev, category: cat.value }))}
                       className="rounded-2xl p-3 text-left transition-all hover:scale-[1.02]"
                       style={{
-                        background: selected ? cat.bg : '#fafaff',
-                        border: `2px solid ${selected ? cat.color : '#f0effe'}`,
+                        background: selected ? cat.bg : 'var(--app-surface)',
+                        border: `2px solid ${selected ? cat.color : 'var(--brand-soft)'}`,
                         boxShadow: selected ? `0 4px 16px ${cat.color}30` : 'none',
                       }}
                     >
@@ -288,7 +273,7 @@ export default function NewTicket() {
                           {cat.label}
                         </span>
                       </div>
-                      <p className="text-[10px] text-gray-500 leading-snug">{cat.desc}</p>
+                      <p className="text-xs text-gray-500 leading-snug">{cat.desc}</p>
                     </button>
                   )
                 })}
@@ -303,14 +288,14 @@ export default function NewTicket() {
                 </label>
                 <span
                   className={`text-xs font-bold ${
-                    form.title.length > 80 ? 'text-orange-500' : titleValid ? 'text-emerald-500' : 'text-gray-300'
+                    form.title.length > 80 ? 'text-orange-500' : titleValid ? 'text-emerald-500' : 'text-gray-500'
                   }`}
                 >
                   {form.title.length}/{TITLE_MAX}
                 </span>
               </div>
               <div className="relative">
-                <FileText size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+                <FileText size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
                 <input
                   id="ticket-title"
                   value={form.title}
@@ -341,14 +326,14 @@ export default function NewTicket() {
                 </label>
                 <span
                   className={`text-xs font-bold ${
-                    form.description.length > 900 ? 'text-orange-500' : descValid ? 'text-emerald-500' : 'text-gray-300'
+                    form.description.length > 900 ? 'text-orange-500' : descValid ? 'text-emerald-500' : 'text-gray-500'
                   }`}
                 >
                   {form.description.length}/{DESC_MAX}
                 </span>
               </div>
               <div className="relative">
-                <AlignLeft size={15} className="absolute left-3.5 top-3.5 text-gray-400" aria-hidden="true" />
+                <AlignLeft size={15} className="absolute left-3.5 top-3.5 text-gray-500" aria-hidden="true" />
                 <textarea
                   id="ticket-description"
                   value={form.description}
@@ -384,8 +369,8 @@ export default function NewTicket() {
             </div>
 
             {/* Preview */}
-            <div className={`rounded-2xl p-4 fade-up ${desktop.ticketPreview} ${!form.title && !form.description ? desktop.emptyPreview : ""}`} style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-                <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+            <div className={`rounded-2xl p-4 fade-up ${desktop.ticketPreview} ${!form.title && !form.description ? desktop.emptyPreview : ""}`} style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
                   Preview
                 </p>
                 <div className="flex items-start gap-3">
@@ -401,12 +386,12 @@ export default function NewTicket() {
                         {form.title || 'Your ticket title...'}
                       </p>
                       <span
-                        className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                        className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
                         style={{ background: selectedCategory.bg, color: selectedCategory.color }}
                       >
                         {selectedCategory.label}
                       </span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">
                         open
                       </span>
                     </div>
@@ -423,7 +408,7 @@ export default function NewTicket() {
               disabled={loading || !formValid}
               className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 ${desktop.ticketSubmit}`}
               style={{
-                background: formValid ? 'linear-gradient(135deg, #5B54E8, #7C75F0)' : '#9ca3af',
+                background: formValid ? 'linear-gradient(135deg, var(--brand), var(--brand-light))' : '#9ca3af',
                 boxShadow: formValid ? '0 8px 32px rgba(91,84,232,0.4)' : 'none',
               }}
             >
@@ -440,7 +425,7 @@ export default function NewTicket() {
             </button>
 
             {/* Helper text */}
-            <p className={`text-xs text-gray-400 text-center ${desktop.ticketNote}`}>
+            <p className={`text-xs text-gray-500 text-center ${desktop.ticketNote}`}>
               By submitting, your ticket will be visible to barangay officials only
             </p>
           </form>
@@ -449,20 +434,20 @@ export default function NewTicket() {
         {/* What happens next */}
         <div className={`white-card p-5 fade-up-3 ${desktop.nextSteps}`}>
           <h3 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-            <HelpCircle size={14} style={{ color: '#5B54E8' }} /> What happens next?
+            <HelpCircle size={14} style={{ color: 'var(--brand)' }} /> What happens next?
           </h3>
           <div className="space-y-3">
             {NEXT_STEPS.map(s => (
               <div key={s.step} className="flex items-center gap-3">
                 <div
                   className="w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
                 >
                   {s.step}
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-800">{s.title}</p>
-                  <p className="text-xs text-gray-400">{s.desc}</p>
+                  <p className="text-xs text-gray-500">{s.desc}</p>
                 </div>
               </div>
             ))}

@@ -129,7 +129,7 @@ function DocumentCard({ req, live }) {
       title={doc?.label || req.document_type}
       description={live ? req.purpose : undefined}
       meta={
-        <span className="font-mono text-[11px]" style={{ color: '#5B54E8' }}>
+        <span className="font-mono text-xs" style={{ color: 'var(--brand)' }}>
           {req.reference_code}
         </span>
       }
@@ -147,29 +147,29 @@ function DocumentCard({ req, live }) {
         <>
           <span className="flex items-center gap-1.5 mt-2">
             <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} aria-hidden="true" />
-            <span className="text-[11px]" style={{ color: dl.color }}>
+            <span className="text-xs" style={{ color: dl.color }}>
               Due {formatDeadline(req.due_at)}
             </span>
           </span>
           {state.deemedApproved && (
-            <span className="block text-[11px] mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
+            <span className="block text-xs mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
               style={{ background: '#fef2f2', color: '#b91c1c' }}>
               The deadline passed without a decision. Under <strong>RA 11032 Sec. 10</strong> this
               request is deemed approved — show this reference at the barangay hall.
             </span>
           )}
           {req.extension_reason && (
-            <span className="block text-[11px] text-gray-500 mt-1.5">
+            <span className="block text-xs text-gray-500 mt-1.5">
               <strong>Extended once (Sec. 9(b)(1)):</strong> {req.extension_reason}
             </span>
           )}
-          <span className="block text-[11px] mt-1.5" style={{ color: '#9ca3af' }}
+          <span className="block text-xs mt-1.5" style={{ color: 'var(--app-text-muted)' }}
             title={fullDate(req.created_at)}>
             Filed {timeAgo(req.created_at)}
           </span>
         </>
       ) : req.denial_reason ? (
-        <span className="block text-[11px] mt-1 truncate" style={{ color: '#b91c1c' }}>
+        <span className="block text-xs mt-1 truncate" style={{ color: '#b91c1c' }}>
           {req.denial_reason}
         </span>
       ) : null}
@@ -199,7 +199,7 @@ function BlotterCard({ kase, live }) {
       title={`vs ${kase.respondent_name}`}
       description={live ? kase.nature : undefined}
       meta={
-        <span className="font-mono text-[11px] font-bold" style={{ color: '#5B54E8' }}>
+        <span className="font-mono text-xs font-bold" style={{ color: 'var(--brand)' }}>
           {kase.case_number}
         </span>
       }
@@ -215,8 +215,8 @@ function BlotterCard({ kase, live }) {
       ariaLabel={`Case ${kase.case_number} against ${kase.respondent_name} — ${st.label}`}
       footer={live ? (
         <>
-          <span className="block text-[11px] text-gray-500 mt-1.5">{st.desc}</span>
-          <span className="block text-[11px] mt-1.5" style={{ color: '#9ca3af' }}
+          <span className="block text-xs text-gray-500 mt-1.5">{st.desc}</span>
+          <span className="block text-xs mt-1.5" style={{ color: 'var(--app-text-muted)' }}
             title={fullDate(kase.filed_at)}>
             Filed {timeAgo(kase.filed_at)}
           </span>
@@ -236,7 +236,7 @@ function CaseOutcome({ kase }) {
   const deadline = stageDeadline(kase)
   if (kase.settlement_terms) {
     return (
-      <div className="text-[11px] px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
+      <div className="text-xs px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
         style={{ background: '#f0fdf4', color: '#166534' }}>
         <strong>Settled:</strong> {kase.settlement_terms}
         {deadline.level === 'window' && (
@@ -250,7 +250,7 @@ function CaseOutcome({ kase }) {
   }
   if (kase.cfa_reason) {
     return (
-      <div className="text-[11px] px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
+      <div className="text-xs px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
         style={{ background: '#fef2f2', color: '#b91c1c' }}>
         <strong>Certificate to File Action issued:</strong> {kase.cfa_reason}
         <span className="block mt-1">You may now take this to court.</span>
@@ -259,7 +259,7 @@ function CaseOutcome({ kase }) {
   }
   if (kase.referred_to) {
     return (
-      <p className="text-[11px] text-gray-500 ml-[22px] -mt-1">
+      <p className="text-xs text-gray-500 ml-[22px] -mt-1">
         <strong>Referred to:</strong> {kase.referred_to}
       </p>
     )
@@ -295,7 +295,7 @@ function IncidentCard({ inc, live, onOpen, onRate }) {
             onKeyDown={(e) => e.stopPropagation()}
             className={live
               ? 'mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer'
-              : 'text-[11.5px] font-bold underline underline-offset-2 cursor-pointer whitespace-nowrap'}
+              : 'text-xs font-bold underline underline-offset-2 cursor-pointer whitespace-nowrap'}
             style={live
               ? { background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }
               : { color: '#b45309' }}>
@@ -601,6 +601,10 @@ export default function ResidentDashboard() {
     if (window.innerWidth < 768) setSidebarOpen(false)
   }, [setSidebarOpen])
 
+  // Sections share one scrolling <main>; start each one at the top.
+  const mainRef = useRef(null)
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [activeSection])
+
   // Throws on failure so the improved RatingModal shows its error state
   // and re-enables its buttons; the old version silently ignored a failed
   // update and thanked the user for feedback that was never saved.
@@ -852,7 +856,7 @@ export default function ResidentDashboard() {
           }}
         />
 
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <NotificationBanner />
 
           {loading && (
@@ -911,13 +915,13 @@ export default function ResidentDashboard() {
                           {documentBlockReason(profile)}
                         </p>
                         {profile?.verification_note && (
-                          <p className="text-[11px] mt-2 px-2.5 py-1.5 rounded-lg leading-relaxed"
+                          <p className="text-xs mt-2 px-2.5 py-1.5 rounded-lg leading-relaxed"
                             style={{ background: vs.bg, color: vs.color }}>
                             {profile.verification_note}
                           </p>
                         )}
                         <button onClick={() => router.push('/profile')}
-                          className="mt-2.5 text-xs font-bold" style={{ color: '#5B54E8' }}>
+                          className="mt-2.5 text-xs font-bold" style={{ color: 'var(--brand)' }}>
                           Check your profile details →
                         </button>
                       </div>
@@ -946,9 +950,9 @@ export default function ResidentDashboard() {
                     cursor-pointer focus:outline-none focus-visible:ring-2"
                   style={{ '--tw-ring-color': '#ffffff' }}>
                   <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
-                    style={{ background: '#5B54E8' }} aria-hidden="true" />
+                    style={{ background: 'var(--brand)' }} aria-hidden="true" />
                   <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
                     <AlertTriangle size={20} className="text-white" />
                   </span>
                   <span className="flex-1 min-w-0 block">
@@ -957,7 +961,7 @@ export default function ResidentDashboard() {
                       Fire, flood, injury, crime — the barangay is told at once
                     </span>
                   </span>
-                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: '#5B54E8' }} aria-hidden="true" />
+                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: 'var(--brand)' }} aria-hidden="true" />
                 </button>
 
                 {/* AI Assistant and Announcements were here too, but they are
@@ -970,14 +974,14 @@ export default function ResidentDashboard() {
                     <button key={label} onClick={action}
                       className="white-card p-4 flex items-center gap-3 text-left cursor-pointer
                         focus:outline-none focus-visible:ring-2"
-                      style={{ '--tw-ring-color': '#5B54E8' }}>
+                      style={{ '--tw-ring-color': 'var(--brand)' }}>
                       <span className="w-10 h-10 rounded-2xl grid place-items-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }} aria-hidden="true">
+                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
                         <Icon size={18} className="text-white" />
                       </span>
                       <span className="block min-w-0">
                         <span className="block text-[13.5px] font-semibold text-gray-800">{label}</span>
-                        <span className="block text-[11.5px]" style={{ color: '#9ca3af' }}>{desc}</span>
+                        <span className="block text-xs" style={{ color: 'var(--app-text-muted)' }}>{desc}</span>
                       </span>
                     </button>
                   ))}
@@ -1003,13 +1007,13 @@ export default function ResidentDashboard() {
                         <button key={n.id} onClick={() => navClick('announcements')}
                           className="white-card px-4 py-3 flex items-center gap-3 w-full text-left cursor-pointer
                             focus:outline-none focus-visible:ring-2"
-                          style={{ '--tw-ring-color': '#5B54E8' }}>
+                          style={{ '--tw-ring-color': 'var(--brand)' }}>
                           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: unread ? '#5B54E8' : 'transparent' }}
+                            style={{ background: unread ? 'var(--brand)' : 'transparent' }}
                             aria-hidden="true" />
                           <span className="w-8 h-8 rounded-xl grid place-items-center flex-shrink-0"
                             style={{ background: unread
-                              ? 'linear-gradient(135deg, #5B54E8, #7C75F0)'
+                              ? 'linear-gradient(135deg, var(--brand), var(--brand-light))'
                               : '#e5e7eb' }} aria-hidden="true">
                             <Bell size={14} className={unread ? 'text-white' : 'text-gray-500'} />
                           </span>
@@ -1020,7 +1024,7 @@ export default function ResidentDashboard() {
                             <span className="block text-xs text-gray-500 truncate">
                               {n.data.content}
                             </span>
-                            <span className="block text-[11px] mt-0.5" style={{ color: '#9ca3af' }}
+                            <span className="block text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}
                               title={fullDate(n.created_at)}>
                               {timeAgoLong(n.created_at)}
                             </span>
@@ -1044,17 +1048,17 @@ export default function ResidentDashboard() {
                 <div className="white-card p-5">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}>
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}>
                       <Bell size={20} className="text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-gray-800">Community Updates</h3>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         {announcements.length} {announcements.length === 1 ? 'announcement' : 'announcements'} from {profile?.barangays?.name}
                       </p>
                     </div>
                     {recentAnnouncementCount > 0 && (
-                      <span className="text-[10px] px-2 py-1 rounded-full font-bold flex-shrink-0"
+                      <span className="text-xs px-2 py-1 rounded-full font-bold flex-shrink-0"
                         style={{ background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite' }}>
                         {recentAnnouncementCount} NEW
                       </span>
@@ -1067,11 +1071,11 @@ export default function ResidentDashboard() {
               {announcements.length === 0 && (
                 <div className="white-card p-10 text-center">
                   <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                    style={{ background: '#f0effe' }}>
-                    <Bell size={28} style={{ color: '#5B54E8', opacity: 0.5 }} />
+                    style={{ background: 'var(--brand-soft)' }}>
+                    <Bell size={28} style={{ color: 'var(--brand)', opacity: 0.5 }} />
                   </div>
                   <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
-                  <p className="text-gray-400 text-xs mt-1">Check back later — your barangay will post updates here</p>
+                  <p className="text-gray-500 text-xs mt-1">Check back later — your barangay will post updates here</p>
                 </div>
               )}
 
@@ -1086,25 +1090,25 @@ export default function ResidentDashboard() {
                     {/* New badge accent bar */}
                     {isNew && (
                       <div className="absolute top-0 left-0 right-0 h-1"
-                        style={{ background: 'linear-gradient(90deg, #5B54E8, #7C75F0, #5B54E8)', animation: 'shimmer 2s linear infinite' }} />
+                        style={{ background: 'linear-gradient(90deg, var(--brand), var(--brand-light), var(--brand))', animation: 'shimmer 2s linear infinite' }} />
                     )}
 
                     <div className="flex items-start gap-3">
                       <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
+                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
                         <Bell size={18} className="text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
                           {isNew && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
                               style={{ background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite' }}>
                               NEW
                             </span>
                           )}
                           {!isNew && isThisWeek && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
                               style={{ background: '#f0fdf4', color: '#16a34a' }}>
                               THIS WEEK
                             </span>
@@ -1112,10 +1116,10 @@ export default function ResidentDashboard() {
                         </div>
                         <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
 
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400">
+                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-500">
                           <span title={fullDate(a.created_at)}>📅 {timeAgoLong(a.created_at)}</span>
                           <span>·</span>
-                          <span className="font-semibold" style={{ color: '#5B54E8' }}>From Barangay Office</span>
+                          <span className="font-semibold" style={{ color: 'var(--brand)' }}>From Barangay Office</span>
                         </div>
                       </div>
                     </div>
@@ -1131,15 +1135,15 @@ export default function ResidentDashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{incidents.length} total</p>
                 <button onClick={() => router.push('/resident/report')}
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white"
-                  style={{ color: '#5B54E8', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
+                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
                   <Plus size={14} /> Report Incident
                 </button>
               </div>
               {incidents.length === 0 && (
                 <div className="white-card p-10 text-center">
                   <AlertTriangle size={36} className="mx-auto mb-3 text-orange-300" />
-                  <p className="text-gray-400 text-sm">No incidents reported yet.</p>
-                  <button onClick={() => router.push('/resident/report')} className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>Report your first →</button>
+                  <p className="text-gray-500 text-sm">No incidents reported yet.</p>
+                  <button onClick={() => router.push('/resident/report')} className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>Report your first →</button>
                 </div>
               )}
               <RecordGroup label="In progress" count={liveIncidents.length}>
@@ -1165,15 +1169,15 @@ export default function ResidentDashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{tickets.length} total</p>
                 <button onClick={() => router.push('/resident/ticket/new')}
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white"
-                  style={{ color: '#5B54E8', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
+                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
                   <Plus size={14} /> New Ticket
                 </button>
               </div>
               {tickets.length === 0 && (
                 <div className="white-card p-10 text-center">
-                  <FileText size={36} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
-                  <p className="text-gray-400 text-sm">No tickets created yet.</p>
-                  <button onClick={() => router.push('/resident/ticket/new')} className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>Create your first →</button>
+                  <FileText size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
+                  <p className="text-gray-500 text-sm">No tickets created yet.</p>
+                  <button onClick={() => router.push('/resident/ticket/new')} className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>Create your first →</button>
                 </div>
               )}
               <RecordGroup label="Open" count={liveTickets.length}>
@@ -1203,7 +1207,7 @@ export default function ResidentDashboard() {
                 </p>
                 <button onClick={() => router.push('/resident/documents/new')}
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white flex-shrink-0"
-                  style={{ color: '#5B54E8', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
+                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
                   <Plus size={14} /> Request Document
                 </button>
               </div>
@@ -1211,9 +1215,9 @@ export default function ResidentDashboard() {
               {/* The promise, stated up front. */}
               <div className="white-card p-4">
                 <div className="flex items-start gap-2">
-                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-                  <p className="text-[11px] text-gray-600 leading-relaxed">
-                    <strong style={{ color: '#5B54E8' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — the
+                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    <strong style={{ color: 'var(--brand)' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — the
                     barangay has <strong>3 working days</strong> to act on a simple request (7 for a
                     complex one, 20 for a highly technical one), extendable once. Past that with no
                     decision, your request is <strong>deemed approved</strong> and your
@@ -1233,10 +1237,10 @@ export default function ResidentDashboard() {
 
               {documentRequests.length === 0 && (
                 <div className="white-card p-10 text-center">
-                  <FileCheck2 size={36} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
-                  <p className="text-gray-400 text-sm">You haven’t requested any documents yet.</p>
+                  <FileCheck2 size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
+                  <p className="text-gray-500 text-sm">You haven’t requested any documents yet.</p>
                   <button onClick={() => router.push('/resident/documents/new')}
-                    className="mt-4 text-xs font-semibold" style={{ color: '#5B54E8' }}>
+                    className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
                     See what the barangay issues →
                   </button>
                 </div>
@@ -1265,9 +1269,9 @@ export default function ResidentDashboard() {
 
               <div className="white-card p-4">
                 <div className="flex items-start gap-2">
-                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} />
-                  <p className="text-[11px] text-gray-600 leading-relaxed">
-                    <strong style={{ color: '#5B54E8' }}>RA 7160, Secs. 408–418</strong> — the barangay
+                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    <strong style={{ color: 'var(--brand)' }}>RA 7160, Secs. 408–418</strong> — the barangay
                     summons the other party by the <strong>next working day</strong> and has{' '}
                     <strong>15 days</strong> from your first meeting to mediate. If that fails, a
                     Pangkat gets 15 more. Only when conciliation fails does the barangay issue a{' '}
@@ -1279,9 +1283,9 @@ export default function ResidentDashboard() {
 
               {blotterCases.length === 0 && (
                 <div className="white-card p-10 text-center">
-                  <Gavel size={36} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
-                  <p className="text-gray-400 text-sm">You have no blotter cases on record.</p>
-                  <p className="text-[11px] text-gray-400 mt-1">
+                  <Gavel size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
+                  <p className="text-gray-500 text-sm">You have no blotter cases on record.</p>
+                  <p className="text-xs text-gray-500 mt-1">
                     Cases are recorded at the barangay hall by the secretary.
                   </p>
                 </div>
@@ -1308,10 +1312,10 @@ export default function ResidentDashboard() {
                   <Image src="/logo.png" alt="AI Assistant" width={64} height={64} className="object-contain" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 mb-1">AI Assistant</h2>
-                <p className="text-gray-400 text-sm mb-6">Ask any barangay question — available 24/7</p>
+                <p className="text-gray-500 text-sm mb-6">Ask any barangay question — available 24/7</p>
                 <button onClick={() => router.push('/resident/ai')}
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 20px rgba(91,84,232,0.35)' }}>
+                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)' }}>
                   Start Chatting <ChevronRight size={16} />
                 </button>
               </div>

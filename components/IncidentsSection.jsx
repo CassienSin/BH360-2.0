@@ -211,7 +211,7 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
         </div>
         <div className="flex-1 min-w-0">
           <p className="inc-t13 font-bold text-gray-800 truncate">{t.full_name}</p>
-          <p className="inc-t11 text-gray-400 truncate">
+          <p className="inc-t11 text-gray-500 truncate">
             {active > 0 ? `${active} active` : 'No active assignments'}
             {t.phone ? ` · ${t.phone}` : ''}
           </p>
@@ -229,13 +229,13 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="dispatch-title">
-      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid #f0effe' }}>
+      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
         <div className="flex-1 min-w-0">
           <h3 id="dispatch-title" className="inc-t13 font-bold text-gray-800">Dispatch a tanod</h3>
-          <p className="inc-t11 text-gray-400 truncate">{incident?.title}</p>
+          <p className="inc-t11 text-gray-500 truncate">{incident?.title}</p>
         </div>
         <button onClick={onClose} aria-label="Close"
-          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 flex-shrink-0">
+          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 flex-shrink-0">
           <X size={16} />
         </button>
       </div>
@@ -254,7 +254,7 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
       {tanods.length > 6 && (
         <div className="px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #f7f6ff' }}>
           <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
             <input value={query} onChange={e => setQuery(e.target.value)}
               placeholder="Find a tanod…" aria-label="Find a tanod"
               className="input-field w-full rounded-xl pl-8 pr-3 py-2 inc-t13 text-gray-800" />
@@ -264,14 +264,14 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
 
       <div className="overflow-y-auto inc-sheet-scroll flex-1">
         {list.length === 0 && (
-          <p className="px-4 py-8 text-center inc-t13 text-gray-400">
+          <p className="px-4 py-8 text-center inc-t13 text-gray-500">
             {tanods.length === 0 ? 'No tanods registered yet.' : 'No tanod matches that name.'}
           </p>
         )}
         {onDuty.length > 0 && (
           <>
-            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-400 sticky top-0 z-10"
-              style={{ background: '#fafaff' }}>
+            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10"
+              style={{ background: 'var(--app-surface)' }}>
               Available now ({onDuty.length})
             </p>
             {onDuty.map(row)}
@@ -279,8 +279,8 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
         )}
         {offDuty.length > 0 && (
           <>
-            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-400 sticky top-0 z-10"
-              style={{ background: '#fafaff' }}>
+            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10"
+              style={{ background: 'var(--app-surface)' }}>
               Off duty ({offDuty.length}) · may not respond right away
             </p>
             {offDuty.map(row)}
@@ -326,22 +326,22 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="override-title">
-      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid #f0effe' }}>
+      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
         <div className="flex-1 min-w-0">
           <h3 id="override-title" className="inc-t13 font-bold text-gray-800">Adjust priority</h3>
-          <p className="inc-t11 text-gray-400 truncate">{incident.title}</p>
+          <p className="inc-t11 text-gray-500 truncate">{incident.title}</p>
         </div>
         <button onClick={onClose} aria-label="Close"
-          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 flex-shrink-0">
+          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 flex-shrink-0">
           <X size={16} />
         </button>
       </div>
 
       <div className="overflow-y-auto inc-sheet-scroll flex-1 px-4 py-3 space-y-3">
         {basis?.law && (
-          <div className="p-2.5 rounded-xl flex items-start gap-2" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-            <Scale size={12} className="flex-shrink-0 mt-0.5" style={{ color: '#5B54E8' }} aria-hidden="true" />
-            <p className="inc-t11" style={{ color: '#5B54E8' }}>
+          <div className="p-2.5 rounded-xl flex items-start gap-2" style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+            <Scale size={12} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} aria-hidden="true" />
+            <p className="inc-t11" style={{ color: 'var(--brand)' }}>
               System assigned <strong>{lawAssigned}</strong> under <strong>{basis.law}</strong>.
               Overriding records your name and reason.
             </p>
@@ -356,16 +356,16 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
         )}
 
         <div>
-          <p className="inc-t10 font-bold text-gray-400 uppercase tracking-wider mb-1.5">New priority</p>
+          <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">New priority</p>
           <div className="grid grid-cols-2 gap-2">
             {Object.entries(PRIORITY_CONFIG).sort((a, b) => b[1].order - a[1].order).map(([p, conf]) => (
               <button key={p} onClick={() => setPicked(p)}
                 aria-pressed={picked === p}
                 className="inc-press inc-tint p-2.5 rounded-xl inc-t12 font-bold flex items-center gap-2"
                 style={{
-                  background: picked === p ? conf.bg : '#fafaff',
+                  background: picked === p ? conf.bg : 'var(--app-surface)',
                   color: picked === p ? conf.color : '#6b7280',
-                  border: `2px solid ${picked === p ? conf.color : '#f0effe'}`,
+                  border: `2px solid ${picked === p ? conf.color : 'var(--brand-soft)'}`,
                 }}>
                 <span aria-hidden="true">{conf.icon}</span> {p}
                 {p === lawAssigned && <span className="ml-auto inc-t10 opacity-60">auto</span>}
@@ -375,14 +375,14 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
         </div>
 
         <div>
-          <label htmlFor="override-reason" className="inc-t10 font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+          <label htmlFor="override-reason" className="inc-t10 font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
             Reason for change {changed && <span className="text-red-500">*</span>}
           </label>
           <textarea id="override-reason" value={reason} onChange={e => setReason(e.target.value)}
             rows={3} maxLength={300} disabled={!changed}
             placeholder="e.g. Floodwater above waist level, families evacuating"
             className="input-field w-full rounded-xl px-3 py-2.5 inc-t13 text-gray-800 resize-none disabled:opacity-50" />
-          <p className="inc-t10 text-gray-400 text-right mt-1">
+          <p className="inc-t10 text-gray-500 text-right mt-1">
             {changed && reason.trim().length < 10
               ? `${10 - reason.trim().length} more characters needed`
               : `${reason.length}/300`}
@@ -390,15 +390,15 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
         </div>
       </div>
 
-      <div className="px-4 py-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid #f0effe' }}>
+      <div className="px-4 py-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid var(--brand-soft)' }}>
         <button onClick={onClose}
           className="inc-press flex-1 h-11 rounded-xl inc-t12 font-bold"
-          style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+          style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
           Cancel
         </button>
         <button onClick={save} disabled={!canSave}
           className="inc-press flex-1 h-11 rounded-xl inc-t12 font-bold text-white disabled:opacity-40"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
+          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
           {saving ? 'Saving…' : 'Save change'}
         </button>
       </div>
@@ -455,7 +455,7 @@ function Thumb({ src, label, onOpen }) {
     <button onClick={() => onOpen(signed, label)}
       aria-label={`View ${label}`}
       className="inc-press relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0"
-      style={{ border: '1px solid #f0effe' }}>
+      style={{ border: '1px solid var(--brand-soft)' }}>
       <img src={signed} alt="" loading="lazy" className="w-full h-full object-cover" />
     </button>
   )
@@ -638,7 +638,7 @@ export default function IncidentsSection({
 
           {/* Search */}
           <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
             <input
               ref={searchRef}
               value={search}
@@ -651,7 +651,7 @@ export default function IncidentsSection({
             />
             {search && (
               <button onClick={() => setSearch('')} aria-label="Clear search"
-                className="inc-press absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
+                className="inc-press absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500">
                 <X size={14} />
               </button>
             )}
@@ -668,15 +668,15 @@ export default function IncidentsSection({
                     aria-pressed={on}
                     className="inc-press inc-tint px-3 h-9 rounded-xl inc-t12 font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
                     style={{
-                      background: on ? f.color : '#fafaff',
+                      background: on ? f.color : 'var(--app-surface)',
                       color: on ? 'white' : '#6b7280',
-                      border: `1px solid ${on ? f.color : '#f0effe'}`,
+                      border: `1px solid ${on ? f.color : 'var(--brand-soft)'}`,
                     }}>
                     {f.label}
                     <span className="inc-t10 px-1.5 rounded-md font-black"
                       style={{
-                        background: on ? 'rgba(255,255,255,0.25)' : '#f0effe',
-                        color: on ? 'white' : '#5B54E8',
+                        background: on ? 'rgba(255,255,255,0.25)' : 'var(--brand-soft)',
+                        color: on ? 'white' : 'var(--brand)',
                       }}>
                       {counts[f.value]}
                     </span>
@@ -690,14 +690,14 @@ export default function IncidentsSection({
               Exports become icon-only below 640px so nothing overflows. */}
           <div className="flex items-center gap-1.5">
             <div className="relative flex-1 min-w-0">
-              <ArrowUpDown size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true" />
+              <ArrowUpDown size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" aria-hidden="true" />
               <select value={sort} onChange={e => setSort(e.target.value)}
                 aria-label="Sort incidents"
                 className="w-full appearance-none inc-t12 font-bold rounded-xl pl-7 pr-6 h-9 text-gray-600 outline-none cursor-pointer truncate"
-                style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
+                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
                 {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" aria-hidden="true" />
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" aria-hidden="true" />
             </div>
 
             <button onClick={() => setFiltersOpen(o => !o)}
@@ -705,9 +705,9 @@ export default function IncidentsSection({
               aria-label="More filters"
               className="inc-press inc-tint flex items-center gap-1 px-2.5 h-9 rounded-xl inc-t12 font-bold flex-shrink-0"
               style={{
-                background: advancedActive ? '#5B54E8' : '#fafaff',
+                background: advancedActive ? 'var(--brand)' : 'var(--app-surface)',
                 color: advancedActive ? 'white' : '#6b7280',
-                border: `1px solid ${advancedActive ? '#5B54E8' : '#f0effe'}`,
+                border: `1px solid ${advancedActive ? 'var(--brand)' : 'var(--brand-soft)'}`,
               }}>
               <SlidersHorizontal size={13} />
               {advancedActive && <span className="inc-t10">on</span>}
@@ -732,14 +732,14 @@ export default function IncidentsSection({
             <div className="inc-collapse-inner">
               <div className="pt-2.5 space-y-3" style={{ borderTop: '1px solid #f7f6ff' }}>
                 <div>
-                  <p className="inc-t10 font-bold text-gray-400 uppercase tracking-wider mb-1.5">Category</p>
+                  <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">Category</p>
                   <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by category">
                     <button onClick={() => setCategory('all')} aria-pressed={category === 'all'}
                       className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold"
                       style={{
-                        background: category === 'all' ? '#5B54E8' : '#fafaff',
+                        background: category === 'all' ? 'var(--brand)' : 'var(--app-surface)',
                         color: category === 'all' ? 'white' : '#6b7280',
-                        border: '1px solid #f0effe',
+                        border: '1px solid var(--brand-soft)',
                       }}>
                       All
                     </button>
@@ -751,7 +751,7 @@ export default function IncidentsSection({
                           aria-pressed={category === cat}
                           className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold flex items-center gap-1"
                           style={{
-                            background: category === cat ? conf.color : '#fafaff',
+                            background: category === cat ? conf.color : 'var(--app-surface)',
                             color: category === cat ? 'white' : conf.color,
                             border: `1px solid ${category === cat ? conf.color : conf.color + '25'}`,
                           }}>
@@ -763,14 +763,14 @@ export default function IncidentsSection({
                 </div>
 
                 <div>
-                  <p className="inc-t10 font-bold text-gray-400 uppercase tracking-wider mb-1.5">Priority</p>
+                  <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">Priority</p>
                   <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by priority">
                     <button onClick={() => setPriority('all')} aria-pressed={priority === 'all'}
                       className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold"
                       style={{
-                        background: priority === 'all' ? '#5B54E8' : '#fafaff',
+                        background: priority === 'all' ? 'var(--brand)' : 'var(--app-surface)',
                         color: priority === 'all' ? 'white' : '#6b7280',
-                        border: '1px solid #f0effe',
+                        border: '1px solid var(--brand-soft)',
                       }}>
                       All
                     </button>
@@ -782,7 +782,7 @@ export default function IncidentsSection({
                           aria-pressed={priority === p}
                           className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold flex items-center gap-1"
                           style={{
-                            background: priority === p ? conf.color : '#fafaff',
+                            background: priority === p ? conf.color : 'var(--app-surface)',
                             color: priority === p ? 'white' : conf.color,
                             border: `1px solid ${priority === p ? conf.color : conf.color + '30'}`,
                           }}>
@@ -798,18 +798,18 @@ export default function IncidentsSection({
 
           {activeFilters.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap pt-2.5" style={{ borderTop: '1px solid #f7f6ff' }}>
-              <span className="inc-t10 text-gray-400 font-semibold">
+              <span className="inc-t10 text-gray-500 font-semibold">
                 {filtered.length} of {incidents.length}
               </span>
               {activeFilters.map(f => (
                 <button key={f.key} onClick={f.clear}
                   aria-label={`Remove filter ${f.label}`}
                   className="inc-press flex items-center gap-1 px-2 py-1 rounded-lg inc-t10 font-bold"
-                  style={{ background: '#f0effe', color: '#5B54E8' }}>
+                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
                   {f.label} <X size={9} />
                 </button>
               ))}
-              <button onClick={clearAll} className="inc-t10 font-bold ml-1" style={{ color: '#5B54E8' }}>
+              <button onClick={clearAll} className="inc-t10 font-bold ml-1" style={{ color: 'var(--brand)' }}>
                 Clear all
               </button>
             </div>
@@ -824,18 +824,18 @@ export default function IncidentsSection({
             <AlertTriangle size={26} className="text-orange-400" />
           </div>
           <p className="inc-t13 font-semibold text-gray-700">No incidents reported yet</p>
-          <p className="inc-t12 text-gray-400 mt-1">Reports from residents appear here the moment they&apos;re submitted.</p>
+          <p className="inc-t12 text-gray-500 mt-1">Reports from residents appear here the moment they&apos;re submitted.</p>
         </div>
       )}
 
       {incidents.length > 0 && filtered.length === 0 && (
         <div className="white-card p-10 text-center inc-card">
-          <Search size={30} className="mx-auto mb-3" style={{ color: '#5B54E8', opacity: 0.3 }} />
+          <Search size={30} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
           <p className="inc-t13 font-semibold text-gray-700">Nothing matches these filters</p>
-          <p className="inc-t12 text-gray-400 mt-1">Try a broader search or clear a filter.</p>
+          <p className="inc-t12 text-gray-500 mt-1">Try a broader search or clear a filter.</p>
           <button onClick={clearAll}
             className="inc-press mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl inc-t12 font-bold"
-            style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
             <X size={12} /> Clear all filters
           </button>
         </div>
@@ -899,7 +899,7 @@ export default function IncidentsSection({
                   <button
                     onClick={() => router.push(`/official/incident/${inc.id}`)}
                     className="inc-t14 font-bold text-gray-800 break-words text-left hover:underline"
-                    style={{ textDecorationColor: '#5B54E8' }}>
+                    style={{ textDecorationColor: 'var(--brand)' }}>
                     {inc.title}
                   </button>
 
@@ -927,7 +927,7 @@ export default function IncidentsSection({
                     )}
                     {basis?.law && (
                       <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
-                        style={{ background: '#f0effe', color: '#5B54E8' }}
+                        style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
                         title={basis.reason}>
                         <Scale size={9} /> {basis.law}
                       </span>
@@ -954,11 +954,11 @@ export default function IncidentsSection({
               {/* Metadata — location on its own line so it never fights the
                   reporter name for space on a narrow screen */}
               <div className="mt-2 space-y-0.5">
-                <p className="inc-t11 text-gray-400 flex items-center gap-1">
+                <p className="inc-t11 text-gray-500 flex items-center gap-1">
                   <span aria-hidden="true">📍</span>
                   <span className="truncate">{inc.location || 'No location given'}</span>
                 </p>
-                <p className="inc-t11 text-gray-400 truncate">
+                <p className="inc-t11 text-gray-500 truncate">
                   {inc.profiles?.full_name || 'Unknown reporter'}
                   {' · '}
                   <time title={fullDate(inc.created_at)} dateTime={inc.created_at}>{timeAgo(inc.created_at)}</time>
@@ -1063,8 +1063,8 @@ export default function IncidentsSection({
                           </div>
                         )}
                         {wasOverridden && (
-                          <div className="p-2.5 rounded-xl" style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-                            <p className="inc-t10 font-bold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>
+                          <div className="p-2.5 rounded-xl" style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
+                            <p className="inc-t10 font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>
                               Priority adjusted · {inc.original_priority} → {inc.priority}
                             </p>
                             <p className="inc-t12 italic" style={{ color: '#4c46c4' }}>&quot;{inc.priority_override_reason}&quot;</p>
@@ -1085,7 +1085,7 @@ export default function IncidentsSection({
                 {isPending && (
                   <button onClick={() => setDispatchFor(inc)}
                     className="inc-press flex-1 h-10 flex items-center justify-center gap-1.5 inc-t12 font-bold rounded-xl"
-                    style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                     <Send size={13} /> Dispatch
                   </button>
                 )}
@@ -1098,7 +1098,7 @@ export default function IncidentsSection({
                   <button onClick={() => setOverrideFor(inc)}
                     aria-label="Adjust priority"
                     className="inc-press w-10 h-10 flex items-center justify-center rounded-xl flex-shrink-0"
-                    style={{ background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' }}>
+                    style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
                     <Pencil size={13} />
                   </button>
                 )}
@@ -1113,10 +1113,10 @@ export default function IncidentsSection({
         <div className="pt-1 pb-2 text-center">
           <button onClick={onLoadMore} disabled={loadingMore}
             className="inc-press px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
-            style={{ background: 'white', color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+            style={{ background: 'white', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
             {loadingMore ? 'Loading…' : 'Load older incidents'}
           </button>
-          <p className="text-[11px] text-white/60 mt-2">
+          <p className="text-xs text-white/60 mt-2">
             Showing the {incidents.length} most recent — filters and exports cover these.
           </p>
         </div>

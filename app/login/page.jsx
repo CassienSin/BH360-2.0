@@ -246,12 +246,12 @@ export default function LoginPage() {
               <>
                 <div className="mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
-                    style={{ background: '#f0effe' }}>
+                    style={{ background: 'var(--brand-soft)' }}>
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Welcome back</span>
+                    <span className="text-xs font-bold" style={{ color: 'var(--brand)' }}>Welcome back</span>
                   </div>
                   <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Sign in 👋</h2>
-                  <p className="text-gray-400 text-sm mt-2">Continue to your barangay dashboard</p>
+                  <p className="text-gray-500 text-sm mt-2">Continue to your barangay dashboard</p>
                 </div>
 
                 {error && (
@@ -268,7 +268,7 @@ export default function LoginPage() {
                   <div className="fade-up-2">
                     <label htmlFor="login-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email Address</label>
                     <div className="relative">
-                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
                         autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
                         className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
@@ -281,19 +281,19 @@ export default function LoginPage() {
                       <label htmlFor="login-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Password</label>
                       <button type="button" onClick={() => switchMode('forgot')}
                         className="text-xs font-bold transition-colors hover:opacity-70"
-                        style={{ color: '#5B54E8' }}>
+                        style={{ color: 'var(--brand)' }}>
                         Forgot password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input id="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
                         autoComplete="current-password"
                         className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
                         placeholder="••••••••" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Hide password' : 'Show password'}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
@@ -302,7 +302,7 @@ export default function LoginPage() {
                   <div className="fade-up-4 pt-2">
                     <button type="submit" disabled={loading}
                       className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                      style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                       {loading ? (
                         <span className="flex items-center gap-2">
                           <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -319,9 +319,9 @@ export default function LoginPage() {
                 </form>
 
                 <div className="mt-6 pt-6 border-t border-gray-100 text-center">
-                  <p className="text-sm text-gray-400">
+                  <p className="text-sm text-gray-500">
                     Don&apos;t have an account?{' '}
-                    <a href="/register" className="font-bold transition-colors" style={{ color: '#5B54E8' }}>Create one →</a>
+                    <a href="/register" className="font-bold transition-colors" style={{ color: 'var(--brand)' }}>Create one →</a>
                   </p>
                 </div>
               </>
@@ -332,12 +332,12 @@ export default function LoginPage() {
               <>
                 <div className="mb-8">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
-                    style={{ background: '#f0effe' }}>
-                    <KeyRound size={11} style={{ color: '#5B54E8' }} />
-                    <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Password reset</span>
+                    style={{ background: 'var(--brand-soft)' }}>
+                    <KeyRound size={11} style={{ color: 'var(--brand)' }} />
+                    <span className="text-xs font-bold" style={{ color: 'var(--brand)' }}>Password reset</span>
                   </div>
                   <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Forgot password?</h2>
-                  <p className="text-gray-400 text-sm mt-2">Enter your email and we&apos;ll send you a link to set a new one.</p>
+                  <p className="text-gray-500 text-sm mt-2">Enter your email and we&apos;ll send you a link to set a new one.</p>
                 </div>
 
                 {error && (
@@ -353,7 +353,7 @@ export default function LoginPage() {
                   <div>
                     <label htmlFor="forgot-email" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email Address</label>
                     <div className="relative">
-                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                       <input id="forgot-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
                         autoComplete="email" inputMode="email" autoCapitalize="none" spellCheck={false}
                         className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
@@ -363,7 +363,7 @@ export default function LoginPage() {
 
                   <button type="submit" disabled={loading}
                     className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                    style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
+                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
                     {loading ? (
                       <span className="flex items-center gap-2">
                         <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -379,7 +379,7 @@ export default function LoginPage() {
                 </form>
 
                 <button onClick={() => switchMode('login')}
-                  className="mt-6 w-full flex items-center justify-center gap-1.5 text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                  className="mt-6 w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-600 transition-colors">
                   <ArrowLeft size={14} /> Back to sign in
                 </button>
               </>
@@ -393,15 +393,15 @@ export default function LoginPage() {
                   <Mail size={26} className="text-emerald-500" />
                 </div>
                 <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Check your email 📬</h2>
-                <p className="text-gray-400 text-sm mt-3 max-w-xs mx-auto">
+                <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
                   If an account exists for <span className="font-semibold text-gray-600">{email}</span>, a
                   password reset link is on its way. It may take a minute — check your spam folder too.
                 </p>
-                <p className="text-xs text-gray-400 mt-4">The link expires after a short time, so use it soon.</p>
+                <p className="text-xs text-gray-500 mt-4">The link expires after a short time, so use it soon.</p>
 
                 <button onClick={() => switchMode('login')}
                   className="mt-8 w-full flex items-center justify-center gap-1.5 py-3.5 rounded-2xl text-sm font-bold transition-colors hover:bg-gray-50"
-                  style={{ color: '#5B54E8', border: '1px solid #e8e3ff' }}>
+                  style={{ color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
                   <ArrowLeft size={14} /> Back to sign in
                 </button>
               </div>

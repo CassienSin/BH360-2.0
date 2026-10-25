@@ -69,7 +69,7 @@ export default function Error({
           <div
             className="absolute inset-0 rounded-3xl opacity-20"
             style={{
-              background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
+              background: 'linear-gradient(135deg, var(--brand), var(--brand-light))',
               filter: 'blur(20px)',
               animation: 'pulse 2s ease-in-out infinite',
             }}
@@ -77,7 +77,7 @@ export default function Error({
           <Image src="/logo.png" alt="BH360" fill sizes="96px" className="object-contain relative" priority />
         </div>
 
-        <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
+        <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--brand)' }}>
           Something went wrong
         </p>
         <h1 className="text-2xl font-black text-gray-800 mb-2" style={{ letterSpacing: '-0.5px' }}>
@@ -87,7 +87,7 @@ export default function Error({
           An unexpected error occurred. It&apos;s not you — it&apos;s us. Try again, and if it keeps happening, head back home.
         </p>
         {error.digest && (
-          <p className="text-[10px] text-gray-300 mb-6">Error reference: {error.digest}</p>
+          <p className="text-xs text-gray-300 mb-6">Error reference: {error.digest}</p>
         )}
         {!error.digest && <div className="mb-6" />}
 
@@ -95,14 +95,14 @@ export default function Error({
           <button
             onClick={reset}
             className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
-            style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
+            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
           >
             <RefreshCw size={14} /> Try Again
           </button>
           <Link
             href="/"
             className="flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: '#f0effe', color: '#5B54E8', border: '1px solid #e8e3ff' }}
+            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
           >
             <Home size={14} /> Go Home
           </Link>
@@ -110,8 +110,8 @@ export default function Error({
 
         {/* Bouncing dots — the app's signature trio */}
         <div className="mt-8 flex items-center justify-center gap-1.5">
-          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#5B54E8', animationDelay: '0ms' }} />
-          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#7C75F0', animationDelay: '150ms' }} />
+          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
+          <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
           <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
         </div>
       </div>

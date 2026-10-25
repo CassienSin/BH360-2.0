@@ -596,7 +596,7 @@ export default function CommandMap({
                 <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#2563eb' }} />Assigned</span>
                 <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#dc2626' }}>!</span>Critical</span>
                 <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#f97316' }}>!</span>High</span>
-                <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#5B54E8' }} />Grouped</span>
+                <span className={styles.legendItem}><span className={styles.sw} style={{ background: 'var(--brand)' }} />Grouped</span>
                 {layers.tanods && <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#16a34a' }} />Tanod</span>}
                 {layers.tanods && <span className={styles.legendItem}><span className={styles.sw} style={{ background: '#d97706' }} />Signal lost</span>}
                 {layers.tanods && <span className={styles.legendItem}><span className={styles.swRoute} />Route</span>}

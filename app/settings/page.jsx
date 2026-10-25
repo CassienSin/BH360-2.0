@@ -1,9 +1,10 @@
 'use client'
+import { PageHeader, AppButton } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock } from 'lucide-react'
+import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock, Settings as SettingsIcon } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -45,10 +46,10 @@ const Toggle = ({ enabled, onChange, label, desc }) => (
     className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
     <div className="flex-1 text-left min-w-0">
       <p className="text-sm font-bold text-gray-800">{label}</p>
-      <p className="text-xs text-gray-400 mt-0.5">{desc}</p>
+      <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
     </div>
     <div className="w-10 h-6 rounded-full relative flex-shrink-0 transition-colors"
-      style={{ background: enabled ? '#5B54E8' : '#e5e7eb' }}>
+      style={{ background: enabled ? 'var(--brand)' : '#e5e7eb' }}>
       <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
         style={{ left: enabled ? '20px' : '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
     </div>
@@ -242,26 +243,18 @@ export default function SettingsPage() {
           style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
       </div>
 
-      <header className={`bg-white z-10 px-4 sm:px-6 py-3 flex items-center gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid #f0effe' }}>
-        <button onClick={() => router.back()} aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>Settings</h1>
-          <p className="text-xs text-gray-400 truncate">Customize your experience</p>
-        </div>
-        <button onClick={saveSettings} disabled={saving || !dirty}
-          className="relative flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
-          {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-          <span className="hidden sm:inline">{dirty ? 'Save changes' : 'Saved'}</span>
-          {dirty && !saving && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-white" />
-          )}
-        </button>
-      </header>
+      <PageHeader
+        title="Settings"
+        description="Customize your experience"
+        icon={SettingsIcon}
+        onBack={() => router.back()}
+        actions={(
+          <AppButton onClick={saveSettings} disabled={!dirty} busy={saving} busyLabel="Saving…">
+            <Save size={15} aria-hidden="true" />
+            {dirty ? 'Save changes' : 'Saved'}
+          </AppButton>
+        )}
+      />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
 
@@ -269,12 +262,12 @@ export default function SettingsPage() {
         <div className="white-card p-5 fade-up">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#f0effe' }}>
-              <Bell size={20} style={{ color: '#5B54E8' }} />
+              style={{ background: 'var(--brand-soft)' }}>
+              <Bell size={20} style={{ color: 'var(--brand)' }} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
-              <p className="text-xs text-gray-400">Choose what you want to be notified about</p>
+              <p className="text-xs text-gray-500">Choose what you want to be notified about</p>
             </div>
           </div>
 
@@ -304,7 +297,7 @@ export default function SettingsPage() {
                 {notificationPermission === 'default' && (
                   <button onClick={enableNotifications}
                     className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg text-white"
-                    style={{ background: '#5B54E8' }}>
+                    style={{ background: 'var(--brand)' }}>
                     Enable Notifications
                   </button>
                 )}
@@ -356,7 +349,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-800">Language</h3>
-              <p className="text-xs text-gray-400">Choose your preferred language</p>
+              <p className="text-xs text-gray-500">Choose your preferred language</p>
             </div>
           </div>
 
@@ -369,11 +362,11 @@ export default function SettingsPage() {
                 aria-pressed={language === lang.value}
                 className="p-3 rounded-2xl transition-all hover:scale-[1.02]"
                 style={{
-                  background: language === lang.value ? '#f0effe' : '#fafaff',
-                  border: `2px solid ${language === lang.value ? '#5B54E8' : '#f0effe'}`,
+                  background: language === lang.value ? 'var(--brand-soft)' : 'var(--app-surface)',
+                  border: `2px solid ${language === lang.value ? 'var(--brand)' : 'var(--brand-soft)'}`,
                 }}>
                 <p className="text-2xl mb-1" aria-hidden="true">{lang.flag}</p>
-                <p className="text-sm font-bold" style={{ color: language === lang.value ? '#5B54E8' : '#374151' }}>
+                <p className="text-sm font-bold" style={{ color: language === lang.value ? 'var(--brand)' : '#374151' }}>
                   {lang.label}
                 </p>
               </button>
@@ -393,7 +386,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-bold text-gray-800">Install as App</h3>
-              <p className="text-xs text-gray-400">Add BarangayHub 360 to your home screen</p>
+              <p className="text-xs text-gray-500">Add BarangayHub 360 to your home screen</p>
             </div>
           </div>
           <p className="text-xs text-gray-500 leading-relaxed">
@@ -412,7 +405,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-800">Privacy & Data</h3>
-              <p className="text-xs text-gray-400">Manage your personal data</p>
+              <p className="text-xs text-gray-500">Manage your personal data</p>
             </div>
           </div>
 
@@ -425,7 +418,7 @@ export default function SettingsPage() {
                   : <Download size={16} className="text-blue-500 flex-shrink-0" />}
                 <div>
                   <p className="text-sm font-bold text-gray-800">Download My Data</p>
-                  <p className="text-xs text-gray-400">Export all your data as JSON</p>
+                  <p className="text-xs text-gray-500">Export all your data as JSON</p>
                 </div>
               </div>
             </button>
@@ -436,10 +429,10 @@ export default function SettingsPage() {
                 <Lock size={16} className="text-gray-500 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-bold text-gray-800">Change Password</p>
-                  <p className="text-xs text-gray-400">Update via your profile page</p>
+                  <p className="text-xs text-gray-500">Update via your profile page</p>
                 </div>
               </div>
-              <ArrowLeft size={14} className="text-gray-400 rotate-180" />
+              <ArrowLeft size={14} className="text-gray-500 rotate-180" />
             </button>
           </div>
         </div>
