@@ -2074,7 +2074,7 @@ begin
         'x-push-secret', v_secret
       ),
       body := jsonb_build_object(
-        'type', 'INSERT',
+        'type', tg_op,
         'table', tg_table_name,
         'record', to_jsonb(new)
       ),
@@ -2102,6 +2102,18 @@ drop trigger if exists dispatch_ticket_message_push_trigger on ticket_messages;
 create trigger dispatch_ticket_message_push_trigger
   after insert on ticket_messages
   for each row execute function private.dispatch_push();
+
+-- A tanod being dispatched to a report that already exists — by an
+-- official, or reassigned. The INSERT push above only covers reports that
+-- were auto-assigned the moment they were filed; without this, a tanod
+-- dispatched later heard nothing unless the app happened to be open.
+-- /api/push/send reads type = 'UPDATE' as "tell the assigned tanod".
+drop trigger if exists dispatch_incident_assignment_push_trigger on incidents;
+create trigger dispatch_incident_assignment_push_trigger
+  after update of assigned_to on incidents
+  for each row
+  when (new.assigned_to is not null and new.assigned_to is distinct from old.assigned_to)
+  execute function private.dispatch_push();
 
 -- Superseded by the generic dispatch_push above.
 drop function if exists private.dispatch_incident_push();

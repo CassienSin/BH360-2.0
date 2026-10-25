@@ -1,9 +1,9 @@
 import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase-server'
-import { incidentNotification, ticketReplyAudience } from '@/lib/pushAudience'
+import { assignmentNotification, newIncidentDeliveries, ticketReplyAudience } from '@/lib/pushAudience'
 
 /**
- * Sends a Web Push for a new incident.
+ * Sends a Web Push for a new incident, a tanod's assignment, or a ticket reply.
  *
  * This is the piece that works with nobody's browser open. It is called on
  * INSERT into `incidents` by a database trigger (Section 16 of
@@ -46,16 +46,28 @@ async function forIncident(admin, incident) {
 
   const { data: staff, error } = await admin
     .from('profiles')
-    .select('id')
+    .select('id, role')
     .eq('barangay_id', incident.barangay_id)
     .in('role', ['official', 'tanod'])
     .is('deactivated_at', null)
 
   if (error) return { error: 'Could not determine recipients.', cause: error }
-  return {
-    userIds: (staff || []).map(s => s.id),
-    notification: incidentNotification(incident),
-  }
+  return { deliveries: newIncidentDeliveries(incident, staff || []) }
+}
+
+/**
+ * A tanod dispatched to an existing report (the UPDATE trigger in setup.sql
+ * fires only when assigned_to changes to someone). Only that tanod hears.
+ */
+async function forAssignment(admin, incident) {
+  if (!incident.assigned_to) return { userIds: [], notification: null }
+  const { data: tanod } = await admin
+    .from('profiles')
+    .select('id, deactivated_at')
+    .eq('id', incident.assigned_to)
+    .single()
+  if (!tanod || tanod.deactivated_at) return { userIds: [], notification: null }
+  return { userIds: [tanod.id], notification: assignmentNotification(incident) }
 }
 
 /** Who hears about a ticket reply: the other side of that conversation. */
@@ -114,13 +126,14 @@ export async function POST(request) {
     return Response.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
-  let table, record
+  let table, record, type
   try {
     const body = await request.json()
     // Supabase database webhooks post { type, table, record, old_record }.
     // The SQL trigger in Section 16 of setup.sql sends the same shape.
     record = body?.record || body?.incident || body
     table = body?.table || 'incidents'
+    type = body?.type || 'INSERT'
   } catch {
     return Response.json({ error: 'Expected a JSON body.' }, { status: 400 })
   }
@@ -131,23 +144,28 @@ export async function POST(request) {
 
   const admin = createAdminClient()
 
-  const resolver = RESOLVERS[table]
+  const resolver = table === 'incidents' && type === 'UPDATE' ? forAssignment : RESOLVERS[table]
   if (!resolver) {
     // A webhook pointed at a table nothing here knows how to address. Say
     // so plainly rather than silently sending nobody anything.
     return Response.json({ error: `No push is defined for table "${table}".` }, { status: 400 })
   }
 
-  const { userIds, notification, error, cause } = await resolver(admin, record)
-  if (error) {
-    if (cause) console.error('push/send:', error, cause)
-    return Response.json({ error }, { status: cause ? 500 : 400 })
+  const result = await resolver(admin, record)
+  if (result.error) {
+    if (result.cause) console.error('push/send:', result.error, result.cause)
+    return Response.json({ error: result.error }, { status: result.cause ? 500 : 400 })
   }
+  // One notification per group of readers (officials, tanods, the assigned
+  // tanod), each with wording and a link that fits them.
+  const deliveries = (result.deliveries || [{ userIds: result.userIds, notification: result.notification }])
+    .filter(d => d.userIds?.length && d.notification)
+  const userIds = deliveries.flatMap(d => d.userIds)
   if (!userIds.length) return Response.json({ sent: 0, reason: 'Nobody to notify.' })
 
   const { data: subs, error: subsError } = await admin
     .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
+    .select('id, user_id, endpoint, p256dh, auth')
     .in('user_id', userIds)
 
   if (subsError) {
@@ -156,17 +174,21 @@ export async function POST(request) {
   }
   if (!subs?.length) return Response.json({ sent: 0, reason: 'No devices registered.' })
 
-  const payload = JSON.stringify(notification)
-  // Critical reports are worth retrying for a while; the rest are stale
-  // within the hour and should not pile up on a phone that was off.
-  const ttl = notification.priority === 'Critical' ? 3600 : 600
+  const forUser = new Map()
+  for (const d of deliveries) for (const id of d.userIds) forUser.set(id, d.notification)
 
   const results = await Promise.allSettled(
-    subs.map(sub => webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      payload,
-      { TTL: ttl, urgency: 'high' }
-    ))
+    subs.map(sub => {
+      const notification = forUser.get(sub.user_id)
+      // Critical reports are worth retrying for a while; the rest are stale
+      // within the hour and should not pile up on a phone that was off.
+      const ttl = notification.priority === 'Critical' ? 3600 : 600
+      return webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        JSON.stringify(notification),
+        { TTL: ttl, urgency: 'high' }
+      )
+    })
   )
 
   const dead = []

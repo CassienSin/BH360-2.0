@@ -81,7 +81,7 @@ function useTitleFlash(active, message) {
    Browser notification — reaches the official when the tab is backgrounded
    or the window is minimized, which the modal cannot do.
 ------------------------------------------------------------------------- */
-function fireBrowserNotification(incident) {
+function fireBrowserNotification(incident, url) {
   // Through showNotification rather than `new Notification()` directly:
   // Android Chrome throws "Illegal constructor" for the latter, so on the
   // phones most officials actually carry the critical notification was
@@ -96,15 +96,42 @@ function fireBrowserNotification(incident) {
     tag: `critical-${incident.id}`,   // replaces rather than stacks duplicates
     requireInteraction: true,          // stays until dismissed
     force: true,
-    data: { url: `/official/incident/${incident.id}` },
+    data: { url },
   })
 }
+
+// Wording for each audience. Officials triage and dispatch; a tanod has
+// been sent and needs to get moving. Everything else — siren, flashing
+// title, blocking modal — is shared, so both get the same alert.
+const COPY = {
+  official: {
+    headline: 'Immediate response required',
+    multiHeadline: 'Multiple emergencies active',
+    multiHint: 'Review all before dispatching — you may need to split your tanods.',
+    view: 'View & dispatch a tanod',
+    viewShort: 'View & dispatch',
+    url: (inc) => `/official/incident/${inc.id}`,
+  },
+  tanod: {
+    headline: 'You have been dispatched',
+    multiHeadline: 'Multiple emergencies assigned to you',
+    multiHint: 'Acknowledge each one, then open your assignments to plan the order.',
+    view: 'Open my assignment',
+    viewShort: 'Open',
+    url: () => '/tanod',
+  },
+}
+
+const defaultPending = (i) => i.priority === 'Critical' && i.status !== 'resolved' && !i.acknowledged_at
 
 export default function CriticalAlert({
   incidents = [],
   onAcknowledge,       // async (incident) => void
   onView,              // (incident) => void — jump to the incident
+  audience = 'official',
+  isPending = defaultPending, // which incidents still need this person's acknowledgement
 }) {
+  const copy = COPY[audience] || COPY.official
   const now = useNow()
   const [muted, setMuted] = useState(false)
   const [ackBusy, setAckBusy] = useState(false)
@@ -113,7 +140,7 @@ export default function CriticalAlert({
   // Oldest unacknowledged critical first — the one that's been waiting
   // longest is the one that needs attention most.
   const queue = incidents
-    .filter(i => i.priority === 'Critical' && i.status !== 'resolved' && !i.acknowledged_at)
+    .filter(isPending)
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 
   const current = queue[0] || null
@@ -133,8 +160,8 @@ export default function CriticalAlert({
     if (!current) return
     if (notifiedRef.current.has(current.id)) return
     notifiedRef.current.add(current.id)
-    fireBrowserNotification(current)
-  }, [current])
+    fireBrowserNotification(current, copy.url(current))
+  }, [current, copy])
 
   if (!current) return null
 
@@ -193,11 +220,11 @@ export default function CriticalAlert({
               {multiple ? `${queue.length} Critical Incidents` : 'Critical Incident'}
             </p>
             <h2 id="crit-title" className="text-xl font-black text-white mt-1 leading-tight">
-              {multiple ? 'Multiple emergencies active' : 'Immediate response required'}
+              {multiple ? copy.multiHeadline : copy.headline}
             </h2>
             {multiple && (
               <p className="text-xs text-red-100 mt-2 leading-relaxed">
-                Review all before dispatching — you may need to split your tanods.
+                {copy.multiHint}
               </p>
             )}
           </div>
@@ -237,7 +264,7 @@ export default function CriticalAlert({
                       <button onClick={() => { onView?.(inc); acknowledgeOne(inc) }} disabled={ackBusy === inc.id}
                         className="flex-1 h-9 rounded-xl text-xs font-bold transition-transform active:scale-95 disabled:opacity-50"
                         style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                        View & dispatch
+                        {copy.viewShort}
                       </button>
                     </div>
                   </div>
@@ -318,7 +345,7 @@ export default function CriticalAlert({
                 <button onClick={() => { onView?.(current); acknowledgeOne(current) }} disabled={ackBusy === current.id}
                   className="w-full py-3 rounded-2xl text-sm font-bold transition-transform active:scale-95 disabled:opacity-60"
                   style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                  View &amp; dispatch a tanod
+                  {copy.view}
                 </button>
               </div>
             )}

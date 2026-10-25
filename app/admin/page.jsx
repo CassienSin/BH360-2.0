@@ -91,7 +91,7 @@ function inviteEmail(app) {
     '2. Choose "Barangay Official" and enter the code above',
     '3. Fill in your details and sign in',
     '',
-    'Once you are in, you can create invite codes for your fellow officials and tanods.',
+    'Inviting your team: once you are signed in, open User Management and press "Tanod Code" or "Official Code". Share each code with one person; they choose the matching role when they sign up.',
     '',
     'BarangayHub 360',
   ].join('\n')
@@ -146,7 +146,6 @@ export default function AdminPanel() {
   const [incidentBarangayFilter, setIncidentBarangayFilter] = useState('all')
   const [incidentView, setIncidentView] = useState('list')
   const [analyticsIncidents, setAnalyticsIncidents] = useState(null)
-  const [analyticsBarangays, setAnalyticsBarangays] = useState(null)
   const [loadingIncidentAnalytics, setLoadingIncidentAnalytics] = useState(false)
   const [incidentAnalyticsError, setIncidentAnalyticsError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -170,7 +169,7 @@ export default function AdminPanel() {
         .order('created_at', { ascending: false })
         .limit(APPLICATION_LIMIT),
       supabase.from('profiles')
-        .select('*, barangays(name)')
+        .select('*, barangays(name, city, province)')
         .or('is_super_admin.is.null,is_super_admin.eq.false')
         .order('created_at', { ascending: false })
         .limit(100),
@@ -221,22 +220,7 @@ export default function AdminPanel() {
         allRows.push(...page)
         if (page.length < INCIDENT_ANALYTICS_PAGE_SIZE) break
       }
-      const allBarangays = []
-      for (let from = 0; ; from += INCIDENT_ANALYTICS_PAGE_SIZE) {
-        const { data, error } = await supabase.from('barangays')
-          .select('id, name, city, province')
-          .order('name')
-          .order('province')
-          .order('city')
-          .order('id')
-          .range(from, from + INCIDENT_ANALYTICS_PAGE_SIZE - 1)
-        if (error) throw error
-        const page = data || []
-        allBarangays.push(...page)
-        if (page.length < INCIDENT_ANALYTICS_PAGE_SIZE) break
-      }
       setAnalyticsIncidents(allRows)
-      setAnalyticsBarangays(allBarangays)
     } catch (error) {
       console.error('Incident analytics load failed:', error)
       setIncidentAnalyticsError(error.message || 'Could not load incident analytics.')
@@ -573,15 +557,23 @@ export default function AdminPanel() {
 
   const incidentAnalytics = useMemo(() => {
     if (!analyticsIncidents) return null
-    const barangays = new Map((analyticsBarangays || []).map(barangay => [barangay.id, {
-      id: barangay.id,
-      name: barangay.name || 'Unnamed barangay',
-      city: barangay.city || '',
-      province: barangay.province || '',
-      total: 0,
-      open: 0,
-      critical: 0,
-    }]))
+    // Only barangays that use the app: every one with registered users
+    // (so a quiet barangay still shows its zero), plus any with reports.
+    // Listing all ~42,000 PSGC barangays made this tab slow to load and
+    // buried the dozen that matter.
+    const barangays = new Map()
+    for (const u of users) {
+      if (!u.barangay_id || barangays.has(u.barangay_id)) continue
+      barangays.set(u.barangay_id, {
+        id: u.barangay_id,
+        name: u.barangays?.name || 'Unnamed barangay',
+        city: u.barangays?.city || '',
+        province: u.barangays?.province || '',
+        total: 0,
+        open: 0,
+        critical: 0,
+      })
+    }
     const categories = new Map()
     const statuses = { pending: 0, assigned: 0, resolved: 0 }
     const monthly = new Map()
@@ -639,7 +631,7 @@ export default function AdminPanel() {
       statuses,
       monthly: lastSixMonths,
     }
-  }, [analyticsIncidents, analyticsBarangays])
+  }, [analyticsIncidents, users])
 
   const totalBarangaysWithUsers = useMemo(
     () => new Set(users.map(u => u.barangay_id).filter(Boolean)).size,
@@ -969,6 +961,11 @@ export default function AdminPanel() {
                         style={{ background: '#047857' }}>
                         <Mail size={13} aria-hidden="true" /> Email code
                       </button>
+                      <p className="w-full text-xs text-emerald-900 leading-relaxed">
+                        This code is for the applicant only. Once they sign in, they create
+                        <strong> tanod</strong> and <strong>official</strong> codes for their team under
+                        <strong> User Management</strong>. Need one now? Use <strong>Invite Codes</strong> above.
+                      </p>
                       {emailMenuFor === app.id && (() => {
                         const links = emailLinks(app)
                         const item = 'flex items-center justify-center gap-1.5 px-3 min-h-10 rounded-lg text-xs font-bold transition-colors bg-white hover:bg-emerald-100'
@@ -1268,7 +1265,7 @@ export default function AdminPanel() {
                   </div>
                 ) : incidentAnalytics ? (
                   <>
-                    <p className="px-1 text-xs text-white/75">All {incidentAnalytics.total} incident records loaded across {incidentAnalytics.barangays.length} registered barangays.</p>
+                    <p className="px-1 text-xs text-white/75">All {incidentAnalytics.total} incident records, across {incidentAnalytics.barangays.length} barangays using the app.</p>
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       {[
                         { label: 'All reports', value: incidentAnalytics.total, color: '#5B54E8' },
@@ -1325,7 +1322,7 @@ export default function AdminPanel() {
 
                     <section className="white-card min-w-0 overflow-hidden p-5">
                       <h3 className="font-bold text-gray-800">Incident reports by barangay</h3>
-                      <p className="mb-4 mt-1 text-xs text-gray-500">Every registered barangay, including those with no reports, ranked by total reports</p>
+                      <p className="mb-4 mt-1 text-xs text-gray-500">Every barangay with registered users or reports, ranked by total reports</p>
                       {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-500">No incident reports yet.</p> : (
                         <div className="max-h-[480px] overflow-auto">
                           <table className="w-full min-w-[600px] text-left text-xs">

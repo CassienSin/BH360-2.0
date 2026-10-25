@@ -248,12 +248,19 @@ export default function NewAnnouncement() {
     if (!success || !postedId) return
     if (undoSecondsLeft <= 0) {
       try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
-      router.push('/official')
+      // Save it once more now that it is visible. Residents' live feed
+      // could not see the original insert (it was still hidden), but it
+      // does see this update — so it appears without a refresh.
+      supabase.from('announcements')
+        .update({ published_at: new Date(Date.now() - 1000).toISOString() })
+        .eq('id', postedId)
+        .then(({ error }) => { if (error) console.error('Publishing announcement failed:', error) })
+        .finally(() => router.push('/official'))
       return
     }
     const timer = setTimeout(() => setUndoSecondsLeft(s => s - 1), 1000)
     return () => clearTimeout(timer)
-  }, [success, postedId, undoSecondsLeft, router])
+  }, [success, postedId, undoSecondsLeft, router, supabase])
 
   async function undoPost() {
     if (undoing || !postedId) return

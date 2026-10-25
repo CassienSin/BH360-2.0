@@ -25,6 +25,7 @@ import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified
 import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -455,30 +456,26 @@ export default function ResidentDashboard() {
   // listeners are now FILTERED to this user's own rows. Previously they
   // subscribed to updates on EVERY incident and ticket in the database
   // (whatever RLS allowed through), doing a state .map() per event.
+  // New announcements, live — see lib/useLiveAnnouncements for why this
+  // is not a plain INSERT listener.
+  useLiveAnnouncements(supabase, profile?.barangay_id, (row) => {
+    // De-dupe: a reload racing this could already have the row
+    setAnnouncements(prev => (prev.some(a => a.id === row.id) ? prev : [row, ...prev]))
+    if (prefsRef.current.announcements !== false) {
+      notify.info({
+        kind: 'Announcement',
+        title: row.title,
+        action: { label: 'Read it', onClick: () => setActiveSection('announcements') },
+      })
+      notifyNewAnnouncement(row)
+    }
+  })
+
   useEffect(() => {
     if (!profile?.barangay_id) return
 
     const channel = supabase
       .channel(`resident-${profile.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'announcements',
-        filter: `barangay_id=eq.${profile.barangay_id}`,
-      }, (payload) => {
-        // De-dupe: a reload racing this event could already have the row
-        setAnnouncements(prev => prev.some(a => a.id === payload.new.id)
-          ? prev
-          : [payload.new, ...prev])
-        if (prefsRef.current.announcements !== false) {
-          notify.info({
-            kind: 'Announcement',
-            title: payload.new.title,
-            action: { label: 'Read it', onClick: () => setActiveSection('announcements') },
-          })
-          notifyNewAnnouncement(payload.new)
-        }
-      })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',

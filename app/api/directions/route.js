@@ -15,7 +15,9 @@ import { cookies } from 'next/headers'
  * Maps directions — it never draws a guessed path.
  */
 
-const ORS_URL = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson'
+// api.openrouteservice.org is being retired (quota cut to 10% from Aug 2026,
+// shut down 2-6 Nov 2026). The same API, same key, now lives on api.heigit.org.
+const ORS_URL = 'https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson'
 const CACHE_TTL_MS = 10 * 60 * 1000
 const CACHE_MAX = 500
 // Per server instance. On Vercel that is a partial cache, which is fine:

@@ -13,7 +13,9 @@ import DutyToggle from '@/components/DutyToggle'
 import DutyScheduleSummary from '@/components/DutyScheduleSummary'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
-import { notifyNewAssignment } from '@/lib/notifications'
+import CriticalAlert from '@/components/CriticalAlert'
+import { playSiren } from '@/lib/audioAlert'
+import { notifyNewAssignment, notifyNewAnnouncement } from '@/lib/notifications'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { notify } from '@/components/Toast'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
@@ -26,6 +28,7 @@ import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 import {
   RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
   tanodSummary, mostUrgentAssignment, tanodStats,
@@ -36,6 +39,7 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
 const PAGE_SIZE = 50
 const INCIDENT_SELECT = '*, profiles!incidents_reported_by_fkey(full_name, phone)'
+const SEEN_ALERTS_KEY = 'bh360-tanod-alerts-seen'
 
 const DOTS = Array.from({ length: 20 }, (_, i) => ({
   size: ((i * 7) % 6) + 3,
@@ -118,6 +122,15 @@ export default function TanodDashboard() {
   // already paged through.
   const pageSizeRef = useRef(PAGE_SIZE)
   const [busyStamp, setBusyStamp] = useState(null)
+
+  // Critical assignments this tanod has already acknowledged on this device.
+  // acknowledged_at alone can't say that: an official acknowledging the
+  // report on their own dashboard stamps it too, and the tanod still has
+  // to be told. Kept per device, so a reload doesn't sound the siren again.
+  const [seenAlerts, setSeenAlerts] = useState(() => {
+    if (typeof window === 'undefined') return new Set()
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_ALERTS_KEY) || '[]')) } catch { return new Set() }
+  })
   const [staleSince, setStaleSince] = useState(null)
   const [directionsMenu, setDirectionsMenu] = useState(null)
 
@@ -254,6 +267,17 @@ export default function TanodDashboard() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [profile?.id, fetchIncidents])
 
+  // Barangay announcements reach tanods live too.
+  useLiveAnnouncements(supabase, profile?.barangay_id, (row) => {
+    const text = row.content || ''
+    notify.info({
+      kind: 'Announcement',
+      title: row.title,
+      body: text.length > 140 ? `${text.slice(0, 140)}…` : text,
+    })
+    notifyNewAnnouncement(row)
+  })
+
   // ---- Realtime subscription ----
   useEffect(() => {
     if (!profile?.id) return
@@ -292,13 +316,19 @@ export default function TanodDashboard() {
 
           const toastId = `assignment-${data.id}`
           if (data.priority === 'Critical') {
-      notify.critical({
-        kind: `Critical · ${data.category || 'Assignment'}`,
-        title: data.title,
-        body: data.location,
-      })
+            // The blocking alert (CriticalAlert below) takes it from here:
+            // siren, flashing title and a system notification, the same as
+            // the officials get.
+            return
           } else if (data.priority === 'High') {
-            toast(`⚠️ HIGH PRIORITY: ${data.title}`, { duration: 6000, icon: '🟠', id: toastId })
+            playSiren()
+            notify.critical({
+              kind: `High priority · ${data.category || 'Assignment'}`,
+              title: data.title,
+              body: data.location,
+              id: toastId,
+              action: { label: 'Open', onClick: () => setActiveSection('active') },
+            })
           } else {
       notify.warn({
         kind: 'New assignment',
@@ -339,6 +369,17 @@ export default function TanodDashboard() {
    * database decides what the time says and whose name is on it, so a
    * response time cannot be edited after the fact.
    */
+  async function acknowledgeAlert(incident) {
+    setSeenAlerts(prev => {
+      const next = new Set(prev).add(incident.id)
+      try { localStorage.setItem(SEEN_ALERTS_KEY, JSON.stringify([...next].slice(-200))) } catch { /* private mode */ }
+      return next
+    })
+    // Records "seen" with the server's clock — unless an official already
+    // stamped it, in which case the database keeps the first stamp anyway.
+    if (!incident.acknowledged_at) await stampResponse(incident, 'acknowledged_at')
+  }
+
   async function stampResponse(incident, field) {
     if (busyStamp) return
     setBusyStamp(incident.id)
@@ -1132,6 +1173,15 @@ export default function TanodDashboard() {
 
         </main>
       </div>
+
+      <CriticalAlert
+        audience="tanod"
+        incidents={incidents}
+        isPending={(i) => i.priority === 'Critical' && i.status === 'assigned' && !i.arrived_at
+          && i.acknowledged_by !== profile?.id && !seenAlerts.has(i.id)}
+        onAcknowledge={acknowledgeAlert}
+        onView={() => setActiveSection('active')}
+      />
 
       <ResolveModal
         open={!!resolveModal}
