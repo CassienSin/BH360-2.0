@@ -1,6 +1,6 @@
 'use client'
 import desktop from '@/components/desktop-pages.module.css'
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
@@ -46,7 +46,7 @@ function IncidentPhoto({ stored, onOpen }) {
     <button onClick={() => onOpen(signed)} aria-label="View your photo"
       className="rid-press w-full rounded-2xl overflow-hidden block mb-4"
       style={{ border: '1px solid #f0effe' }}>
-      <img src={signed} alt="Your photo" className="w-full max-h-56 object-cover" />
+      <img loading="lazy" decoding="async" src={signed} alt="Your photo" className="w-full max-h-56 object-cover" />
     </button>
   )
 }
@@ -58,7 +58,7 @@ function TimelinePhoto({ stored, onOpen }) {
     <button onClick={() => onOpen(signed)} aria-label="View resolution photo"
       className="rid-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
       style={{ border: '1px solid #f0effe' }}>
-      <img src={signed} alt="" className="w-full h-full object-cover" />
+      <img loading="lazy" decoding="async" src={signed} alt="" className="w-full h-full object-cover" />
     </button>
   )
 }
@@ -184,42 +184,51 @@ export default function ResidentIncidentDetail() {
 
   const availability = useBarangayAvailability(barangayId)
 
-  const load = useCallback(async () => {
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) { router.replace('/login'); return }
+  // Fetch on open and whenever the incident id changes. `cancelled`
+  // drops answers for an incident the user has already navigated away from.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (cancelled) return
+      if (authError || !user) { router.replace('/login'); return }
 
-    // See the note in app/resident/report/page.jsx: if the embedded
-    // barangays(phone) column is missing, the whole select fails and
-    // barangay_id comes back null too.
-    const { data: prof, error: profError } = await supabase
-      .from('profiles').select('barangay_id, barangays(phone)').eq('id', user.id).single()
-    if (profError) console.error('Could not load barangay context:', profError)
-    setBarangayId(prof?.barangay_id ?? null)
-    setBarangayPhone(prof?.barangays?.phone ?? null)
+      // See the note in app/resident/report/page.jsx: if the embedded
+      // barangays(phone) column is missing, the whole select fails and
+      // barangay_id comes back null too.
+      const { data: prof, error: profError } = await supabase
+        .from('profiles').select('barangay_id, barangays(phone)').eq('id', user.id).single()
+      if (cancelled) return
+      if (profError) console.error('Could not load barangay context:', profError)
+      setBarangayId(prof?.barangay_id ?? null)
+      setBarangayPhone(prof?.barangays?.phone ?? null)
 
-    const { data, error } = await supabase
-      .from('incidents').select('*').eq('id', params.id).single()
+      const { data, error } = await supabase
+        .from('incidents').select('*').eq('id', params.id).single()
+      if (cancelled) return
 
-    // A resident may only open their own report. RLS enforces this too —
-    // this check is for a clear message rather than an empty screen.
-    if (error || !data || data.reported_by !== user.id) {
-      setDenied(true); setLoading(false); return
+      // A resident may only open their own report. RLS enforces this too —
+      // this check is for a clear message rather than an empty screen.
+      if (error || !data || data.reported_by !== user.id) {
+        setDenied(true); setLoading(false); return
+      }
+      setIncident(data)
+      setRating(data.rating || 0)
+      setFeedback(data.rating_feedback || '')
+
+      if (data.assigned_to) {
+        const { data: t, error: responderError } = await supabase
+          .from('profiles').select('full_name, phone, on_duty').eq('id', data.assigned_to).single()
+        if (cancelled) return
+        // The report still renders without the responder's details.
+        if (responderError) console.error('Could not load the assigned tanod:', responderError)
+        setResponder(t)
+      }
+      setLoading(false)
     }
-    setIncident(data)
-    setRating(data.rating || 0)
-    setFeedback(data.rating_feedback || '')
-
-    if (data.assigned_to) {
-      const { data: t, error: responderError } = await supabase
-        .from('profiles').select('full_name, phone, on_duty').eq('id', data.assigned_to).single()
-      // The report still renders without the responder's details.
-      if (responderError) console.error('Could not load the assigned tanod:', responderError)
-      setResponder(t)
-    }
-    setLoading(false)
+    load()
+    return () => { cancelled = true }
   }, [supabase, router, params.id])
-
-  useEffect(() => { load() }, [load])
 
   // Live updates — the resident sees a tanod get assigned without refreshing
   useEffect(() => {
@@ -266,7 +275,7 @@ export default function ResidentIncidentDetail() {
           <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
           <h1 className="text-lg font-bold text-gray-800">Report not found</h1>
           <p className="text-sm text-gray-400 mt-1">
-            This report doesn't exist, or it isn't one of yours.
+            This report doesn&apos;t exist, or it isn&apos;t one of yours.
           </p>
           <button onClick={() => router.replace('/resident')}
             className="btn-primary mt-5 px-5 py-2.5 rounded-2xl text-white text-sm font-bold">
@@ -431,7 +440,7 @@ export default function ResidentIncidentDetail() {
                     {e.quote && (
                       <p className="text-[11px] italic mt-1.5 px-2.5 py-1.5 rounded-lg"
                         style={{ background: e.tone.bg, color: e.tone.dot }}>
-                        "{e.quote}"
+                        &quot;{e.quote}&quot;
                       </p>
                     )}
                     <TimelinePhoto stored={e.photo}
@@ -458,7 +467,7 @@ export default function ResidentIncidentDetail() {
           <div className="white-card p-5">
             <p className="text-sm font-black text-gray-800">How was the response?</p>
             <p className="text-xs text-gray-400 mt-0.5 mb-3">
-              Your rating helps the barangay improve. It's visible to officials.
+              Your rating helps the barangay improve. It&apos;s visible to officials.
             </p>
 
             <div className="flex items-center gap-1.5 mb-3" role="radiogroup" aria-label="Rating">

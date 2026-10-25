@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import { LEGAL_BASIS, getPriority } from '@/lib/legalBasis'
+import { LEGAL_BASIS } from '@/lib/legalBasis'
 import { computeStanding, activeWindowLabel } from '@/lib/triage'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 
@@ -175,54 +175,67 @@ export default function IncidentDetail() {
   const [lightbox, setLightbox] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) { router.replace('/login'); return }
+  // Bumped to fetch again (after a dispatch conflict shows stale data).
+  const [reloadCount, setReloadCount] = useState(0)
 
-    const { data: prof, error: profError } = await supabase
-      .from('profiles').select('role, barangay_id').eq('id', user.id).single()
-    // A failed query is not the same as being the wrong role.
-    if (profError) {
-      console.error('Could not load your profile:', profError)
-      toast.error('Could not load this incident. Please refresh.')
+  // Fetch on open and whenever the incident id changes (or a reload is asked for). `cancelled`
+  // drops answers for an incident the user has already navigated away from.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (cancelled) return
+      if (authError || !user) { router.replace('/login'); return }
+
+      const { data: prof, error: profError } = await supabase
+        .from('profiles').select('role, barangay_id').eq('id', user.id).single()
+      if (cancelled) return
+      // A failed query is not the same as being the wrong role.
+      if (profError) {
+        console.error('Could not load your profile:', profError)
+        toast.error('Could not load this incident. Please refresh.')
+        setLoading(false)
+        return
+      }
+      if (prof?.role !== 'official') { router.replace('/login'); return }
+
+      const { data, error } = await supabase
+        .from('incidents')
+        .select('*, profiles!incidents_reported_by_fkey(full_name, phone)')
+        .eq('id', params.id)
+        .single()
+      if (cancelled) return
+
+      if (error || !data) { setNotFound(true); setLoading(false); return }
+      setIncident(data)
+
+      // Everyone who appears in the timeline, resolved in one query
+      const ids = [data.assigned_to, data.acknowledged_by, data.priority_overridden_by].filter(Boolean)
+      if (ids.length) {
+        const { data: rows, error: rowsError } = await supabase
+          .from('profiles').select('id, full_name, phone, on_duty, avatar_url').in('id', ids)
+        if (cancelled) return
+        // Names for the audit trail. Without them it falls back to ids, which
+        // is ugly but readable — not worth interrupting the page for.
+        if (rowsError) console.error('Could not load the people named on this incident:', rowsError)
+        const map = {}
+        for (const r of rows || []) map[r.id] = r
+        setPeople(map)
+      }
+
+      const { data: tanodRows, error: tanodError } = await supabase
+        .from('profiles').select('id, full_name, phone, on_duty')
+        .eq('barangay_id', prof.barangay_id).eq('role', 'tanod').is('deactivated_at', null)
+      if (cancelled) return
+      // Feeds the dispatch picker; an empty list would read as "no tanods".
+      if (tanodError) console.error('Could not load the tanod roster:', tanodError)
+      setTanods(tanodRows || [])
+
       setLoading(false)
-      return
     }
-    if (prof?.role !== 'official') { router.replace('/login'); return }
-
-    const { data, error } = await supabase
-      .from('incidents')
-      .select('*, profiles!incidents_reported_by_fkey(full_name, phone)')
-      .eq('id', params.id)
-      .single()
-
-    if (error || !data) { setNotFound(true); setLoading(false); return }
-    setIncident(data)
-
-    // Everyone who appears in the timeline, resolved in one query
-    const ids = [data.assigned_to, data.acknowledged_by, data.priority_overridden_by].filter(Boolean)
-    if (ids.length) {
-      const { data: rows, error: rowsError } = await supabase
-        .from('profiles').select('id, full_name, phone, on_duty, avatar_url').in('id', ids)
-      // Names for the audit trail. Without them it falls back to ids, which
-      // is ugly but readable — not worth interrupting the page for.
-      if (rowsError) console.error('Could not load the people named on this incident:', rowsError)
-      const map = {}
-      for (const r of rows || []) map[r.id] = r
-      setPeople(map)
-    }
-
-    const { data: tanodRows, error: tanodError } = await supabase
-      .from('profiles').select('id, full_name, phone, on_duty')
-      .eq('barangay_id', prof.barangay_id).eq('role', 'tanod').is('deactivated_at', null)
-    // Feeds the dispatch picker; an empty list would read as "no tanods".
-    if (tanodError) console.error('Could not load the tanod roster:', tanodError)
-    setTanods(tanodRows || [])
-
-    setLoading(false)
-  }, [supabase, router, params.id])
-
-  useEffect(() => { load() }, [load])
+    load()
+    return () => { cancelled = true }
+  }, [supabase, router, params.id, reloadCount])
 
   // Live updates while the page is open
   useEffect(() => {
@@ -260,7 +273,7 @@ export default function IncidentDetail() {
       .eq('id', incident.id).eq('status', 'pending').select()
     setBusy(false)
     if (error) { toast.error('Dispatch failed.'); return }
-    if (!data?.length) { toast.error('Already assigned by someone else.'); load(); return }
+    if (!data?.length) { toast.error('Already assigned by someone else.'); setReloadCount(n => n + 1); return }
     setIncident(p => ({ ...p, assigned_to: tanodId, status: 'assigned' }))
     toast.success('Tanod dispatched')
   }
@@ -536,7 +549,7 @@ export default function IncidentDetail() {
                         {e.quote && (
                           <p className="text-[11px] italic mt-1.5 px-2.5 py-1.5 rounded-lg"
                             style={{ background: tone.bg, color: tone.dot }}>
-                            "{e.quote}"
+                            &quot;{e.quote}&quot;
                           </p>
                         )}
                         {e.note && (
@@ -660,7 +673,7 @@ function TimelinePhoto({ stored, onOpen }) {
       aria-label="View resolution photo"
       className="idt-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
       style={{ border: '1px solid #f0effe' }}>
-      <img src={signed} alt="" className="w-full h-full object-cover" />
+      <img loading="lazy" decoding="async" src={signed} alt="" className="w-full h-full object-cover" />
     </button>
   )
 }

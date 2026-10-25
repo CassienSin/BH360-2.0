@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, HelpCircle, MessageSquare, BookOpen, Phone, ChevronDown, Send, Sparkles, Search, AlertTriangle, Loader2, CheckCircle, X } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 
 const DOTS = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -17,10 +18,9 @@ const DOTS = [...Array(20)].map((_, i) => ({
 
 // Ambient decoration only — skipped for users who prefer reduced motion.
 const AnimatedDots = () => {
-  const [show, setShow] = useState(false)
-  useEffect(() => {
-    setShow(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  }, [])
+  // Server and hydration render assume reduced motion (nothing drawn), so
+  // the dots appear only once the browser says motion is welcome.
+  const show = !useMediaQuery('(prefers-reduced-motion: reduce)', true)
   if (!show) return null
   return (
     <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
@@ -211,7 +211,7 @@ export default function HelpPage() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>Help & Support</h1>
-          <p className="text-xs text-gray-400 truncate">We're here to help, 24/7</p>
+          <p className="text-xs text-gray-400 truncate">We&apos;re here to help, 24/7</p>
         </div>
         <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0"
           style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>

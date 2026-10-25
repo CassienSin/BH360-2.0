@@ -378,7 +378,7 @@ export default function TicketChat() {
                         style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
                       >
                         {msg.profiles?.avatar_url ? (
-                          <img src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                         ) : (
                           msg.profiles?.full_name?.[0]?.toUpperCase() || '?'
                         )}

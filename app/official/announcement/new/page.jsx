@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase'
 import { Bell, AlignLeft, CheckCircle, Sparkles, Megaphone, Info, AlertTriangle, Lightbulb, Users, Eye, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import styles from './announcement.module.css'
+import { useHydrated } from '@/lib/useHydrated'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 150
@@ -79,6 +80,17 @@ const BEST_PRACTICES = [
   { icon: '❌', title: 'Avoid all caps', desc: 'IT FEELS LIKE SHOUTING — use sparingly' },
 ]
 
+// The saved draft, or null when there is none or it is unreadable.
+function readDraft() {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null')
+    if (draft && (draft.title || draft.content)) return { title: draft.title || '', content: draft.content || '' }
+  } catch {
+    // Corrupt draft or storage blocked: start blank
+  }
+  return null
+}
+
 export default function NewAnnouncement() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -92,21 +104,22 @@ export default function NewAnnouncement() {
   const [undoing, setUndoing] = useState(false)
   const [pendingTemplate, setPendingTemplate] = useState(null)
 
-  // Restore any saved draft on mount, and load the official's name for the preview
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(DRAFT_KEY)
-      if (saved) {
-        const draft = JSON.parse(saved)
-        if (draft.title || draft.content) {
-          setForm({ title: draft.title || '', content: draft.content || '' })
-          setDraftRestored(true)
-        }
-      }
-    } catch {
-      // Corrupt draft — ignore
+  // Restore a saved draft once, on the first render in the browser. The
+  // server renders an empty form, so this must wait for hydration; doing it
+  // while rendering (not in an effect) avoids a flash of the empty form.
+  const hydrated = useHydrated()
+  const [draftChecked, setDraftChecked] = useState(false)
+  if (hydrated && !draftChecked) {
+    setDraftChecked(true)
+    const draft = readDraft()
+    if (draft) {
+      setForm(draft)
+      setDraftRestored(true)
     }
+  }
 
+  // Load the official's name for the preview byline
+  useEffect(() => {
     let cancelled = false
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -323,7 +336,7 @@ export default function NewAnnouncement() {
           </div>
 
           <p className="text-xs text-gray-400 mt-4">
-            Leaving this page won't cancel the announcement — it publishes automatically.
+            Leaving this page won&apos;t cancel the announcement — it publishes automatically.
           </p>
         </div>
       </div>

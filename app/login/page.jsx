@@ -320,7 +320,7 @@ export default function LoginPage() {
 
                 <div className="mt-6 pt-6 border-t border-gray-100 text-center">
                   <p className="text-sm text-gray-400">
-                    Don't have an account?{' '}
+                    Don&apos;t have an account?{' '}
                     <a href="/register" className="font-bold transition-colors" style={{ color: '#5B54E8' }}>Create one →</a>
                   </p>
                 </div>
@@ -337,7 +337,7 @@ export default function LoginPage() {
                     <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Password reset</span>
                   </div>
                   <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Forgot password?</h2>
-                  <p className="text-gray-400 text-sm mt-2">Enter your email and we'll send you a link to set a new one.</p>
+                  <p className="text-gray-400 text-sm mt-2">Enter your email and we&apos;ll send you a link to set a new one.</p>
                 </div>
 
                 {error && (

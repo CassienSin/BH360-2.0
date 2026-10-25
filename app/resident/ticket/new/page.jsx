@@ -229,9 +229,9 @@ export default function NewTicket() {
             <Lightbulb size={18} className="text-yellow-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-bold">What's a support ticket?</p>
+            <p className="text-white text-sm font-bold">What&apos;s a support ticket?</p>
             <p className="text-purple-200 text-xs mt-0.5 leading-relaxed">
-              Use this to request services, ask questions, file complaints, or share feedback. You'll be able to chat directly with a barangay official.
+              Use this to request services, ask questions, file complaints, or share feedback. You&apos;ll be able to chat directly with a barangay official.
             </p>
           </div>
         </div>

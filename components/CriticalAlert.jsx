@@ -4,6 +4,7 @@ import { AlertTriangle, MapPin, User, Clock, Phone, Volume2, VolumeX, Scale } fr
 import { LEGAL_BASIS } from '@/lib/legalBasis'
 import { timeAgo } from '@/lib/timeAgo'
 import { showNotification } from '@/lib/notifications'
+import { useNow } from '@/lib/useNow'
 import {
   installAudioPrimer, primeAudio, playSiren,
   isAudioUnlocked, onAudioUnlockChange,
@@ -104,6 +105,7 @@ export default function CriticalAlert({
   onAcknowledge,       // async (incident) => void
   onView,              // (incident) => void — jump to the incident
 }) {
+  const now = useNow()
   const [muted, setMuted] = useState(false)
   const [ackBusy, setAckBusy] = useState(false)
   const notifiedRef = useRef(new Set())
@@ -138,7 +140,7 @@ export default function CriticalAlert({
 
   const multiple = queue.length > 1
   const basis = LEGAL_BASIS[current.category]
-  const waitingMin = Math.floor((Date.now() - new Date(current.created_at).getTime()) / 60000)
+  const waitingMin = Math.floor((now - new Date(current.created_at).getTime()) / 60000)
 
   async function acknowledgeOne(incident) {
     setAckBusy(incident.id)
@@ -205,7 +207,7 @@ export default function CriticalAlert({
             <div className="overflow-y-auto flex-1 divide-y" style={{ borderColor: '#f7f6ff' }}>
               {queue.map((inc, i) => {
                 const b = LEGAL_BASIS[inc.category]
-                const mins = Math.floor((Date.now() - new Date(inc.created_at).getTime()) / 60000)
+                const mins = Math.floor((now - new Date(inc.created_at).getTime()) / 60000)
                 return (
                   <div key={inc.id} className="px-5 py-4">
                     <div className="flex items-start gap-3">

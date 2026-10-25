@@ -1,0 +1,70 @@
+/* Map markers. Pins are HTML, not canvas, so they stay real <button>s:
+   focusable, labelled, and tappable at a full 44px target. */
+
+.pin {
+  position: relative; display: block; width: 44px; height: 56px;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  transform-origin: 50% 100%; transition: transform .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin:focus-visible { outline: 3px solid #b8acf9; outline-offset: 2px; border-radius: 12px; }
+.pinSvg { position: absolute; left: 2px; top: 2px; width: 40px; height: 52px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.pinGlyph { position: absolute; left: 50%; top: 21px; transform: translate(-50%, -50%); display: grid; place-items: center; }
+.selected { transform: scale(1.15); z-index: 1; }
+.resolved .pinSvg, .resolved .pinGlyph { opacity: .55; }
+
+/* Pulse sits at the pin tip: the exact reported spot is what is pending. */
+.pulse {
+  position: absolute; left: 50%; bottom: 0; width: 30px; height: 30px; border-radius: 50%;
+  transform: translate(-50%, 50%); animation: pulse 1.8s ease-out infinite; pointer-events: none;
+}
+@keyframes pulse {
+  0% { transform: translate(-50%, 50%) scale(.6); opacity: .75; }
+  75% { transform: translate(-50%, 50%) scale(1.9); opacity: 0; }
+  100% { opacity: 0; }
+}
+.ring {
+  position: absolute; left: 50%; top: 21px; width: 58px; height: 58px; border-radius: 50%;
+  border: 2.5px solid var(--cm-accent, #5B54E8); transform: translate(-50%, -50%); pointer-events: none;
+}
+
+.badge {
+  position: absolute; top: -2px; display: grid; place-items: center; width: 19px; height: 19px;
+  border-radius: 50%; border: 2px solid #fff; color: #fff; font-size: 11px; font-weight: 800; line-height: 1;
+  box-sizing: border-box;
+}
+.badgeRight { right: -2px; }
+.badgeLeft { left: -2px; }
+.critical { background: #dc2626; }
+.high { background: #f97316; }
+.assigned { background: #2563eb; }
+.done { background: #16a34a; }
+
+.cluster {
+  position: relative; display: grid; place-items: center; border-radius: 50%;
+  border: 3px solid #fff; background: #5B54E8; color: #fff; font: inherit; font-weight: 800;
+  box-shadow: 0 4px 14px rgba(41,35,56,.3); cursor: pointer; padding: 0;
+}
+.cluster:focus-visible { outline: 3px solid #b8acf9; outline-offset: 3px; }
+.clusterResolved { background: #9a93ab; }
+.clusterHalo { position: absolute; inset: -9px; border-radius: 50%; background: rgba(91,84,232,.18); pointer-events: none; }
+.clusterHaloCritical { background: rgba(220,38,38,.2); animation: halo 1.8s ease-out infinite; }
+@keyframes halo { 0% { transform: scale(.85); opacity: 1; } 100% { transform: scale(1.35); opacity: 0; } }
+.clusterDot { position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-sizing: border-box; }
+
+.tanod {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border-radius: 50%; border: 3px solid #fff; background: #16a34a; color: #fff; font: inherit;
+  font-size: 13px; font-weight: 800; box-shadow: 0 4px 12px rgba(22,163,74,.4); cursor: pointer; overflow: visible;
+}
+.tanod:focus-visible { outline: 3px solid #b8acf9; outline-offset: 3px; }
+.tanodStale { background: #d97706; box-shadow: 0 4px 12px rgba(217,119,6,.4); }
+.tanodHalo { position: absolute; inset: -8px; border-radius: 50%; background: rgba(34,197,94,.22); animation: halo 2.2s ease-out infinite; pointer-events: none; }
+.tanodPhoto { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+.measureDot { width: 14px; height: 14px; border-radius: 50%; background: #5B54E8; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse, .clusterHaloCritical, .tanodHalo { animation: none; }
+  .pin { transition: none; }
+}

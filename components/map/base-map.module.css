@@ -1,0 +1,29 @@
+/* Shared look for every map in the app (console, mini map, location picker). */
+.wrap { position: relative; width: 100%; height: 100%; isolation: isolate; font-family: inherit; }
+.wrap :global(.maplibregl-map) { font-family: inherit; }
+
+.wrap :global(.maplibregl-ctrl-group) {
+  border-radius: 14px; overflow: hidden; border: 1px solid #e8e3ff;
+  box-shadow: 0 4px 14px rgba(41,35,56,.12);
+}
+.wrap :global(.maplibregl-ctrl-group button) { width: 44px; height: 44px; }
+.wrap :global(.maplibregl-ctrl-bottom-right .maplibregl-ctrl-group) { margin: 0 16px 10px 0; }
+.wrap :global(.maplibregl-ctrl-top-right .maplibregl-ctrl-group) { margin: 10px 12px 0 0; }
+.wrap :global(.maplibregl-ctrl-attrib) { font-size: 11px; background: rgba(255,255,255,.85); border-radius: 8px 0 0 0; }
+.wrap :global(.maplibregl-ctrl-attrib a) { color: #514765; }
+
+.wrap :global(.maplibregl-popup-content) {
+  border-radius: 16px; padding: 14px; font-family: inherit; color: #292338;
+  box-shadow: 0 10px 30px rgba(41,35,56,.2);
+}
+.wrap :global(.maplibregl-popup-close-button) { width: 32px; height: 32px; font-size: 20px; border-radius: 0 16px 0 10px; color: #62576f; }
+
+.dark :global(.maplibregl-ctrl-group) { background: #1c2030; border-color: #2e3446; }
+.dark :global(.maplibregl-ctrl-group button + button) { border-top-color: #2e3446; }
+.dark :global(.maplibregl-ctrl-group button .maplibregl-ctrl-icon) { filter: invert(1) hue-rotate(180deg); }
+.dark :global(.maplibregl-ctrl-attrib) { background: rgba(22,25,35,.85); color: #9aa3b8; }
+.dark :global(.maplibregl-ctrl-attrib a) { color: #c3c9d8; }
+.dark :global(.maplibregl-ctrl-attrib-button) { filter: invert(1); }
+.dark :global(.maplibregl-popup-content) { background: #1c2030; color: #e8eaf2; }
+.dark :global(.maplibregl-popup-tip) { border-top-color: #1c2030; border-bottom-color: #1c2030; }
+.dark :global(.maplibregl-popup-close-button) { color: #c3c9d8; }

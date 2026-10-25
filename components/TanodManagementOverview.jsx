@@ -18,7 +18,6 @@ function Avatar({ tanod, large = false }) {
     {(tanod.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase()}
     {tanod.avatar_url && !failed && (
       // Small user-uploaded avatars can come from dynamic storage URLs.
-      // eslint-disable-next-line @next/next/no-img-element
       <img src={tanod.avatar_url} alt="" loading="lazy" onError={() => setFailed(true)} />
     )}
   </span>

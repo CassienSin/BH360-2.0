@@ -528,7 +528,7 @@ export default function LandingPage() {
                     <Star key={i} size={14} fill="#fbbf24" className="text-yellow-400" aria-hidden="true" />
                   ))}
                 </div>
-                <p className="text-gray-700 text-sm leading-relaxed mb-5 italic">"{t.text}"</p>
+                <p className="text-gray-700 text-sm leading-relaxed mb-5 italic">&quot;{t.text}&quot;</p>
                 <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold text-sm"
                     style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>

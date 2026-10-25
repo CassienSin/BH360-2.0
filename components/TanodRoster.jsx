@@ -15,6 +15,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Shield, Phone, AlertTriangle } from 'lucide-react'
 import { timeAgo } from '@/lib/timeAgo'
+import { useNow } from '@/lib/useNow'
 
 const STALE_MS = 30 * 60 * 1000 // on duty but unseen for 30 min → warn
 
@@ -33,6 +34,7 @@ const statusConfig = {
 const statusOrder = { responding: 0, available: 1, off: 2 }
 
 export default function TanodRoster({ profile }) {
+  const now = useNow()
   const supabase = useMemo(() => createClient(), [])
   const [tanods, setTanods] = useState([])
   const [activeAssignments, setActiveAssignments] = useState({}) // { tanodId: count }
@@ -141,7 +143,7 @@ export default function TanodRoster({ profile }) {
   function isStale(t) {
     if (!t.on_duty) return false
     if (!t.last_seen_at) return true
-    return Date.now() - new Date(t.last_seen_at).getTime() > STALE_MS
+    return now - new Date(t.last_seen_at).getTime() > STALE_MS
   }
 
   return (
@@ -192,7 +194,7 @@ export default function TanodRoster({ profile }) {
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
                     style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
                     {t.avatar_url
-                      ? <img src={t.avatar_url} alt={t.full_name} className="w-full h-full object-cover" />
+                      ? <img loading="lazy" decoding="async" src={t.avatar_url} alt={t.full_name} className="w-full h-full object-cover" />
                       : t.full_name?.[0]?.toUpperCase()}
                   </div>
                   <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"

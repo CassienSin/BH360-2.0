@@ -84,7 +84,7 @@ export default function Error({
           Naku! We hit a snag 😅
         </h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-1">
-          An unexpected error occurred. It's not you — it's us. Try again, and if it keeps happening, head back home.
+          An unexpected error occurred. It&apos;s not you — it&apos;s us. Try again, and if it keeps happening, head back home.
         </p>
         {error.digest && (
           <p className="text-[10px] text-gray-300 mb-6">Error reference: {error.digest}</p>

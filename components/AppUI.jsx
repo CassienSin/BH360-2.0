@@ -9,8 +9,8 @@ export function AppButton({ children, variant = 'primary', busy = false, busyLab
   </button>
 }
 
-export function PageHeader({ title, description, onBack, backLabel = 'Go back', icon: Icon, actions }) {
-  return <header className={styles.header}><div className={styles.headerInner}>
+export function PageHeader({ title, description, onBack, backLabel = 'Go back', icon: Icon, actions, maxWidth }) {
+  return <header className={styles.header}><div className={styles.headerInner} style={maxWidth ? { maxWidth } : undefined}>
     {onBack && <button type="button" onClick={onBack} className={styles.back} aria-label={backLabel}><ArrowLeft size={19} aria-hidden="true" /></button>}
     {Icon && <span className={styles.headerIcon}><Icon size={21} aria-hidden="true" /></span>}
     <div className={styles.heading}><h1>{title}</h1>{description && <p>{description}</p>}</div>

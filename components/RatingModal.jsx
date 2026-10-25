@@ -20,14 +20,18 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
   const [submitting, setSubmitting] = useState(false)
   const panelRef = useRef(null)
 
-  useEffect(() => {
+  // Closing clears the form, so the next incident starts blank. Done while
+  // rendering when `open` flips (no effect, no extra render pass).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
     if (!open) {
       setRating(0)
       setHoverRating(0)
       setFeedback('')
       setSubmitting(false)
     }
-  }, [open])
+  }
 
   useEffect(() => {
     if (!open) return

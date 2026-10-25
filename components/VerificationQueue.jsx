@@ -129,7 +129,7 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
                   <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
                     style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}>
                     {u.avatar_url
-                      ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                      ? <img loading="lazy" decoding="async" src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                       : u.full_name?.[0]?.toUpperCase() || '?'}
                   </div>
 

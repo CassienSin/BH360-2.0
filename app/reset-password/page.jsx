@@ -9,6 +9,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Eye, EyeOff, Lock, ArrowRight, CheckCircle, KeyRound } from 'lucide-react'
 import Image from 'next/image'
+import { useBrowserValue } from '@/lib/useHydrated'
 
 export default function ResetPasswordPage() {
   const supabase = useMemo(() => createClient(), [])
@@ -19,20 +20,22 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
+  // 1) If Supabase already rejected the link, it says so explicitly in the
+  //    URL hash (#error=...&error_code=otp_expired etc). That is fixed for
+  //    the life of the page, so it is read once rather than kept in state.
+  const linkRejected = useBrowserValue(() => Boolean(new URLSearchParams(window.location.hash.slice(1)).get('error')), false)
+
   // 'checking' | 'ready' | 'invalid'
-  const [linkState, setLinkState] = useState('checking')
+  const [linkCheck, setLinkState] = useState('checking')
+  const linkState = linkRejected ? 'invalid' : linkCheck
 
   useEffect(() => {
     let cancelled = false
 
-    // 1) If Supabase already rejected the link, it says so explicitly in
-    //    the URL hash (#error=...&error_code=otp_expired etc). Surface
-    //    that instead of guessing via timeouts.
-    const hashParams = new URLSearchParams(window.location.hash.slice(1))
-    if (hashParams.get('error')) {
+    if (linkRejected) {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1))
       console.error('Auth link error:',
         hashParams.get('error_code'), '—', hashParams.get('error_description'))
-      setLinkState('invalid')
       return
     }
 
@@ -113,7 +116,7 @@ export default function ResetPasswordPage() {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [supabase])
+  }, [supabase, linkRejected])
 
   async function handleReset(e) {
     e.preventDefault()
@@ -219,7 +222,7 @@ export default function ResetPasswordPage() {
                   <span className="text-xs font-bold" style={{ color: '#5B54E8' }}>Almost there</span>
                 </div>
                 <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Set new password 🔐</h2>
-                <p className="text-gray-400 text-sm mt-2">Choose a strong password you haven't used before.</p>
+                <p className="text-gray-400 text-sm mt-2">Choose a strong password you haven&apos;t used before.</p>
               </div>
 
               {error && (

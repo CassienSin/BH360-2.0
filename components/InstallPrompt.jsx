@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Download, X } from 'lucide-react'
 import Image from 'next/image'
+import { useBrowserValue } from '@/lib/useHydrated'
 
 // localStorage throws in some private modes and embedded webviews —
 // an install banner must never crash the app.
@@ -41,20 +42,18 @@ export default function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [showBanner, setShowBanner] = useState(false)
   const [showFull, setShowFull] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
-  const [isInApp, setIsInApp] = useState(false)
-  const [isInstalled, setIsInstalled] = useState(false)
+  // Facts about this browser that do not change while the page is open.
+  // The server render assumes none of them, and the banner never shows
+  // before hydration, so nothing visible can disagree.
+  const standalone = useBrowserValue(detectStandalone, false)
+  const isIOS = useBrowserValue(detectIOS, false)
+  const isInApp = useBrowserValue(detectInAppBrowser, false)
+  // Installed = already running as the app, or installed during this visit.
+  const [installedNow, setInstalledNow] = useState(false)
+  const isInstalled = standalone || installedNow
 
   useEffect(() => {
-    if (detectStandalone()) {
-      setIsInstalled(true)
-      return
-    }
-
-    const iOS = detectIOS()
-    const inApp = detectInAppBrowser()
-    setIsIOS(iOS)
-    setIsInApp(inApp)
+    if (standalone) return
 
     // Respect a recent dismissal
     const dismissed = storageGet('pwa-install-dismissed')
@@ -76,7 +75,7 @@ export default function InstallPrompt() {
     // If the user installs through the browser's own UI (address-bar
     // icon, menu), hide the banner — previously it kept showing.
     const handleInstalled = () => {
-      setIsInstalled(true)
+      setInstalledNow(true)
       setShowBanner(false)
       setShowFull(false)
     }
@@ -84,7 +83,7 @@ export default function InstallPrompt() {
 
     // iOS and in-app browsers never fire beforeinstallprompt — show the
     // banner on a timer with the appropriate instructions instead.
-    if (iOS || inApp) {
+    if (isIOS || isInApp) {
       timeouts.push(setTimeout(() => setShowBanner(true), 3000))
     }
 
@@ -95,7 +94,7 @@ export default function InstallPrompt() {
       // setState on an unmounted component.
       timeouts.forEach(clearTimeout)
     }
-  }, [])
+  }, [standalone, isIOS, isInApp])
 
   // Escape closes the full modal, and the page behind it doesn't scroll
   useEffect(() => {
@@ -119,7 +118,7 @@ export default function InstallPrompt() {
       const { outcome } = await deferredPrompt.userChoice
       if (outcome === 'accepted') {
         setShowBanner(false)
-        setIsInstalled(true)
+        setInstalledNow(true)
       }
     } catch (err) {
       // prompt() throws if already used or blocked — fall back to steps
@@ -237,10 +236,10 @@ export default function InstallPrompt() {
                 <div className="rounded-2xl p-4 mt-4"
                   style={{ background: 'linear-gradient(135deg, #fafaff, #f0effe)', border: '1px solid #e8e3ff' }}>
                   <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>
-                    ⚠️ You're in an in-app browser
+                    ⚠️ You&apos;re in an in-app browser
                   </p>
                   <p className="text-xs text-gray-500 mb-3">
-                    Apps like Messenger and Facebook open links in their own browser, which can't install apps. Open BH360 in your real browser first:
+                    Apps like Messenger and Facebook open links in their own browser, which can&apos;t install apps. Open BH360 in your real browser first:
                   </p>
                   <ol className="text-sm text-gray-700 space-y-2">
                     <li className="flex gap-2">
@@ -249,7 +248,7 @@ export default function InstallPrompt() {
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
-                      <span>Choose <strong>"Open in browser"</strong> {isIOS ? '(Safari)' : '(Chrome)'}</span>
+                      <span>Choose <strong>&quot;Open in browser&quot;</strong> {isIOS ? '(Safari)' : '(Chrome)'}</span>
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
@@ -270,11 +269,11 @@ export default function InstallPrompt() {
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
-                      <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+                      <span>Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong></span>
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
-                      <span>Tap <strong>"Add"</strong> in the top right</span>
+                      <span>Tap <strong>&quot;Add&quot;</strong> in the top right</span>
                     </li>
                   </ol>
                 </div>
@@ -287,15 +286,15 @@ export default function InstallPrompt() {
                   <ol className="text-sm text-gray-700 space-y-2">
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>1.</span>
-                      <span>Look for the <strong>Install icon</strong> in your browser's address bar</span>
+                      <span>Look for the <strong>Install icon</strong> in your browser&apos;s address bar</span>
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>2.</span>
-                      <span>Or open the menu (⋮) and click <strong>"Install BarangayHub 360"</strong></span>
+                      <span>Or open the menu (⋮) and click <strong>&quot;Install BarangayHub 360&quot;</strong></span>
                     </li>
                     <li className="flex gap-2">
                       <span className="font-bold" style={{ color: '#5B54E8' }}>3.</span>
-                      <span>Click <strong>"Install"</strong> to confirm</span>
+                      <span>Click <strong>&quot;Install&quot;</strong> to confirm</span>
                     </li>
                   </ol>
                 </div>

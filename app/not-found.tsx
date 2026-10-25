@@ -80,7 +80,7 @@ export default function NotFound() {
           Wala dito! 🧭
         </h1>
         <p className="text-sm text-gray-500 leading-relaxed mb-6">
-          The page you're looking for doesn't exist, moved, or the link is broken. Let's get you back on track.
+          The page you&apos;re looking for doesn&apos;t exist, moved, or the link is broken. Let&apos;s get you back on track.
         </p>
 
         <div className="flex items-center justify-center gap-3 flex-wrap">

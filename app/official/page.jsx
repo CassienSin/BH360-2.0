@@ -1,9 +1,10 @@
 'use client'
 import { PageState } from '@/components/AppUI'
+import { Skeleton, CardSkeleton } from '@/components/Skeletons'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Star, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
+import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -31,6 +32,9 @@ import { deadlineState } from '@/lib/documents'
 import { stageDeadline as blotterDeadline, isOpen as blotterIsOpen } from '@/lib/katarungan'
 import { verificationStyle } from '@/lib/verification'
 import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
+import { useNow } from '@/lib/useNow'
+import { useMediaQuery } from '@/lib/useMediaQuery'
+import { useSidebarState } from '@/lib/useSidebarState'
 
 const DOTS = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -42,10 +46,9 @@ const DOTS = [...Array(20)].map((_, i) => ({
 
 // Ambient decoration only — skipped for users who prefer reduced motion.
 const AnimatedDots = () => {
-  const [show, setShow] = useState(false)
-  useEffect(() => {
-    setShow(!window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  }, [])
+  // Server and hydration render assume reduced motion (nothing drawn), so
+  // the dots appear only once the browser says motion is welcome.
+  const show = !useMediaQuery('(prefers-reduced-motion: reduce)', true)
   if (!show) return null
   return (
     <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
@@ -71,8 +74,9 @@ const AnimatedDots = () => {
 // Used in User Management and Tanod Management — avatar_url was never
 // rendered there before, only the initial.
 function Avatar({ src, name, gradient, className = 'w-9 h-9', textClass = 'text-sm' }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => { setFailed(false) }, [src])
+  // Remember WHICH url failed: a new url gets a fresh try with no reset effect.
+  const [failedSrc, setFailedSrc] = useState(null)
+  const failed = failedSrc != null && failedSrc === src
   if (src && !failed) {
     return (
       <img
@@ -80,7 +84,7 @@ function Avatar({ src, name, gradient, className = 'w-9 h-9', textClass = 'text-
         alt=""
         className={`${className} rounded-2xl object-cover flex-shrink-0`}
         style={{ border: '2px solid white', boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}
-        onError={() => setFailed(true)}
+        onError={() => setFailedSrc(src)}
         loading="lazy"
       />
     )
@@ -167,7 +171,20 @@ function OfficialTicketCard({ t, live, onOpen }) {
   )
 }
 
+// Dashboard loading state. Module level so it is not rebuilt each render.
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-28 w-full rounded-3xl" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-3xl" />)}
+      </div>
+    </div>
+  )
+}
+
 export default function OfficialDashboard() {
+  const now = useNow()
   const router = useRouter()
 
   // A resident replying on a ticket used to be silent unless the official
@@ -191,13 +208,9 @@ export default function OfficialDashboard() {
   const [incidentsHasMore, setIncidentsHasMore] = useState(false)
   const [loadingMoreIncidents, setLoadingMoreIncidents] = useState(false)
   const [activeSection, setActiveSection] = useState('dashboard')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
+  const [sidebarOpen, setSidebarOpen] = useSidebarState(true)
   const [loading, setLoading] = useState(true)
-  const [incidentSearch, setIncidentSearch] = useState('')
-  const [incidentFilter, setIncidentFilter] = useState('all')
-  const [incidentCategoryFilter, setIncidentCategoryFilter] = useState('all')
-  const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
   const [ticketSearch, setTicketSearch] = useState('')
   const [ticketFilter, setTicketFilter] = useState('all')
   const [userSearch, setUserSearch] = useState('')
@@ -206,37 +219,6 @@ export default function OfficialDashboard() {
   const [generatingCode, setGeneratingCode] = useState(false)
   const hadDropRef = useRef(false) // realtime dropped at some point → refetch on reconnect
 
-  useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) {
-      setSidebarOpen(JSON.parse(saved))
-    } else if (window.innerWidth < 768) {
-      setSidebarOpen(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
-
-  // Only react when the viewport CROSSES the mobile breakpoint. The old
-  // version force-set the sidebar on every resize (and once on mount),
-  // which stomped the user's saved preference on desktop.
-  useEffect(() => {
-    let lastMobile = window.innerWidth < 768
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768
-      if (isMobile !== lastMobile) {
-        lastMobile = isMobile
-        setSidebarOpen(!isMobile)
-      }
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
@@ -574,20 +556,10 @@ export default function OfficialDashboard() {
     }
   }, [profile?.barangay_id, supabase, loadBarangayData, router])
 
-  const filteredIncidents = useMemo(() => {
-    const q = incidentSearch.trim().toLowerCase()
-    return incidents
-      .filter(inc => {
-        const matchesSearch = !q ||
-          inc.title?.toLowerCase().includes(q) ||
-          inc.description?.toLowerCase().includes(q) ||
-          inc.location?.toLowerCase().includes(q) ||
-          inc.profiles?.full_name?.toLowerCase().includes(q)
-        const matchesFilter = incidentFilter === 'all' || inc.status === incidentFilter
-        const matchesCategory = incidentCategoryFilter === 'all' || inc.category === incidentCategoryFilter
-        const matchesPriority = incidentPriorityFilter === 'all' || inc.priority === incidentPriorityFilter
-        return matchesSearch && matchesFilter && matchesCategory && matchesPriority
-      })
+  // Export order: open work first, then priority, then newest. (Filtering
+  // lives in IncidentsSection; the export takes every incident.)
+  const sortedIncidents = useMemo(() => {
+    return [...incidents]
       .sort((a, b) => {
         // Status first (pending/assigned before resolved)
         const statusOrder = { pending: 1, assigned: 2, resolved: 3 }
@@ -601,7 +573,7 @@ export default function OfficialDashboard() {
         // Finally newest first
         return new Date(b.created_at) - new Date(a.created_at)
       })
-  }, [incidents, incidentSearch, incidentFilter, incidentCategoryFilter, incidentPriorityFilter])
+  }, [incidents])
 
   const filteredTickets = useMemo(() => {
     const q = ticketSearch.trim().toLowerCase()
@@ -630,7 +602,7 @@ export default function OfficialDashboard() {
   const navClick = useCallback((key) => {
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
-  }, [])
+  }, [setSidebarOpen])
 
   async function doDispatch(incidentId, tanod) {
     // Atomic: only succeeds while the incident is still pending, so two
@@ -945,7 +917,7 @@ export default function OfficialDashboard() {
       { label: 'Description', key: 'description' },
       { label: 'Date Reported', value: (r) => new Date(r.created_at).toLocaleDateString('en-PH', { dateStyle: 'medium' }) },
     ]
-    const data = filteredIncidents
+    const data = sortedIncidents
     const filename = `incidents-${profile?.barangays?.name?.replace(/\s/g, '-') || 'barangay'}`
     try {
       if (format === 'csv') {
@@ -953,7 +925,7 @@ export default function OfficialDashboard() {
       } else {
         await exportToPDF(data, filename, columns, {
           title: 'Incident Report',
-          subtitle: `${data.length} incidents${incidentFilter !== 'all' ? ` (${incidentFilter})` : ''}`,
+          subtitle: `${data.length} incidents`,
           barangay: profile?.barangays ? `${profile.barangays.name}, ${profile.barangays.city}` : '',
           orientation: 'landscape',
           paperSize: 'a4',
@@ -1024,26 +996,6 @@ export default function OfficialDashboard() {
     }
   }
 
-  const Skeleton = ({ className }) => <div className={`skeleton-shimmer ${className}`} />
-  const CardSkeleton = () => (
-    <div className="white-card p-5">
-      <div className="flex items-center gap-3">
-        <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-3.5 w-3/4" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
-      </div>
-    </div>
-  )
-  const DashboardSkeleton = () => (
-    <div className="space-y-6">
-      <Skeleton className="h-28 w-full rounded-3xl" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-3xl" />)}
-      </div>
-    </div>
-  )
 
   return (
     <div className="min-h-screen flex relative overflow-hidden bg-brand">
@@ -1173,7 +1125,7 @@ export default function OfficialDashboard() {
                 <AlertTriangle size={28} className="text-orange-500" />
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">No Barangay Assigned</h2>
-              <p className="text-gray-500 text-sm">Your official account isn't linked to a barangay. Please contact your system administrator.</p>
+              <p className="text-gray-500 text-sm">Your official account isn&apos;t linked to a barangay. Please contact your system administrator.</p>
             </div>
           )}
 
@@ -1414,13 +1366,13 @@ export default function OfficialDashboard() {
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-black" style={{color: '#22c55e'}}>
-                        {announcements.filter(a => (Date.now() - new Date(a.created_at)) / 86400000 <= 7).length}
+                        {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 7).length}
                       </p>
                       <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">This Week</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-black" style={{color: '#f97316'}}>
-                        {announcements.filter(a => (Date.now() - new Date(a.created_at)) / 86400000 <= 1).length}
+                        {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 1).length}
                       </p>
                       <p className="text-[10px] text-gray-400 uppercase tracking-wider mt-0.5">Today</p>
                     </div>
@@ -1447,7 +1399,7 @@ export default function OfficialDashboard() {
 
               {/* Announcement cards */}
               {announcements.map(a => {
-                const daysAgo = (Date.now() - new Date(a.created_at)) / 86400000
+                const daysAgo = (now - new Date(a.created_at)) / 86400000
                 const isNew = daysAgo <= 1
                 const isThisWeek = daysAgo <= 7
 

@@ -63,28 +63,43 @@ export default function RequestAccess() {
     getProvinces().then(setProvinces)
   }, [])
 
+  // Choosing a province or city clears the choices below it and starts
+  // the loading indicator, right where the choice is made. The effects
+  // below only fetch.
+  function chooseProvince(province) {
+    setSelectedProvince(province)
+    setSelectedCity('')
+    setSelectedBarangay('')
+    setBarangays([])
+    if (province) setLoadingLocations(true)
+  }
+  function chooseCity(city) {
+    setSelectedCity(city)
+    setSelectedBarangay('')
+    if (city) setLoadingLocations(true)
+  }
+
+  // `cancelled` drops a slow answer for a place the user has already left.
   useEffect(() => {
-    if (selectedProvince) {
-      setLoadingLocations(true)
-      setSelectedCity('')
-      setSelectedBarangay('')
-      setBarangays([])
-      getCities(selectedProvince).then(c => {
-        setCities(c)
-        setLoadingLocations(false)
-      })
-    }
+    if (!selectedProvince) return
+    let cancelled = false
+    getCities(selectedProvince).then(c => {
+      if (cancelled) return
+      setCities(c)
+      setLoadingLocations(false)
+    })
+    return () => { cancelled = true }
   }, [selectedProvince])
 
   useEffect(() => {
-    if (selectedCity && selectedProvince) {
-      setLoadingLocations(true)
-      setSelectedBarangay('')
-      getBarangays(selectedProvince, selectedCity).then(b => {
-        setBarangays(b)
-        setLoadingLocations(false)
-      })
-    }
+    if (!selectedCity || !selectedProvince) return
+    let cancelled = false
+    getBarangays(selectedProvince, selectedCity).then(b => {
+      if (cancelled) return
+      setBarangays(b)
+      setLoadingLocations(false)
+    })
+    return () => { cancelled = true }
   }, [selectedCity, selectedProvince])
 
   async function handleSubmit(e) {
@@ -167,7 +182,7 @@ export default function RequestAccess() {
 
           <div className="rounded-2xl p-4 mb-6"
             style={{ background: '#f0effe', border: '1px solid #e8e3ff' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>What's Next?</p>
+            <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: '#5B54E8' }}>What&apos;s Next?</p>
             <ol className="text-xs text-gray-700 space-y-1.5 text-left">
               <li>✓ Our team verifies your barangay credentials</li>
               <li>✓ You receive an invite code via email</li>
@@ -301,14 +316,14 @@ export default function RequestAccess() {
               <div className="space-y-2">
                 <SearchSelect
                   value={selectedProvince}
-                  onChange={setSelectedProvince}
+                  onChange={chooseProvince}
                   options={provinces}
                   placeholder="Select Province" />
 
                 {selectedProvince && (
                   <SearchSelect
                     value={selectedCity}
-                    onChange={setSelectedCity}
+                    onChange={chooseCity}
                     options={cities}
                     placeholder={loadingLocations ? "Loading cities..." : "Select City/Municipality"}
                     disabled={loadingLocations} />

@@ -1,5 +1,6 @@
     'use client'
 import { PageHeader, AppButton, PageState } from '@/components/AppUI'
+import { useBrowserValue } from '@/lib/useHydrated'
 
     import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useRouter } from 'next/navigation'
@@ -44,7 +45,11 @@ import { PageHeader, AppButton, PageState } from '@/components/AppUI'
     const [form, setForm] = useState(initialForm)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [notificationPermission, setNotificationPermission] = useState('default')
+    // The browser's answer when the page opened, overridden by the user's
+    // choice here ('default' on the server and during hydration).
+    const initialPermission = useBrowserValue(getPermission, 'default')
+    const [chosenPermission, setNotificationPermission] = useState(null)
+    const notificationPermission = chosenPermission ?? initialPermission
 
     const loadAppointments = useCallback(async (barangayId) => {
         const { data, error } = await supabase.from('appointments')
@@ -85,7 +90,6 @@ import { PageHeader, AppButton, PageState } from '@/components/AppUI'
         }
         }
         load()
-        setNotificationPermission(getPermission())
         return () => { cancelled = true }
     }, [supabase, router, loadAppointments])
 
@@ -161,9 +165,10 @@ import { PageHeader, AppButton, PageState } from '@/components/AppUI'
 
     useEffect(() => {
         if (!profile?.barangay_id) return
-        checkReminders()
+        // First check right after this render commits, then every 30 s.
+        const first = setTimeout(checkReminders, 0)
         const interval = setInterval(checkReminders, 30_000)
-        return () => clearInterval(interval)
+        return () => { clearTimeout(first); clearInterval(interval) }
     }, [profile, checkReminders])
 
     async function requestNotifications() {

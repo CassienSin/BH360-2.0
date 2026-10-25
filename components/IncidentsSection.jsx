@@ -7,6 +7,7 @@ import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG, getPriority } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
+import { useNow } from '@/lib/useNow'
 
 
 const PRIORITY_CONFIG = {
@@ -112,15 +113,24 @@ const styles = `
 function Sheet({ open, onClose, labelledBy, children }) {
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
   const panelRef = useRef(null)
 
+  // React to `open` flipping while rendering (React's "adjust state when a
+  // prop changes" pattern): opening shows the sheet at once, closing starts
+  // the exit animation. Reopening mid-exit cancels it.
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) { setMounted(true); setClosing(false) }
+    else if (mounted) setClosing(true)
+  }
+
+  // The exit animation runs 220 ms, then the sheet unmounts.
   useEffect(() => {
-    if (open) { setMounted(true); setClosing(false); return }
-    if (!mounted) return
-    setClosing(true)
+    if (!closing) return
     const t = setTimeout(() => { setMounted(false); setClosing(false) }, 220)
     return () => clearTimeout(t)
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [closing])
 
   useEffect(() => {
     if (!mounted) return
@@ -163,7 +173,12 @@ function Sheet({ open, onClose, labelledBy, children }) {
 /* ----------------------------- Tanod picker ----------------------------- */
 function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) {
   const [query, setQuery] = useState('')
-  useEffect(() => { if (open) setQuery('') }, [open])
+  // Each time the picker opens, it starts with an empty search.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setQuery('')
+  }
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -191,7 +206,7 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
               : 'linear-gradient(135deg, #9ca3af, #6b7280)',
           }}>
           {t.avatar_url
-            ? <img src={t.avatar_url} alt="" className="w-full h-full object-cover" />
+            ? <img loading="lazy" decoding="async" src={t.avatar_url} alt="" className="w-full h-full object-cover" />
             : (t.full_name?.[0]?.toUpperCase() || '?')}
         </div>
         <div className="flex-1 min-w-0">
@@ -282,9 +297,15 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (open && incident) { setPicked(incident.priority); setReason('') }
-  }, [open, incident])
+  // Start fresh each time the dialog opens for an incident. Keyed on the
+  // incident's id, not the object: a live update to the same incident while
+  // the official is choosing must not wipe their choice.
+  const session = open && incident ? incident.id : null
+  const [lastSession, setLastSession] = useState(null)
+  if (session !== lastSession) {
+    setLastSession(session)
+    if (session != null) { setPicked(incident.priority); setReason('') }
+  }
 
   if (!incident) return null
 
@@ -330,7 +351,7 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
         {incident.priority_override_reason && (
           <div className="p-2.5 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
             <p className="inc-t10 font-bold uppercase tracking-wider text-amber-700 mb-1">Previously adjusted</p>
-            <p className="inc-t11 text-amber-900 italic">"{incident.priority_override_reason}"</p>
+            <p className="inc-t11 text-amber-900 italic">&quot;{incident.priority_override_reason}&quot;</p>
           </div>
         )}
 
@@ -455,11 +476,15 @@ export default function IncidentsSection({
   loadingMore = false,
   onLoadMore,
 }) {
+  const now = useNow()
   const router = useRouter()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
-  const [category, setCategory] = useState('all')
-  const [priority, setPriority] = useState('all')
+  // What the user picked. The filter actually applied (`category`,
+  // `priority`, below) falls back to 'all' when the pick no longer matches
+  // anything, so a chip never vanishes while its filter stays on.
+  const [categoryChoice, setCategory] = useState('all')
+  const [priorityChoice, setPriority] = useState('all')
   const [sort, setSort] = useState('triage')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [expanded, setExpanded] = useState(() => new Set())
@@ -509,6 +534,8 @@ export default function IncidentsSection({
     scoped.forEach(i => { if (i.priority) c[i.priority] = (c[i.priority] || 0) + 1 })
     return c
   }, [scoped])
+  const category = categoryChoice !== 'all' && !categoryCounts[categoryChoice] ? 'all' : categoryChoice
+  const priority = priorityChoice !== 'all' && !priorityCounts[priorityChoice] ? 'all' : priorityChoice
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -531,7 +558,6 @@ export default function IncidentsSection({
       (PRIORITY_CONFIG[b.priority]?.order || 0) - (PRIORITY_CONFIG[a.priority]?.order || 0) || byNewest(a, b))
 
     const statusOrder = { pending: 1, assigned: 2, resolved: 3 }
-    const now = Date.now()
     return list.sort((a, b) => {
       const s = (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4)
       if (s !== 0) return s
@@ -539,7 +565,7 @@ export default function IncidentsSection({
       if (standing !== 0) return standing
       return a.status === 'resolved' ? byNewest(a, b) : new Date(a.created_at) - new Date(b.created_at)
     })
-  }, [incidents, search, status, category, priority, sort])
+  }, [incidents, search, status, category, priority, sort, now])
 
   const activeFilters = [
     search && { key: 'search', label: `"${search}"`, clear: () => setSearch('') },
@@ -560,12 +586,6 @@ export default function IncidentsSection({
     })
   }
 
-  useEffect(() => {
-    if (category !== 'all' && !categoryCounts[category]) setCategory('all')
-  }, [categoryCounts, category])
-  useEffect(() => {
-    if (priority !== 'all' && !priorityCounts[priority]) setPriority('all')
-  }, [priorityCounts, priority])
 
   // Live first, settled after, each side keeping the order the filters and
   // sort produced. `firstSettled` marks where the divider goes.
@@ -804,7 +824,7 @@ export default function IncidentsSection({
             <AlertTriangle size={26} className="text-orange-400" />
           </div>
           <p className="inc-t13 font-semibold text-gray-700">No incidents reported yet</p>
-          <p className="inc-t12 text-gray-400 mt-1">Reports from residents appear here the moment they're submitted.</p>
+          <p className="inc-t12 text-gray-400 mt-1">Reports from residents appear here the moment they&apos;re submitted.</p>
         </div>
       )}
 
@@ -1038,7 +1058,7 @@ export default function IncidentsSection({
                               Resident feedback · {inc.rating}.0 / 5.0
                             </p>
                             {inc.rating_feedback && (
-                              <p className="inc-t12 text-amber-900 italic">"{inc.rating_feedback}"</p>
+                              <p className="inc-t12 text-amber-900 italic">&quot;{inc.rating_feedback}&quot;</p>
                             )}
                           </div>
                         )}
@@ -1047,7 +1067,7 @@ export default function IncidentsSection({
                             <p className="inc-t10 font-bold uppercase tracking-wider mb-1" style={{ color: '#5B54E8' }}>
                               Priority adjusted · {inc.original_priority} → {inc.priority}
                             </p>
-                            <p className="inc-t12 italic" style={{ color: '#4c46c4' }}>"{inc.priority_override_reason}"</p>
+                            <p className="inc-t12 italic" style={{ color: '#4c46c4' }}>&quot;{inc.priority_override_reason}&quot;</p>
                           </div>
                         )}
                       </div>

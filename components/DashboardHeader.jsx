@@ -2,43 +2,25 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, Clock, ArrowRight, HelpCircle, Sparkles, CheckCheck } from 'lucide-react'
+import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, ArrowRight, HelpCircle, Sparkles, CheckCheck } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
 import ui from './app-ui.module.css'
 import { timeAgo } from '@/lib/timeAgo'
 import { useNotificationReads, notifKey, unreadCount as countUnread } from '@/lib/notificationReads'
-
-// Extracted so the 1-second tick re-renders only this tiny component,
-// not the whole header (including the search modal and dropdowns).
-function LiveClock() {
-  const [now, setNow] = useState(null)
-  useEffect(() => {
-    setNow(new Date())
-    const interval = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-  if (!now) return null
-  return (
-    <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
-      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-      <Clock size={12} className="text-gray-400" aria-hidden="true" />
-      <span className="text-xs font-bold text-gray-600">
-        {now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-      </span>
-    </div>
-  )
-}
+import LiveClock from '@/components/LiveClock'
+import { useBrowserValue } from '@/lib/useHydrated'
 
 // Avatar with graceful fallback to the initial when the image URL is
 // missing or fails to load (deleted storage file, broken link).
 function HeaderAvatar({ src, name, className, style }) {
-  const [failed, setFailed] = useState(false)
-  useEffect(() => { setFailed(false) }, [src])
+  // Remember WHICH url failed: a new url gets a fresh try with no reset effect.
+  const [failedSrc, setFailedSrc] = useState(null)
+  const failed = failedSrc != null && failedSrc === src
   return (
     <div className={className} style={style}>
       {src && !failed ? (
         <img src={src} alt="" className="w-full h-full object-cover"
-          onError={() => setFailed(true)} />
+          onError={() => setFailedSrc(src)} />
       ) : (
         name?.[0]?.toUpperCase()
       )}
@@ -50,6 +32,28 @@ const roleConfig = {
   resident: { label: 'Resident', color: '#5B54E8', bg: '#f0effe' },
   official: { label: 'Barangay Official', color: '#f97316', bg: '#fff7ed' },
   tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4' },
+}
+
+// One search result. A component (not a helper called during render), so
+// its click handler is plainly an event handler.
+function ResultRow({ idx, highlighted, onHighlight, icon, iconStyle, title, subtitle, onClick }) {
+  const isHighlighted = idx === highlighted
+  return (
+    <button data-idx={idx} id={`search-result-${idx}`} role="option" aria-selected={isHighlighted}
+      onClick={onClick}
+      onMouseEnter={() => onHighlight(idx)}
+      className="w-full px-5 py-3 flex items-center gap-3 transition-colors text-left"
+      style={{ background: isHighlighted ? '#faf5ff' : 'transparent' }}>
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={iconStyle}>
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
+        <p className="text-xs text-gray-400 truncate">{subtitle}</p>
+      </div>
+      <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} aria-hidden="true" />
+    </button>
+  )
 }
 
 export default function DashboardHeader({
@@ -98,7 +102,8 @@ export default function DashboardHeader({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [isMac, setIsMac] = useState(false)
+  // Show ⌘K on Macs instead of Ctrl+K (Ctrl+K on the server and first paint)
+  const isMac = useBrowserValue(() => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), false)
 
   const searchRef = useRef(null)
   const notifRef = useRef(null)
@@ -107,10 +112,6 @@ export default function DashboardHeader({
   const resultsRef = useRef(null)
   const searchTriggerRef = useRef(null) // element to restore focus to on close
 
-  useEffect(() => {
-    // Show ⌘K on Macs instead of Ctrl+K
-    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent))
-  }, [])
 
   function openSearch() {
     // Remember what was focused so Escape puts the keyboard user back
@@ -145,7 +146,7 @@ export default function DashboardHeader({
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Click outside to close
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function DashboardHeader({
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Lock page scroll while the search modal is open
   useEffect(() => {
@@ -223,9 +224,6 @@ export default function DashboardHeader({
   const ticketsOffset = filteredResults.incidents.length
   const announcementsOffset = ticketsOffset + filteredResults.tickets.length
 
-  // Reset the highlight when the result set changes
-  useEffect(() => { setHighlighted(0) }, [searchQuery])
-
   // Keep the highlighted row in view while arrowing through a long list
   useEffect(() => {
     if (!searchOpen || !resultsRef.current) return
@@ -264,27 +262,6 @@ export default function DashboardHeader({
   }, [visibleNotifications, readKeys])
 
   const rc = roleConfig[profile?.role] || roleConfig.resident
-
-  // Shared row renderer keeps highlight styling consistent
-  function resultRow({ idx, icon, iconStyle, title, subtitle, onClick, key }) {
-    const isHighlighted = idx === highlighted
-    return (
-      <button key={key} data-idx={idx} id={`search-result-${idx}`}
-        onClick={onClick}
-        onMouseEnter={() => setHighlighted(idx)}
-        className="w-full px-5 py-3 flex items-center gap-3 transition-colors text-left"
-        style={{ background: isHighlighted ? '#faf5ff' : 'transparent' }}>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={iconStyle}>
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
-          <p className="text-xs text-gray-400 truncate">{subtitle}</p>
-        </div>
-        <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} aria-hidden="true" />
-      </button>
-    )
-  }
 
   return (
     <>
@@ -545,12 +522,14 @@ export default function DashboardHeader({
               <input
                 ref={searchInputRef}
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={e => { setSearchQuery(e.target.value); setHighlighted(0) }}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search incidents, tickets, announcements..."
                 aria-label="Search"
                 role="combobox"
                 aria-expanded={totalResults > 0}
+                aria-controls="search-results"
+                aria-autocomplete="list"
                 aria-activedescendant={totalResults > 0 ? `search-result-${highlighted}` : undefined}
                 className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-400"
               />
@@ -564,7 +543,7 @@ export default function DashboardHeader({
               </button>
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto" ref={resultsRef}>
+            <div className="max-h-[60vh] overflow-y-auto" ref={resultsRef} id="search-results" role="listbox" aria-label="Search results">
               {!searchQuery && (
                 <div className="px-5 py-8 text-center">
                   <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"
@@ -583,7 +562,7 @@ export default function DashboardHeader({
 
               {searchQuery && totalResults === 0 && (
                 <div className="px-5 py-12 text-center">
-                  <p className="text-sm font-semibold text-gray-700">No results for "{searchQuery}"</p>
+                  <p className="text-sm font-semibold text-gray-700">No results for &quot;{searchQuery}&quot;</p>
                   <p className="text-xs text-gray-400 mt-1">Try a different search term</p>
                 </div>
               )}
@@ -594,15 +573,19 @@ export default function DashboardHeader({
                     style={{ background: '#fafaff' }}>
                     Incidents ({filteredResults.incidents.length})
                   </p>
-                  {filteredResults.incidents.map((inc, i) => resultRow({
-                    key: `inc-${inc.id}`,
-                    idx: i,
-                    icon: <AlertTriangle size={14} className="text-orange-500" />,
-                    iconStyle: { background: '#fff7ed' },
-                    title: inc.title,
-                    subtitle: `📍 ${inc.location} · ${inc.status}`,
-                    onClick: () => selectResult('incidents', inc),
-                  }))}
+                  {filteredResults.incidents.map((inc, i) => (
+                    <ResultRow
+                      key={`inc-${inc.id}`}
+                      idx={i}
+                      icon={<AlertTriangle size={14} className="text-orange-500" />}
+                      iconStyle={{ background: '#fff7ed' }}
+                      title={inc.title}
+                      subtitle={`📍 ${inc.location} · ${inc.status}`}
+                      onClick={() => selectResult('incidents', inc)}
+                      highlighted={highlighted}
+                      onHighlight={setHighlighted}
+                    />
+                  ))}
                 </div>
               )}
 
@@ -612,15 +595,19 @@ export default function DashboardHeader({
                     style={{ background: '#fafaff' }}>
                     Tickets ({filteredResults.tickets.length})
                   </p>
-                  {filteredResults.tickets.map((t, i) => resultRow({
-                    key: `tkt-${t.id}`,
-                    idx: ticketsOffset + i,
-                    icon: <FileText size={14} className="text-white" />,
-                    iconStyle: { background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' },
-                    title: t.title,
-                    subtitle: `Status: ${t.status}`,
-                    onClick: () => selectResult('tickets', t),
-                  }))}
+                  {filteredResults.tickets.map((t, i) => (
+                    <ResultRow
+                      key={`tkt-${t.id}`}
+                      idx={ticketsOffset + i}
+                      icon={<FileText size={14} className="text-white" />}
+                      iconStyle={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      title={t.title}
+                      subtitle={`Status: ${t.status}`}
+                      onClick={() => selectResult('tickets', t)}
+                      highlighted={highlighted}
+                      onHighlight={setHighlighted}
+                    />
+                  ))}
                 </div>
               )}
 
@@ -630,15 +617,19 @@ export default function DashboardHeader({
                     style={{ background: '#fafaff' }}>
                     Announcements ({filteredResults.announcements.length})
                   </p>
-                  {filteredResults.announcements.map((a, i) => resultRow({
-                    key: `ann-${a.id}`,
-                    idx: announcementsOffset + i,
-                    icon: <Bell size={14} className="text-white" />,
-                    iconStyle: { background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' },
-                    title: a.title,
-                    subtitle: a.content,
-                    onClick: () => selectResult('announcements', a),
-                  }))}
+                  {filteredResults.announcements.map((a, i) => (
+                    <ResultRow
+                      key={`ann-${a.id}`}
+                      idx={announcementsOffset + i}
+                      icon={<Bell size={14} className="text-white" />}
+                      iconStyle={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      title={a.title}
+                      subtitle={a.content}
+                      onClick={() => selectResult('announcements', a)}
+                      highlighted={highlighted}
+                      onHighlight={setHighlighted}
+                    />
+                  ))}
                 </div>
               )}
             </div>

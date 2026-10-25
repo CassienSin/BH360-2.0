@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { AppButton, PageHeader, PageState, StatusBadge } from '@/components/AppUI'
+import { useNow } from '@/lib/useNow'
 
 function formatDateTime(value) {
   if (!value) return 'Not set'
@@ -17,6 +18,7 @@ function formatDateTime(value) {
 }
 
 export default function AppointmentsPage() {
+  const now = useNow()
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
@@ -97,7 +99,6 @@ export default function AppointmentsPage() {
     return () => { supabase.removeChannel(channel) }
   }, [profile?.barangay_id, supabase])
 
-  const now = Date.now()
   const visibleAppointments = appointments.filter(appointment => {
     const upcoming = new Date(appointment.starts_at).getTime() >= now
     return filter === 'all' || (filter === 'upcoming' ? upcoming : !upcoming)
@@ -134,7 +135,7 @@ export default function AppointmentsPage() {
           ) : (
             <div className="space-y-3">
               {visibleAppointments.map(appointment => {
-                const past = new Date(appointment.starts_at).getTime() < Date.now()
+                const past = new Date(appointment.starts_at).getTime() < now
                 return (
                   <article key={appointment.id} className="rounded-2xl border border-[#f0effe] p-4 sm:p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">

@@ -397,8 +397,8 @@ export default function SettingsPage() {
             </div>
           </div>
           <p className="text-xs text-gray-500 leading-relaxed">
-            On <strong>iPhone</strong>: Tap Share → "Add to Home Screen"<br />
-            On <strong>Android</strong>: Tap menu (⋮) → "Install app"<br />
+            On <strong>iPhone</strong>: Tap Share → &quot;Add to Home Screen&quot;<br />
+            On <strong>Android</strong>: Tap menu (⋮) → &quot;Install app&quot;<br />
             On <strong>Desktop</strong>: Look for the install icon in your address bar
           </p>
         </div>
@@ -460,10 +460,10 @@ export default function SettingsPage() {
 
           <div className="p-3 rounded-2xl mb-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
             <p className="text-xs text-amber-900 leading-relaxed">
-              <strong>What deactivation means:</strong> Your account will be marked as inactive. You won't be able to sign in, and your profile won't appear in user lists. Your data (incidents, tickets, ratings) stays preserved.
+              <strong>What deactivation means:</strong> Your account will be marked as inactive. You won&apos;t be able to sign in, and your profile won&apos;t appear in user lists. Your data (incidents, tickets, ratings) stays preserved.
             </p>
             <p className="text-xs text-amber-700 mt-2 leading-relaxed">
-              💡 Want it permanently deleted? Contact support via Help & Support — we'll erase everything within 7 days.
+              💡 Want it permanently deleted? Contact support via Help & Support — we&apos;ll erase everything within 7 days.
             </p>
           </div>
 

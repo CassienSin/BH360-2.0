@@ -73,22 +73,34 @@ export default function RegisterPage() {
     getProvinces().then(setProvinces)
   }, [])
 
-  // Load cities when province changes
+  // Choosing a province or city clears the choices below it, right where
+  // the choice is made. The effects below only fetch.
+  function chooseProvince(province) {
+    setSelectedProvince(province)
+    setSelectedCity('')
+    setSelectedBarangayId('')
+    setBarangays([])
+  }
+  function chooseCity(city) {
+    setSelectedCity(city)
+    setSelectedBarangayId('')
+  }
+
+  // Load cities when province changes. `cancelled` drops a slow answer
+  // for a province the user has already switched away from.
   useEffect(() => {
-    if (selectedProvince) {
-      getCities(selectedProvince).then(setCities)
-      setSelectedCity('')
-      setSelectedBarangayId('')
-      setBarangays([])
-    }
+    if (!selectedProvince) return
+    let cancelled = false
+    getCities(selectedProvince).then(c => { if (!cancelled) setCities(c) })
+    return () => { cancelled = true }
   }, [selectedProvince])
 
   // Load barangays when city changes
   useEffect(() => {
-    if (selectedProvince && selectedCity) {
-      getBarangays(selectedProvince, selectedCity).then(setBarangays)
-      setSelectedBarangayId('')
-    }
+    if (!selectedProvince || !selectedCity) return
+    let cancelled = false
+    getBarangays(selectedProvince, selectedCity).then(b => { if (!cancelled) setBarangays(b) })
+    return () => { cancelled = true }
   }, [selectedProvince, selectedCity])
 
   function handleChange(e) { setForm({ ...form, [e.target.name]: e.target.value }) }
@@ -416,7 +428,7 @@ export default function RegisterPage() {
                     <KeyRound size={10} /> Contact your barangay captain to get an invite code
                   </p>
                   <p className="text-xs mt-2">
-                    Don't have a code yet?{' '}
+                    Don&apos;t have a code yet?{' '}
                     <button type="button" onClick={() => router.push('/request-access')}
                       className="font-bold hover:underline" style={{ color: '#5B54E8' }}>
                       Request access →
@@ -611,7 +623,7 @@ export default function RegisterPage() {
                     </button>
                   </div>
                   {form.confirmPassword && form.password !== form.confirmPassword && (
-                    <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><X size={11} /> Passwords don't match</p>
+                    <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><X size={11} /> Passwords don&apos;t match</p>
                   )}
                   {form.confirmPassword && form.password === form.confirmPassword && form.password && (
                     <p className="text-xs text-emerald-500 mt-1.5 flex items-center gap-1"><Check size={11} /> Passwords match</p>
@@ -625,14 +637,14 @@ export default function RegisterPage() {
 
                     <SearchSelect
                       value={selectedProvince}
-                      onChange={setSelectedProvince}
+                      onChange={chooseProvince}
                       options={provinces}
                       placeholder="Select Province"
                     />
 
                     <SearchSelect
                       value={selectedCity}
-                      onChange={setSelectedCity}
+                      onChange={chooseCity}
                       options={cities}
                       placeholder={selectedProvince ? 'Select City / Municipality' : 'Select province first'}
                       disabled={!selectedProvince}

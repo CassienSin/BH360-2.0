@@ -238,7 +238,7 @@ export default function AIAssistant() {
                   <Image src="/logo.png" alt="" fill sizes="96px" className="object-contain" />
                 </div>
                 <h2 className="text-xl font-bold text-gray-800 mb-1">Hi there! 👋</h2>
-                <p className="text-sm text-gray-500">I'm here to help with all your barangay questions. Try one of these:</p>
+                <p className="text-sm text-gray-500">I&apos;m here to help with all your barangay questions. Try one of these:</p>
               </div>
 
               <div className="space-y-2">

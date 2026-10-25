@@ -203,10 +203,6 @@ export default function ReportIncident() {
     }
   }, [imagePreview])
 
-  const selectedCategory = useMemo(
-    () => CATEGORIES.find(c => c.value === form.category) || null,
-    [form.category]
-  )
 
   // ── Automated legal classification ────────────────────────────────────
   const basis = form.category ? getBasis(form.category) : null

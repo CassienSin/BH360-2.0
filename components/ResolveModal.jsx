@@ -23,19 +23,25 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef(null)
 
-  // Reset state whenever the modal closes, and revoke the preview URL
-  // so each selected photo doesn't leak memory.
-  useEffect(() => {
+  // Closing clears the form, so the next incident starts blank. Done while
+  // rendering when `open` flips (no effect, no extra render pass).
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
     if (!open) {
       setNotes('')
       setImageFile(null)
-      setImagePreview(prev => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
+      setImagePreview(null)
       setSubmitting(false)
     }
-  }, [open])
+  }
+
+  // Each preview URL is revoked once it is replaced, cleared or the modal
+  // unmounts, so selected photos never leak memory.
+  useEffect(() => {
+    if (!imagePreview) return undefined
+    return () => URL.revokeObjectURL(imagePreview)
+  }, [imagePreview])
 
   useEffect(() => {
     if (!open) return
@@ -73,18 +79,12 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
     setImageFile(file)
     // Object URLs are cheaper than FileReader base64 for previews —
     // no reading the whole file into memory as a string.
-    setImagePreview(prev => {
-      if (prev) URL.revokeObjectURL(prev)
-      return URL.createObjectURL(file)
-    })
+    setImagePreview(URL.createObjectURL(file))
   }
 
   function removeImage() {
     setImageFile(null)
-    setImagePreview(prev => {
-      if (prev) URL.revokeObjectURL(prev)
-      return null
-    })
+    setImagePreview(null)
   }
 
   async function handleSubmit() {

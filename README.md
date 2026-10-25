@@ -64,7 +64,7 @@
 | Styling | [Tailwind CSS](https://tailwindcss.com) + custom glassmorphism design system |
 | AI | [Anthropic Claude API](https://docs.claude.com) (assistant chatbot + analytics reports) |
 | Charts | [Recharts](https://recharts.org) |
-| Maps | Interactive map components (`MapPicker`, `IncidentMap`, `MiniMap`) |
+| Maps | [MapLibre GL](https://maplibre.org) via react-map-gl, with free [OpenFreeMap](https://openfreemap.org) vector tiles; road routes from [openrouteservice](https://openrouteservice.org) |
 | Exports | jsPDF + jspdf-autotable |
 | UX | react-hot-toast, lucide-react, browser-image-compression |
 | Hosting | [Vercel](https://vercel.com) |
@@ -107,9 +107,28 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_SUBJECT=mailto:you@yourbarangay.gov.ph
 PUSH_WEBHOOK_SECRET=any-long-random-string
+
+# Maps — all optional. The defaults need no key (OpenFreeMap vector styles).
+# NEXT_PUBLIC_MAP_STYLE_LIGHT=https://tiles.openfreemap.org/styles/positron
+# NEXT_PUBLIC_MAP_STYLE_STREETS=https://tiles.openfreemap.org/styles/liberty
+# NEXT_PUBLIC_MAP_STYLE_DARK=https://tiles.openfreemap.org/styles/dark
+# Where an empty map opens ("lat,lng"); defaults to Cebu City
+# NEXT_PUBLIC_MAP_DEFAULT_CENTER=10.3157,123.8854
+# Satellite view appears only when a raster tile template with your own key is set, e.g.
+#   https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=YOUR_KEY
+# NEXT_PUBLIC_MAP_SATELLITE_TILES=
+# NEXT_PUBLIC_MAP_SATELLITE_ATTRIBUTION=© MapTiler © OpenStreetMap contributors
+
+# Road routes for responders (server-only). Free key: openrouteservice.org → Sign up.
+# Without it the map shows straight-line distance and a Google Maps link instead.
+OPENROUTESERVICE_API_KEY=your-openrouteservice-key
 ```
 
 Add the same variables in **Vercel → Project → Settings → Environment Variables** for deployment.
+
+> **Map preview without signing in:** with `npm run dev` running, open
+> [`/dev/map-preview`](http://localhost:3000/dev/map-preview) to see the incident map console
+> with sample data. The page returns 404 in production builds.
 
 > **`SUPABASE_SERVICE_ROLE_KEY` is required at runtime**, not just for the PSGC import
 > script. `lib/rateLimit.js` uses it to enforce the per-user limits on `/api/ai-chat` and

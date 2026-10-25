@@ -40,17 +40,23 @@ export default function DutyToggle({ profile, onStatusChange }) {
   const onDutyRef = useRef(onDuty)
   useEffect(() => { onDutyRef.current = onDuty }, [onDuty])
 
-  useEffect(() => {
+  // Follow the server's value when it changes (another device toggled duty,
+  // or the profile reloaded). Adjusted while rendering, not in an effect.
+  const [syncedDuty, setSyncedDuty] = useState(profile?.on_duty)
+  if (profile?.on_duty !== syncedDuty) {
+    setSyncedDuty(profile?.on_duty)
     if (profile?.on_duty !== undefined) setOnDuty(profile.on_duty)
-  }, [profile?.on_duty])
+  }
 
   // One combined beat: always stamps last_seen_at; adds a trail point
   // only when on duty and a position is available.
+  const profileId = profile?.id
+  const barangayId = profile?.barangay_id
   const beat = useCallback(async () => {
-    if (!profile?.id || document.visibilityState !== 'visible') return
+    if (!profileId || document.visibilityState !== 'visible') return
 
     const updates = { last_seen_at: new Date().toISOString() }
-    supabase.from('profiles').update(updates).eq('id', profile.id)
+    supabase.from('profiles').update(updates).eq('id', profileId)
       .then(({ error }) => { if (error) console.error('heartbeat failed:', error) })
 
     if (!onDutyRef.current) return
@@ -62,22 +68,24 @@ export default function DutyToggle({ profile, onStatusChange }) {
     }
     setLocationOk(true)
     const { error } = await supabase.from('tanod_locations').insert({
-      tanod_id: profile.id,
-      barangay_id: profile.barangay_id,
+      tanod_id: profileId,
+      barangay_id: barangayId,
       latitude: pos.coords.latitude,
       longitude: pos.coords.longitude,
       accuracy: pos.coords.accuracy ?? null,
     })
     if (error) console.error('location insert failed:', error)
-  }, [profile?.id, profile?.barangay_id, supabase])
+  }, [profileId, barangayId, supabase])
 
   useEffect(() => {
     if (!profile?.id) return
-    beat()
-    // Interval speed depends on duty state; re-created when it changes
+    // First beat right after this render commits, then on an interval whose
+    // speed depends on duty state (re-created when it changes).
+    const first = setTimeout(beat, 0)
     const interval = setInterval(beat, onDuty ? ON_DUTY_BEAT_MS : OFF_DUTY_BEAT_MS)
     document.addEventListener('visibilitychange', beat)
     return () => {
+      clearTimeout(first)
       clearInterval(interval)
       document.removeEventListener('visibilitychange', beat)
     }

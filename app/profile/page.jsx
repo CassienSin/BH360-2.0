@@ -723,7 +723,7 @@ export default function ProfilePage() {
                   </button>
                 </div>
                 {passwordForm.confirm && passwordForm.new !== passwordForm.confirm && (
-                  <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><X size={11} /> Passwords don't match</p>
+                  <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><X size={11} /> Passwords don&apos;t match</p>
                 )}
                 {passwordsMatch && passwordForm.confirm && (
                   <p className="text-xs text-emerald-500 mt-1.5 flex items-center gap-1"><Check size={11} /> Passwords match</p>

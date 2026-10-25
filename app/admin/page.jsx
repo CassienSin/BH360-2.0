@@ -2,13 +2,14 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Clock, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
+import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, ArrowLeft, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
+import LiveClock from '@/components/LiveClock'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -36,27 +37,6 @@ const AnimatedDots = () => (
     ))}
   </div>
 )
-
-// Extracted so the 1-second tick only re-renders this tiny component,
-// not the whole admin panel (which can hold hundreds of list rows).
-function LiveClock() {
-  const [now, setNow] = useState(null)
-  useEffect(() => {
-    setNow(new Date())
-    const interval = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(interval)
-  }, [])
-  if (!now) return null
-  return (
-    <div className="hidden lg:flex items-center gap-2 px-3 py-2 rounded-xl"
-      style={{ background: '#fafaff', border: '1px solid #f0effe' }}>
-      <Clock size={12} className="text-gray-400" />
-      <span className="text-xs font-bold text-gray-600">
-        {now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true })}
-      </span>
-    </div>
-  )
-}
 
 // Cryptographically secure invite code. Math.random() is predictable and
 // must never be used for codes that gate privileged roles.
@@ -106,7 +86,9 @@ export default function AdminPanel() {
   const [barangayProvinceSearch, setBarangayProvinceSearch] = useState('')
   const [barangayPage, setBarangayPage] = useState(1)
   const [barangayHasMore, setBarangayHasMore] = useState(false)
-  const [searchingBarangays, setSearchingBarangays] = useState(false)
+  // Which query the results on screen belong to. While it differs from the
+  // current query, a search is under way (no separate loading flag to sync).
+  const [fetchedBarangayKey, setFetchedBarangayKey] = useState(null)
   const [users, setUsers] = useState([])
   const [inviteCodes, setInviteCodes] = useState([])
   // Platform-wide incident feed — every barangay, not just one.
@@ -218,12 +200,15 @@ export default function AdminPanel() {
 
   // Debounced, paginated server-side barangay search. This scales to any
   // table size — we never try to load every barangay into the browser.
+  const barangayQueryKey = [barangaySearch.trim(), barangayCitySearch.trim(), barangayProvinceSearch.trim(), barangayPage].join('|')
+  const searchingBarangays = fetchedBarangayKey !== barangayQueryKey
+
   useEffect(() => {
     if (loading) return
     const nameQuery = barangaySearch.trim()
     const cityQuery = barangayCitySearch.trim()
     const provinceQuery = barangayProvinceSearch.trim()
-    setSearchingBarangays(true)
+    const key = [nameQuery, cityQuery, provinceQuery, barangayPage].join('|')
     let cancelled = false
     const t = setTimeout(async () => {
       const start = (barangayPage - 1) * BARANGAY_PAGE_SIZE
@@ -245,7 +230,7 @@ export default function AdminPanel() {
       const matches = data || []
       setBarangayResults(matches.slice(0, BARANGAY_PAGE_SIZE))
       setBarangayHasMore(matches.length > BARANGAY_PAGE_SIZE)
-      setSearchingBarangays(false)
+      setFetchedBarangayKey(key)
     }, 300)
     return () => {
       cancelled = true
@@ -914,7 +899,7 @@ export default function AdminPanel() {
                       <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
                         <MessageSquare size={10} /> Message
                       </p>
-                      <p className="text-xs text-gray-700 italic">"{app.message}"</p>
+                      <p className="text-xs text-gray-700 italic">&quot;{app.message}&quot;</p>
                     </div>
                   )}
 
@@ -1527,7 +1512,7 @@ export default function AdminPanel() {
                         <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
                           style={{ background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)` }}>
                           {u.avatar_url ? (
-                            <img src={u.avatar_url} alt={u.full_name || 'User avatar'} className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={u.avatar_url} alt={u.full_name || 'User avatar'} className="w-full h-full object-cover" />
                           ) : (
                             u.full_name?.[0]?.toUpperCase()
                           )}

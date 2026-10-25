@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useId } from 'react'
 import { MapPin, ChevronDown, Check, Search } from 'lucide-react'
 
 // Coerce any label to a safe string. A single option with a null/undefined
@@ -18,6 +18,7 @@ export default function SearchSelect({
   getValue = (o) => o,
 }) {
   const [open, setOpen] = useState(false)
+  const listId = useId()
   const [search, setSearch] = useState('')
   const [highlighted, setHighlighted] = useState(0)
   const ref = useRef(null)
@@ -47,10 +48,6 @@ export default function SearchSelect({
     if (!q) return options
     return options.filter(o => toLabel(getLabel(o)).toLowerCase().includes(q))
   }, [options, search, getLabel])
-
-  // Reset highlight when the result set changes so it never points
-  // past the end of a shorter list.
-  useEffect(() => { setHighlighted(0) }, [search, open])
 
   // Keep the highlighted option visible while navigating with arrow keys.
   useEffect(() => {
@@ -100,18 +97,20 @@ export default function SearchSelect({
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => !disabled && setOpen(!open)}
+        onClick={() => { if (disabled) return; setOpen(!open); setHighlighted(0) }}
         onKeyDown={e => {
           // Open with keyboard the same way a native select does
           if (!disabled && !open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
             e.preventDefault()
             setOpen(true)
+            setHighlighted(0)
           }
         }}
         disabled={disabled}
         role="combobox"
         aria-expanded={open}
         aria-haspopup="listbox"
+        aria-controls={listId}
         aria-required={required || undefined}
         className="input-field w-full rounded-2xl pl-9 pr-9 py-3 text-sm text-left flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
         <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -145,7 +144,7 @@ export default function SearchSelect({
               <input
                 ref={inputRef}
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => { setSearch(e.target.value); setHighlighted(0) }}
                 onKeyDown={handleKeyDown}
                 placeholder="Search..."
                 aria-label="Search options"
@@ -156,7 +155,7 @@ export default function SearchSelect({
           </div>
 
           {/* Options list */}
-          <div ref={listRef} role="listbox" className="max-h-64 overflow-y-auto">
+          <div ref={listRef} id={listId} role="listbox" className="max-h-64 overflow-y-auto">
             {filtered.length === 0 && (
               <p className="text-center text-gray-400 text-sm py-6">
                 {search ? `No results for "${search}"` : 'No options available'}

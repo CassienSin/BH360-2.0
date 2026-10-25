@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import { CardSkeleton } from '@/components/Skeletons'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { MapPin, CheckCircle, Clock, AlertTriangle, Home, Phone, Navigation, TrendingUp, Award, Zap, FileText, Star } from 'lucide-react'
@@ -24,6 +25,7 @@ import { enqueue, drainOutbox } from '@/lib/offline/sync'
 import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
+import { useSidebarState } from '@/lib/useSidebarState'
 import {
   RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
   tanodSummary, mostUrgentAssignment, tanodStats,
@@ -106,8 +108,8 @@ export default function TanodDashboard() {
   const [profile, setProfile] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [mounted, setMounted] = useState(false)
+  // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
+  const [sidebarOpen, setSidebarOpen] = useSidebarState(true)
   const [loading, setLoading] = useState(true)
   const [resolveModal, setResolveModal] = useState(null)
   const [hasMore, setHasMore] = useState(false)
@@ -127,37 +129,6 @@ export default function TanodDashboard() {
     incidentIdsRef.current = new Set(incidents.map(i => i.id))
   }, [incidents])
 
-  // ---- Sidebar persistence ----
-  useEffect(() => {
-    setMounted(true)
-    const saved = localStorage.getItem('sidebarOpen')
-    if (saved !== null) {
-      setSidebarOpen(JSON.parse(saved))
-    } else if (window.innerWidth < 768) {
-      setSidebarOpen(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem('sidebarOpen', JSON.stringify(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
-
-  // Only react when the viewport actually crosses the breakpoint.
-  // The old version also ran on mount, which stomped the saved preference.
-  useEffect(() => {
-    let wasMobile = window.innerWidth < 768
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768
-      if (isMobile !== wasMobile) {
-        setSidebarOpen(!isMobile)
-        wasMobile = isMobile
-      }
-    }
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // ---- Data loading ----
   // Bounded, like the official queue. A tanod's history only grows, and
@@ -351,10 +322,11 @@ export default function TanodDashboard() {
     }
   }, [profile?.id, supabase])
 
-  function navClick(key) {
+  // Stable, so the home tiles that call it are not rebuilt every render.
+  const navClick = useCallback((key) => {
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
-  }
+  }, [setSidebarOpen])
 
   /**
    * Record having seen an assignment, or having reached it.
@@ -572,7 +544,7 @@ export default function TanodDashboard() {
         : 'nothing acknowledged yet',
       onClick: () => navClick('stats'),
     },
-  ], [unacknowledged, assignedIncidents.length, overdue.length, stats])
+  ], [unacknowledged, assignedIncidents.length, overdue.length, stats, navClick])
 
   const recentRatings = useMemo(
     () => resolvedIncidents.filter(i => i.rating).slice(0, 5),
@@ -587,19 +559,6 @@ export default function TanodDashboard() {
       { key: 'stats', label: 'My Performance', icon: TrendingUp, badge: 'NEW' },
     ]},
   ]
-
-  const Skeleton = ({ className }) => <div className={`skeleton-shimmer ${className}`} />
-  const CardSkeleton = () => (
-    <div className="white-card p-5">
-      <div className="flex items-center gap-3">
-        <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-3.5 w-3/4" />
-          <Skeleton className="h-3 w-1/2" />
-        </div>
-      </div>
-    </div>
-  )
 
   return (
     <div className="min-h-screen flex relative overflow-hidden bg-brand">
@@ -1054,7 +1013,7 @@ export default function TanodDashboard() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="font-bold text-gray-800 text-sm">Resolution Rate</h3>
-                    <p className="text-xs text-gray-400">Percentage of incidents you've resolved</p>
+                    <p className="text-xs text-gray-400">Percentage of incidents you&apos;ve resolved</p>
                   </div>
                   <p className="text-3xl font-black" style={{ color: stats.resolutionRate >= 80 ? '#22c55e' : stats.resolutionRate >= 50 ? '#f97316' : '#ef4444' }}>
                     {stats.resolutionRate}%
@@ -1149,7 +1108,7 @@ export default function TanodDashboard() {
                                 </div>
                               </div>
                               {inc.rating_feedback ? (
-                                <p className="text-xs text-gray-500 italic">"{inc.rating_feedback}"</p>
+                                <p className="text-xs text-gray-500 italic">&quot;{inc.rating_feedback}&quot;</p>
                               ) : (
                                 <p className="text-xs text-gray-300">No written feedback</p>
                               )}

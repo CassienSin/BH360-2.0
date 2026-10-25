@@ -8,6 +8,7 @@ import ConfirmDialog from './ConfirmDialog'
 import { createPortal } from 'react-dom'
 import styles from './dashboard-sidebar.module.css'
 import { lockBodyScroll } from '@/lib/modalScrollLock'
+import { useHydrated } from '@/lib/useHydrated'
 
 const mobileQuery = '(max-width: 767px)'
 function subscribeMobile(onChange) {
@@ -25,6 +26,16 @@ function storageGet(key) {
 }
 function storageSet(key, value) {
   try { localStorage.setItem(key, value) } catch { /* ignore */ }
+}
+
+// Saved pins for one user: a de-duplicated list of nav keys, [] if unreadable.
+function readPins(pinKey) {
+  try {
+    const saved = JSON.parse(storageGet(pinKey))
+    return Array.isArray(saved) ? [...new Set(saved.filter(key => typeof key === 'string'))] : []
+  } catch {
+    return []
+  }
 }
 
 const roleColors = {
@@ -45,10 +56,14 @@ export default function DashboardSidebar({
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [search, setSearch] = useState('')
-  const [pinned, setPinned] = useState([])
+  // Pins and the user they belong to: { key: pinKey, items: [...] }
+  const [pinState, setPinState] = useState({ key: null, items: [] })
+  const hydrated = useHydrated()
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [avatarFailed, setAvatarFailed] = useState(false)
+  // Remember which photo url failed, so a new photo gets a fresh try.
+  const [failedAvatar, setFailedAvatar] = useState(null)
+  const avatarFailed = failedAvatar != null && failedAvatar === profile?.avatar_url
   const sidebarRef = useRef(null)
   const searchRef = useRef(null)
   const isMobile = useSyncExternalStore(subscribeMobile, getMobile, getServerMobile)
@@ -60,15 +75,14 @@ export default function DashboardSidebar({
   // inherit each other's shortcuts.
   const pinKey = `sidebar-pinned-${profile?.id || 'anon'}`
 
-  useEffect(() => {
-    const raw = storageGet(pinKey)
-    try {
-      const saved = JSON.parse(raw)
-      setPinned(Array.isArray(saved) ? [...new Set(saved.filter(key => typeof key === 'string'))] : [])
-    } catch { setPinned([]) }
-  }, [pinKey])
+  // Load this user's pins the first time the sidebar renders for them in
+  // the browser (the server render and hydration show none, so the markup
+  // matches). Adjusted while rendering, so there is no effect to re-run.
+  if (hydrated && pinState.key !== pinKey) {
+    setPinState({ key: pinKey, items: readPins(pinKey) })
+  }
+  const pinned = pinState.key === pinKey ? pinState.items : []
 
-  useEffect(() => { setAvatarFailed(false) }, [profile?.avatar_url])
 
   // Keep keyboard focus inside the open mobile drawer and restore it on close.
   useEffect(() => {
@@ -129,14 +143,12 @@ export default function DashboardSidebar({
     e.stopPropagation()
     e.preventDefault()
     const validKeys = new Set(navItems.flatMap(s => s.items.map(item => item.key)))
-    setPinned(prev => {
-      // Prune keys that no longer exist in the nav (role change, removed
-      // sections) so stale pins don't live in storage forever
-      const cleaned = prev.filter(k => validKeys.has(k))
-      const next = cleaned.includes(key) ? cleaned.filter(k => k !== key) : [...cleaned, key]
-      storageSet(pinKey, JSON.stringify(next))
-      return next
-    })
+    // Prune keys that no longer exist in the nav (role change, removed
+    // sections) so stale pins don't live in storage forever
+    const cleaned = pinned.filter(k => validKeys.has(k))
+    const next = cleaned.includes(key) ? cleaned.filter(k => k !== key) : [...cleaned, key]
+    setPinState({ key: pinKey, items: next })
+    storageSet(pinKey, JSON.stringify(next))
   }
 
   // Filter nav items by search
@@ -409,7 +421,7 @@ export default function DashboardSidebar({
                   style={{ background: rc.gradient, boxShadow: `0 4px 12px ${rc.color}40` }}>
                   {profile?.avatar_url && !avatarFailed ? (
                     <img src={profile.avatar_url} alt="" className="w-full h-full object-cover"
-                      onError={() => setAvatarFailed(true)} />
+                      onError={() => setFailedAvatar(profile?.avatar_url)} />
                   ) : (
                     profile?.full_name?.[0]?.toUpperCase()
                   )}

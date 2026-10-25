@@ -2,7 +2,8 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Loader2, Ticket, Minus } from 'lucide-react'
+import { useNow } from '@/lib/useNow'
+import { ArrowLeft, BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Ticket, Minus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
@@ -71,7 +72,26 @@ function TrendBadge({ current, previous }) {
   )
 }
 
+// Chart tooltip. Module level: defined inside the page, it was a new
+// component type on every render, so recharts remounted it each time.
+function CustomTooltip({ active, payload, label }) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white rounded-2xl px-4 py-3 shadow-lg border border-gray-100">
+        <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
+        {payload.map((p, i) => (
+          <p key={i} className="text-sm font-bold" style={{ color: p.color || p.fill || '#5B54E8' }}>
+            {p.value} {p.name}
+          </p>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
+
 export default function AIAnalytics() {
+  const now = useNow()
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
@@ -202,7 +222,6 @@ export default function AIAnalytics() {
       : null
 
     // Week-over-week delta for the Total Incidents card
-    const now = Date.now()
     const weekAgo = now - 7 * 24 * HOURS_MS
     const twoWeeksAgo = now - 14 * 24 * HOURS_MS
     const thisWeek = incidents.filter(i => new Date(i.created_at).getTime() >= weekAgo).length
@@ -219,7 +238,7 @@ export default function AIAnalytics() {
       totalIncidents, resolvedIncidents, resolutionRate, avgRating, avgResponseHours,
       thisWeek, lastWeek, openTickets, inProgressTickets, criticalPending,
     }
-  }, [incidents, tickets])
+  }, [incidents, tickets, now])
 
   const tanodStats = useMemo(() => tanods.map(t => {
     const assigned = incidents.filter(i => i.assigned_to === t.id)
@@ -329,22 +348,6 @@ export default function AIAnalytics() {
     }
     return days
   }, [incidents])
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white rounded-2xl px-4 py-3 shadow-lg border border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
-          {payload.map((p, i) => (
-            <p key={i} className="text-sm font-bold" style={{ color: p.color || p.fill || '#5B54E8' }}>
-              {p.value} {p.name}
-            </p>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
 
   function getHeatmapColor(value) {
     if (value === 0) return '#fafaff'
@@ -582,7 +585,7 @@ export default function AIAnalytics() {
                       style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
                     >
                       {t.avatar_url ? (
-                        <img src={t.avatar_url} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={t.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         t.name?.[0]?.toUpperCase() || '?'
                       )}

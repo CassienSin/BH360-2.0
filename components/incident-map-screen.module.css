@@ -1,0 +1,29 @@
+/* The incident map page fills the viewport: header, then the console. */
+.screen { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.main { flex: 1; min-height: 0; display: flex; width: 100%; max-width: 1600px; margin: 0 auto; padding: 20px 24px 24px; box-sizing: border-box; }
+.main > * { flex: 1; min-width: 0; }
+.live { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; box-sizing: border-box; border-radius: 9px; font-size: 12px; font-weight: 700; }
+.liveOn { background: #ecfdf5; color: #047857; }
+.liveOff { background: #f3f4f6; color: #596273; }
+.liveDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.liveOn .liveDot { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.18); }
+.night {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 14px;
+  border: 1px solid #e8e3ff; background: transparent; color: #514765; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.night[aria-pressed='true'] { background: #292338; border-color: #292338; color: #fff; }
+.loading { flex: 1; display: grid; place-items: center; }
+
+/* Night mode darkens the whole screen, not only the console: a white header
+   and a bright purple frame are still glare in a dark barangay hall. */
+.screen.dark { background: #0b0d14; }
+.dark header { background: #161923; border-bottom-color: #242938; box-shadow: none; }
+.dark header h1 { color: #e8eaf2; }
+.dark header p { color: #a3abbf; }
+.dark header button, .dark header > div > span { background: #1c2030; border-color: #2e3446; color: #c3c9d8; }
+.dark .liveOn { background: #15302a; color: #6ee7b7; }
+.dark .liveOff { background: #1c2030; color: #a3abbf; }
+.dark .night[aria-pressed='true'] { background: #8b85ff; border-color: #8b85ff; color: #14112b; }
+@media (max-width: 1023px) {
+  .main { padding: 0; max-width: none; }
+}

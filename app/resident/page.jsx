@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { Skeleton, CardSkeleton } from '@/components/Skeletons'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
@@ -22,6 +23,8 @@ import { firstRealError } from '@/lib/dbError'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
 import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
+import { useNow } from '@/lib/useNow'
+import { useSidebarState } from '@/lib/useSidebarState'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -50,21 +53,7 @@ const AnimatedDots = () => (
   </div>
 )
 
-// sessionStorage/localStorage can throw in some privacy modes
-function storageGet(key) {
-  try { return localStorage.getItem(key) } catch { return null }
-}
-function storageSet(key, value) {
-  try { localStorage.setItem(key, value) } catch { /* ignore */ }
-}
-
 // Hoisted — these were recreated on every render
-const statusColor = {
-  pending: 'bg-amber-100 text-amber-700', assigned: 'bg-blue-100 text-blue-700',
-  resolved: 'bg-emerald-100 text-emerald-700', open: 'bg-amber-100 text-amber-700',
-  in_progress: 'bg-blue-100 text-blue-700', closed: 'bg-emerald-100 text-emerald-700',
-}
-
 const priorityConfig = {
   Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
   Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
@@ -345,18 +334,6 @@ const sectionTitle = {
   documents: 'My Documents', blotter: 'My Blotter Cases', ai: 'AI Assistant',
 }
 
-const Skeleton = ({ className, style }) => <div className={`skeleton-shimmer ${className}`} style={style} />
-const CardSkeleton = () => (
-  <div className="white-card p-5 space-y-3">
-    <div className="flex items-center gap-3">
-      <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
-      <div className="flex-1 space-y-2">
-        <Skeleton className="h-3.5 w-3/4" />
-        <Skeleton className="h-3 w-1/2" />
-      </div>
-    </div>
-  </div>
-)
 const HomeSkeleton = () => (
   <div className="space-y-6 max-w-4xl mx-auto">
     <div className="white-card p-6 space-y-2">
@@ -377,6 +354,7 @@ const HomeSkeleton = () => (
 )
 
 export default function ResidentDashboard() {
+  const now = useNow()
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
@@ -386,42 +364,12 @@ export default function ResidentDashboard() {
   const [documentRequests, setDocumentRequests] = useState([])
   const [blotterCases, setBlotterCases] = useState([])
   const [activeSection, setActiveSection] = useState('home')
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // Starts closed so a phone refresh never renders the drawer open; then
+  // the remembered desktop choice (lib/useSidebarState).
+  const [sidebarOpen, setSidebarOpen] = useSidebarState(false)
   const [loading, setLoading] = useState(true)
   const [ratingModal, setRatingModal] = useState(null)
 
-  // ONE sidebar effect instead of four fighting each other. The old code
-  // had: a localStorage restore, a persister, a resize handler that
-  // force-opened on ≥768px / force-closed on <768px on EVERY resize (which
-  // stomped both the saved preference and the user's choice — close the
-  // sidebar on desktop and any resize reopened it), plus a duplicate
-  // matchMedia effect. Now: start closed (so a mobile refresh never
-  // renders the drawer open), then on mount restore the saved preference
-  // on desktop; only react when actually CROSSING the breakpoint.
-  useEffect(() => {
-    setMounted(true)
-    const desktop = window.matchMedia('(min-width: 768px)')
-
-    const applyFor = (isDesktop) => {
-      if (!isDesktop) { setSidebarOpen(false); return }
-      const saved = storageGet('sidebarOpen')
-      setSidebarOpen(saved !== null ? saved === 'true' : true)
-    }
-
-    applyFor(desktop.matches)
-    const onChange = (e) => applyFor(e.matches)
-    desktop.addEventListener('change', onChange)
-    return () => desktop.removeEventListener('change', onChange)
-  }, [])
-
-  // Persist the preference — but only the DESKTOP preference. Saving the
-  // mobile auto-close used to poison the stored value.
-  useEffect(() => {
-    if (mounted && window.matchMedia('(min-width: 768px)').matches) {
-      storageSet('sidebarOpen', String(sidebarOpen))
-    }
-  }, [sidebarOpen, mounted])
 
   useEffect(() => {
     let cancelled = false
@@ -497,14 +445,18 @@ export default function ResidentDashboard() {
     return () => { cancelled = true }
   }, [supabase, router])
 
+  // The listener below outlives any one render. It reads the CURRENT
+  // notification preferences through this ref, so a change made while the
+  // dashboard is open applies at once, without resubscribing the channel.
+  const prefsRef = useRef(profile?.notification_prefs || {})
+  useEffect(() => { prefsRef.current = profile?.notification_prefs || {} })
+
   // Real-time subscriptions — one channel, and the incident/ticket
   // listeners are now FILTERED to this user's own rows. Previously they
   // subscribed to updates on EVERY incident and ticket in the database
   // (whatever RLS allowed through), doing a state .map() per event.
   useEffect(() => {
     if (!profile?.barangay_id) return
-
-    const prefs = profile.notification_prefs || {}
 
     const channel = supabase
       .channel(`resident-${profile.id}`)
@@ -518,7 +470,7 @@ export default function ResidentDashboard() {
         setAnnouncements(prev => prev.some(a => a.id === payload.new.id)
           ? prev
           : [payload.new, ...prev])
-        if (prefs.announcements !== false) {
+        if (prefsRef.current.announcements !== false) {
           notify.info({
             kind: 'Announcement',
             title: payload.new.title,
@@ -540,7 +492,7 @@ export default function ResidentDashboard() {
                 assigned: 'A tanod is on the way',
                 resolved: 'Your report has been resolved',
               }
-              if (statusMessage[payload.new.status] && prefs.incidents !== false) {
+              if (statusMessage[payload.new.status] && prefsRef.current.incidents !== false) {
                 notify.success({
                   kind: 'Your report',
                   title: statusMessage[payload.new.status],
@@ -641,12 +593,13 @@ export default function ResidentDashboard() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [profile?.id, profile?.barangay_id, supabase])
+  }, [profile?.id, profile?.barangay_id, supabase, router])
 
-  function navClick(key) {
+  // Stable, so the home tiles that call it are not rebuilt every render.
+  const navClick = useCallback((key) => {
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
-  }
+  }, [setSidebarOpen])
 
   // Throws on failure so the improved RatingModal shows its error state
   // and re-enables its buttons; the old version silently ignored a failed
@@ -819,7 +772,7 @@ export default function ResidentDashboard() {
   // Separate from unread: this one means "posted recently", which is why it
   // stays put while you read rather than vanishing under you.
   const recentAnnouncementCount = announcements.filter(a =>
-    (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24) <= 1
+    (now - new Date(a.created_at)) / (1000 * 60 * 60 * 24) <= 1
   ).length
 
   return (
@@ -918,7 +871,7 @@ export default function ResidentDashboard() {
                 <AlertTriangle size={28} className="text-orange-500" />
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">No Barangay Assigned</h2>
-              <p className="text-gray-500 text-sm mb-4">Your account isn't linked to a barangay yet. Please contact support or update your profile.</p>
+              <p className="text-gray-500 text-sm mb-4">Your account isn&apos;t linked to a barangay yet. Please contact support or update your profile.</p>
               <button onClick={() => router.push('/profile')} className="btn-primary px-5 py-2.5 rounded-2xl text-white text-sm font-semibold">Go to Profile</button>
             </div>
           )}
@@ -1124,7 +1077,7 @@ export default function ResidentDashboard() {
 
               {/* Announcement cards */}
               {announcements.map((a) => {
-                const daysAgo = (Date.now() - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+                const daysAgo = (now - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
                 const isNew = daysAgo <= 1
                 const isThisWeek = daysAgo <= 7
 

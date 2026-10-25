@@ -5,6 +5,7 @@ import { getPermission, requestPermission, isSupported } from '@/lib/notificatio
 import { subscribeToPush, pushSupport, watchForSubscriptionChange } from '@/lib/push'
 import { primeAudio } from '@/lib/audioAlert'
 import toast from 'react-hot-toast'
+import { useHydrated, useBrowserValue } from '@/lib/useHydrated'
 
 const DISMISS_KEY = 'notif-banner-dismissed'
 
@@ -18,17 +19,21 @@ function safeStorageSet(key, value) {
 }
 
 export default function NotificationBanner() {
-  const [mounted, setMounted] = useState(false)
-  const [permission, setPermission] = useState('default')
-  const [dismissed, setDismissed] = useState(false)
+  const mounted = useHydrated()
+  // The browser's answer when the page opened, overridden by whatever the
+  // user chooses here. Read on the client only; the banner renders nothing
+  // before hydration, so server and browser markup agree.
+  const initialPermission = useBrowserValue(() => (isSupported() ? getPermission() : 'default'), 'default')
+  const [chosenPermission, setPermission] = useState(null)
+  const permission = chosenPermission ?? initialPermission
+  const dismissedEarlier = useBrowserValue(() => Boolean(safeStorageGet(DISMISS_KEY)), false)
+  const [dismissedNow, setDismissed] = useState(false)
+  const dismissed = dismissedEarlier || dismissedNow
   const [enabling, setEnabling] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
     if (!isSupported()) return
     const current = getPermission()
-    setPermission(current)
-    if (safeStorageGet(DISMISS_KEY)) setDismissed(true)
 
     // Someone who granted permission on an earlier visit — or on another
     // device — has no push subscription yet, because subscribing only

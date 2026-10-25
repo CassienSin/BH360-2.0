@@ -277,7 +277,7 @@ export default function OfficialTicketChat() {
           style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
         >
           {ticket?.profiles?.avatar_url ? (
-            <img src={ticket.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+            <img loading="lazy" decoding="async" src={ticket.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
           ) : (
             ticket?.profiles?.full_name?.[0]?.toUpperCase() || '?'
           )}
@@ -419,7 +419,7 @@ export default function OfficialTicketChat() {
                       style={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
                     >
                       {msg.profiles?.avatar_url ? (
-                        <img src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         msg.profiles?.full_name?.[0]?.toUpperCase() || '?'
                       )}
