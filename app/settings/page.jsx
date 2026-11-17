@@ -1,10 +1,14 @@
 'use client'
+import { PageSkeleton } from '@/components/Skeletons'
+import { PAGE_HEADERS } from '@/lib/pageHeaders'
 import { PageHeader, AppButton } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock, Settings as SettingsIcon } from 'lucide-react'
+import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -79,7 +83,7 @@ export default function SettingsPage() {
     let cancelled = false
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
+      if (!user) return router.replace(loginHref())
 
       const { data: prof, error } = await supabase.from('profiles')
         .select('*, barangays(name, city)')
@@ -227,13 +231,7 @@ export default function SettingsPage() {
     }, 1500)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  if (loading) return <PageSkeleton layout="settings" header={{ ...PAGE_HEADERS.settings, actions: true }} />
 
   return (
     <div className="min-h-screen relative overflow-clip bg-brand">
@@ -244,10 +242,8 @@ export default function SettingsPage() {
       </div>
 
       <PageHeader
-        title="Settings"
-        description="Customize your experience"
-        icon={SettingsIcon}
-        onBack={() => router.back()}
+        {...PAGE_HEADERS.settings}
+        onBack={() => goBack(router, '/')}
         actions={(
           <AppButton onClick={saveSettings} disabled={!dirty} busy={saving} busyLabel="Saving…">
             <Save size={15} aria-hidden="true" />
@@ -259,7 +255,7 @@ export default function SettingsPage() {
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
 
         {/* Notifications */}
-        <div className="white-card p-5 fade-up">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: 'var(--brand-soft)' }}>
@@ -341,7 +337,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Language */}
-        <div className="white-card p-5 fade-up-1">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#f0fdf4' }}>
@@ -378,7 +374,7 @@ export default function SettingsPage() {
         </div>
 
         {/* PWA Install */}
-        <div className="white-card p-5 fade-up-2">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#fff7ed' }}>
@@ -397,7 +393,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Privacy & Data */}
-        <div className="white-card p-5 fade-up-3">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#eff6ff' }}>
@@ -438,7 +434,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Account Status / Deactivation */}
-        <div className="rounded-3xl p-5 fade-up-3"
+        <div className="rounded-3xl p-5"
           style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"

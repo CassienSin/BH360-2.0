@@ -3,6 +3,8 @@ import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { FileText, Scale, Clock, Loader2, CheckCircle, ShieldAlert, Send, ListChecks, Coins } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -53,7 +55,7 @@ export default function NewDocumentRequest() {
     let cancelled = false
     async function load() {
       const { data: { user }, error } = await supabase.auth.getUser()
-      if (error || !user) { router.replace('/login'); return }
+      if (error || !user) { router.replace(loginHref()); return }
       const { data, error: profError } = await supabase
         .from('profiles')
         .select('id, full_name, role, is_super_admin, barangay_id, verification_status, verification_note, barangays(name)')
@@ -146,7 +148,7 @@ export default function NewDocumentRequest() {
         title="Request a Document"
         description={`${profile?.barangays?.name || 'Your barangay'} · Citizen’s Charter`}
         icon={FileText}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/resident?section=documents')}
       />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.documentPage}`}>
@@ -185,7 +187,7 @@ export default function NewDocumentRequest() {
             </div>
 
             <div className="flex gap-2 mt-5">
-              <button onClick={() => router.push('/resident')}
+              <button onClick={() => router.push('/resident?section=documents')}
                 className="btn-primary flex-1 py-3 rounded-2xl text-white text-sm font-bold">
                 Back to dashboard
               </button>

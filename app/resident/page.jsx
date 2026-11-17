@@ -1,7 +1,14 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { Skeleton, CardSkeleton } from '@/components/Skeletons'
+import { DashboardShellSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import DashboardBackdrop from '@/components/DashboardBackdrop'
+import { DASHBOARD_SKELETONS } from '@/lib/dashboardSkeletons'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import SectionContent from '@/components/SectionContent'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
 import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
 import Image from 'next/image'
@@ -26,33 +33,6 @@ import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } f
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
 
 // Hoisted — these were recreated on every render
 const priorityConfig = {
@@ -335,26 +315,11 @@ const sectionTitle = {
   documents: 'My Documents', blotter: 'My Blotter Cases', ai: 'AI Assistant',
 }
 
-const HomeSkeleton = () => (
-  <div className="space-y-6 max-w-4xl mx-auto">
-    <div className="white-card p-6 space-y-2">
-      <Skeleton className="h-3 w-24" />
-      <Skeleton className="h-7 w-48" />
-      <Skeleton className="h-3 w-64" />
-    </div>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      {[...Array(3)].map((_, i) => (
-        <div key={i} className="glass-card p-5 space-y-3">
-          <Skeleton className="w-6 h-6 rounded-lg" style={{ background: 'rgba(255,255,255,0.2)' }} />
-          <Skeleton className="h-8 w-12" style={{ background: 'rgba(255,255,255,0.2)' }} />
-          <Skeleton className="h-3 w-24" style={{ background: 'rgba(255,255,255,0.2)' }} />
-        </div>
-      ))}
-    </div>
-  </div>
-)
+// Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
+const { kinds: RESIDENT_SKELETONS, fallback: RESIDENT_HOME } = DASHBOARD_SKELETONS['/resident']
+const RESIDENT_SECTIONS = Object.keys(RESIDENT_SKELETONS)
 
-export default function ResidentDashboard() {
+function ResidentDashboard() {
   const now = useNow()
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -364,7 +329,7 @@ export default function ResidentDashboard() {
   const [tickets, setTickets] = useState([])
   const [documentRequests, setDocumentRequests] = useState([])
   const [blotterCases, setBlotterCases] = useState([])
-  const [activeSection, setActiveSection] = useState('home')
+  const [activeSection, setActiveSection] = useUrlSection(RESIDENT_SECTIONS, RESIDENT_HOME)
   // Starts closed so a phone refresh never renders the drawer open; then
   // the remembered desktop choice (lib/useSidebarState).
   const [sidebarOpen, setSidebarOpen] = useSidebarState(false)
@@ -376,7 +341,7 @@ export default function ResidentDashboard() {
     let cancelled = false
     async function loadData() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return router.push('/login')
+      if (!session) return router.replace(loginHref())
       const user = session.user
 
       const { data: prof, error: profError } = await supabase
@@ -590,17 +555,20 @@ export default function ResidentDashboard() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [profile?.id, profile?.barangay_id, supabase, router])
+  }, [profile?.id, profile?.barangay_id, supabase, router, setActiveSection])
 
   // Stable, so the home tiles that call it are not rebuilt every render.
   const navClick = useCallback((key) => {
     setActiveSection(key)
     if (window.innerWidth < 768) setSidebarOpen(false)
-  }, [setSidebarOpen])
+  }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
   const mainRef = useRef(null)
   useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [activeSection])
+
+  // Each section gets its own browser-tab title (history entries, tab strip).
+  useEffect(() => { document.title = `${sectionTitle[activeSection] || 'Dashboard'} · BH360` }, [activeSection])
 
   // Throws on failure so the improved RatingModal shows its error state
   // and re-enables its buttons; the old version silently ignored a failed
@@ -776,15 +744,22 @@ export default function ResidentDashboard() {
     (now - new Date(a.created_at)) / (1000 * 60 * 60 * 24) <= 1
   ).length
 
+  // Sections animate in when the user switches to one — not when the page
+  // first loads (lib/useSectionEntrance.js).
+  const entering = useSectionEntrance(activeSection, !loading)
+
+  // While loading, the same frame the static HTML showed before JavaScript
+  // ran — now with the real sidebar width and banner — so a refresh shows
+  // one skeleton throughout, then the content in its place.
+  if (loading) {
+    return (
+      <DashboardShellSkeleton path="/resident" kind={RESIDENT_SKELETONS[activeSection]}
+        sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
+    )
+  }
+
   return (
-    <div className="min-h-dvh flex relative overflow-hidden bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-        <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-      </div>
+    <div className="min-h-dvh flex relative overflow-hidden">
 
       {/* The page-level overlay is gone — the improved DashboardSidebar
           renders its own mobile backdrop, so this one doubled it up. */}
@@ -853,21 +828,15 @@ export default function ResidentDashboard() {
           }}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto [scrollbar-gutter:stable]">
           <NotificationBanner />
 
-          {loading && (
-            <div className="fade-up">
-              {activeSection === 'home' ? <HomeSkeleton /> : (
-                <div className="space-y-3 max-w-3xl mx-auto">
-                  {[...Array(4)].map((_, i) => <CardSkeleton key={i} />)}
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* Keyed on the section: switching sections remounts it, which
+              eases the new section in (only after a switch — see `entering`
+              above and components/SectionContent.jsx). */}
+          <SectionContent key={activeSection} entering={entering}>
           {!loading && !profile?.barangay_id && (
-            <div className="white-card p-8 max-w-2xl mx-auto text-center fade-up">
+            <div className="white-card p-8 max-w-2xl mx-auto text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{ background: '#fff7ed' }}>
                 <AlertTriangle size={28} className="text-orange-500" />
               </div>
@@ -878,7 +847,7 @@ export default function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'home' && (
-            <div className="space-y-6 fade-up max-w-4xl mx-auto">
+            <div className="space-y-6 max-w-4xl mx-auto">
               <HomeSummary
                 greeting={greeting()}
                 name={profile?.full_name?.split(' ')[0]}
@@ -899,7 +868,7 @@ export default function ResidentDashboard() {
               {!isVerified(profile) && (() => {
                 const vs = verificationStyle(profile?.verification_status)
                 return (
-                  <div className="white-card p-5 fade-up-1"
+                  <div className="white-card p-5"
                     style={{ borderLeft: `4px solid ${vs.color}` }}>
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
@@ -927,7 +896,7 @@ export default function ResidentDashboard() {
                 )
               })()}
 
-              <div className="fade-up-1">
+              <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
                   {homeSummary.allClear ? 'Your activity' : 'Needs you'}
                 </p>
@@ -936,7 +905,7 @@ export default function ResidentDashboard() {
                 )} />
               </div>
 
-              <div className="fade-up-2">
+              <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
                 {/* Reporting an emergency used to look exactly like asking the
                     AI a question. It is the primary now — in BH360 purple, not
@@ -986,7 +955,7 @@ export default function ResidentDashboard() {
               </div>
 
               {announcements.length > 0 && (
-                <div className="fade-up-3">
+                <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-white/85">Latest announcements</p>
                     <button onClick={() => navClick('announcements')}
@@ -1038,7 +1007,7 @@ export default function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
-            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl mx-auto">
 
               {/* Header card */}
               {announcements.length > 0 && (
@@ -1127,7 +1096,7 @@ export default function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'incidents' && (
-            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl mx-auto">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{incidents.length} total</p>
                 <button onClick={() => router.push('/resident/report')}
@@ -1161,7 +1130,7 @@ export default function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tickets' && (
-            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl mx-auto">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{tickets.length} total</p>
                 <button onClick={() => router.push('/resident/ticket/new')}
@@ -1196,7 +1165,7 @@ export default function ResidentDashboard() {
           {/* MY DOCUMENTS — barangay certifications, and the clock RA 11032
               puts the barangay on for each one. */}
           {!loading && profile?.barangay_id && activeSection === 'documents' && (
-            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl mx-auto">
 
               <div className="flex items-center justify-between mb-2 gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">
@@ -1262,7 +1231,7 @@ export default function ResidentDashboard() {
               but they should be able to see where their case has got to and
               what the law says happens next. */}
           {!loading && profile?.barangay_id && activeSection === 'blotter' && (
-            <div className="space-y-3 fade-up max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl mx-auto">
 
               <div className="white-card p-4">
                 <div className="flex items-start gap-2">
@@ -1303,7 +1272,7 @@ export default function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'ai' && (
-            <div className="fade-up max-w-3xl mx-auto space-y-4">
+            <div className="max-w-3xl mx-auto space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-24 h-24 rounded-3xl mx-auto mb-4 flex items-center justify-center">
                   <Image src="/logo.png" alt="AI Assistant" width={64} height={64} className="object-contain" />
@@ -1319,6 +1288,7 @@ export default function ResidentDashboard() {
             </div>
           )}
 
+          </SectionContent>
         </main>
       </div>
       <RatingModal
@@ -1328,5 +1298,22 @@ export default function ResidentDashboard() {
         incident={ratingModal}
       />
     </div>
+  )
+}
+
+/**
+ * The section lives in the URL (?section=…), read with useSearchParams, and
+ * the sidebar width in localStorage — see components/ClientBoundary.jsx.
+ * The fallback is the static loading frame; the backdrop sits outside the
+ * boundary so it is drawn once and never restarts.
+ */
+export default function ResidentDashboardPage() {
+  return (
+    <>
+      <DashboardBackdrop />
+      <ClientBoundary fallback={<DashboardShellSkeleton path="/resident" />}>
+        <ResidentDashboard />
+      </ClientBoundary>
+    </>
   )
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
@@ -38,11 +40,11 @@ export default function CalendarView() {
         const { data: { user }, error } = await supabase.auth.getUser()
         if (cancelled) return
         if (error) throw error
-        if (!user) { router.replace('/login'); return }
+        if (!user) { router.replace(loginHref()); return }
         const { data: official, error: profileError } = await supabase.from('profiles').select('id, role, barangay_id, barangays(name)').eq('id', user.id).single()
         if (cancelled) return
         if (profileError) throw profileError
-        if (official?.role !== 'official' || !official?.barangay_id) { router.replace('/login'); return }
+        if (official?.role !== 'official' || !official?.barangay_id) { router.replace(loginHref()); return }
         setProfile(official)
       } catch {
         if (!cancelled) setAuthError('Could not load your calendar access. Refresh this page to try again.')
@@ -102,7 +104,7 @@ export default function CalendarView() {
       title="Barangay calendar"
       description={`${profile?.barangays?.name || 'Schedule and activity'} · Philippine time`}
       icon={CalendarDays}
-      onBack={() => router.push('/official')}
+      onBack={() => goBack(router, '/official?section=calendar')}
       backLabel="Back to dashboard"
       actions={<>
         <AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={15} aria-hidden="true" />Appointments</AppButton>

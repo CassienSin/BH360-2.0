@@ -1,11 +1,14 @@
 'use client'
+import { IncidentDetailSkeleton } from '@/components/Skeletons'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
-  MapPin, Clock, Shield, Scale, Star, Loader2, X, FileText,
+  MapPin, Clock, Shield, Scale, Star, X, FileText,
   Check, AlertTriangle, Phone, ShieldOff, Send,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -193,7 +196,7 @@ export default function ResidentIncidentDetail() {
     async function load() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (cancelled) return
-      if (authError || !user) { router.replace('/login'); return }
+      if (authError || !user) { router.replace(loginHref()); return }
 
       // See the note in app/resident/report/page.jsx: if the embedded
       // barangays(phone) column is missing, the whole select fails and
@@ -262,13 +265,7 @@ export default function ResidentIncidentDetail() {
     toast.success('Thank you for the feedback!')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={30} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  if (loading) return <IncidentDetailSkeleton />
 
   if (denied) {
     return (
@@ -312,7 +309,7 @@ export default function ResidentIncidentDetail() {
         description={`Reported ${timeAgo(incident.created_at)}`}
         iconElement={<CategoryIcon category={incident.category} size={21} />}
         iconStyle={{ background: `${cat.color}18`, color: cat.color }}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/resident?section=incidents')}
       />
 
       <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>

@@ -5,7 +5,7 @@ import { createClient as createSupabaseJsClient } from '@supabase/supabase-js'
 import { Eye, EyeOff, Mail, Lock, ArrowRight, ArrowLeft, Shield, KeyRound, AlertTriangle, BarChart2, MessageCircle } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { dashboardPath } from '@/lib/roles'
+import { postLoginPath } from '@/lib/loginRedirect'
 
 const dots = [...Array(25)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -62,7 +62,7 @@ export default function LoginPage() {
         console.error('Could not read the signed-in profile:', error)
         return
       }
-      window.location.replace(dashboardPath(profile))
+      window.location.replace(postLoginPath(profile))
     }
     checkExistingSession()
     return () => { cancelled = true }
@@ -115,7 +115,7 @@ export default function LoginPage() {
     // OUT of the browser history instead of stacking the dashboard on top
     // of it. Previously `window.location.href = ...` pushed a new entry,
     // so pressing back on mobile returned users to the login form.
-    window.location.replace(dashboardPath(profile))
+    window.location.replace(postLoginPath(profile))
   }
 
   async function handleForgotPassword(e) {

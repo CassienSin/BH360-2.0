@@ -1,7 +1,10 @@
 'use client'
+import { TicketDetailSkeleton } from '@/components/Skeletons'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Send, Clock, CheckCircle, AlertCircle, Sparkles, Shield, FileQuestion, FileText, AlertCircle as AlertIcon, Star, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -91,7 +94,7 @@ export default function TicketChat() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         if (cancelled) return
@@ -191,17 +194,7 @@ export default function TicketChat() {
   const CategoryIcon = cat?.icon
 
   // ---- Loading state ----
-  if (pageLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden">
-        <AnimatedDots />
-        <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 relative z-10">
-          <Loader2 size={24} className="animate-spin text-white" />
-          <p className="text-white text-sm font-semibold">Loading ticket...</p>
-        </div>
-      </div>
-    )
-  }
+  if (pageLoading) return <TicketDetailSkeleton />
 
   // ---- Not found state ----
   if (notFound) {
@@ -213,7 +206,7 @@ export default function TicketChat() {
           <p className="text-white text-sm font-bold">Ticket not found</p>
           <p className="text-purple-200 text-xs">It may have been deleted, or you may not have access to it.</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => goBack(router, '/resident?section=tickets')}
             className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
             style={{ background: 'white', color: 'var(--brand)' }}
           >
@@ -250,7 +243,7 @@ export default function TicketChat() {
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
       >
         <button
-          onClick={() => router.back()}
+          onClick={() => goBack(router, '/resident?section=tickets')}
           aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
         >

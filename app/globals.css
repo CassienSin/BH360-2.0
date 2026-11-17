@@ -233,7 +233,7 @@
   background: white;
   border-radius: var(--app-card-radius);
   box-shadow: var(--app-card-shadow);
-  transition: box-shadow .2s, border-color .2s;
+  transition: box-shadow .2s, border-color .2s, scale .15s ease, translate .2s ease;
 }
 
 .glass-card {
@@ -252,11 +252,85 @@
   }
 }
 
+/* ===== SKELETONS =====
+   A soft base block with a highlight that sweeps across it. The sweep is a
+   transform on ::after (composited on the GPU) rather than an animated
+   background-position, which repaints every frame and stutters on
+   low-end phones. Reduced motion (below) leaves the static base block. */
 .skeleton-shimmer {
-  @apply rounded-[12px] animate-shimmer;
-  background: linear-gradient(90deg, var(--brand-soft) 25%, var(--brand-border) 50%, var(--brand-soft) 75%);
-  background-size: 200% 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  isolation: isolate;
 }
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.7) 50%, transparent 100%);
+  animation: skeletonSweep 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+/* On the purple brand background: translucent white instead of lilac. */
+.skeleton-shimmer.skeleton-on-brand { background: rgba(255,255,255,0.14); }
+.skeleton-shimmer.skeleton-on-brand::after {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.16) 50%, transparent 100%);
+}
+@keyframes skeletonSweep { to { transform: translateX(100%); } }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* A section the user just switched to fades in rather than snapping. The
+   wrapper only fades; the cards inside carry the movement (see MOTION
+   below), so nothing slides twice. Content arriving on a refresh does NOT
+   get this class (lib/useSectionEntrance.js): it replaces the skeleton in
+   place, with no fade. */
+.content-enter { animation: fadeIn 0.22s ease both; }
+
+/* ===== DASHBOARD LOADING SHELL (components/Skeletons.jsx) =====
+   Before any JavaScript runs, the boot script in lib/dashboardSkeletons.js
+   has put the saved sidebar width, this URL's section skeleton and whether
+   the notification banner will show on <html data-*>. The static skeleton
+   reads them here, so its first paint already matches the page. When the
+   page draws the shell itself it pins the width with its own data-sidebar. */
+/* The browser may paint before it has parsed the page's markup (it yields
+   mid-parse on slow phones), which showed as a white flash. On app routes
+   (the boot script sets data-app) the page canvas itself draws the frame —
+   white 76px header, the brand gradient (same as .bg-brand) and, on the
+   dashboards (data-skeleton), the white sidebar at its saved width — so even
+   that frame already has the skeleton's layout. The page covers it. */
+html[data-app] {
+  --boot-sidebar: 0px;
+  background:
+    linear-gradient(#fff, #fff) 0 0 / var(--boot-sidebar) 100% no-repeat fixed,
+    linear-gradient(#fff, #fff) 0 0 / 100% 76px no-repeat fixed,
+    linear-gradient(145deg, var(--brand-dark) 0%, #6B5FEE 35%, var(--brand-light) 60%, var(--brand) 100%) fixed;
+}
+@media (min-width: 768px) {
+  html[data-skeleton] { --boot-sidebar: 16rem; }
+  html[data-skeleton][data-sidebar='closed'] { --boot-sidebar: 4rem; }
+}
+.dash-shell { --dash-sidebar: 16rem; }
+:is(html[data-sidebar='closed'] .dash-shell:not([data-sidebar]), .dash-shell[data-sidebar='closed']) { --dash-sidebar: 4rem; }
+.dash-shell-aside { width: var(--dash-sidebar); }
+@media (min-width: 768px) { .dash-shell-column { margin-left: var(--dash-sidebar); } }
+.dash-shell-sb-open { display: flex; }
+.dash-shell-sb-closed { display: none; }
+:is(html[data-sidebar='closed'] .dash-shell:not([data-sidebar]), .dash-shell[data-sidebar='closed']) .dash-shell-sb-open { display: none; }
+:is(html[data-sidebar='closed'] .dash-shell:not([data-sidebar]), .dash-shell[data-sidebar='closed']) .dash-shell-sb-closed { display: flex; }
+
+.dash-shell-variant, .dash-shell-banner { display: none; }
+html:not([data-skeleton]) .dash-shell-variant[data-default],
+html[data-skeleton='overview'] .dash-shell-variant[data-kind='overview'],
+html[data-skeleton='records'] .dash-shell-variant[data-kind='records'],
+html[data-skeleton='announcements'] .dash-shell-variant[data-kind='announcements'],
+html[data-skeleton='table'] .dash-shell-variant[data-kind='table'],
+html[data-skeleton='analytics'] .dash-shell-variant[data-kind='analytics'],
+html[data-skeleton='launcher'] .dash-shell-variant[data-kind='launcher'],
+html[data-skeleton='chat'] .dash-shell-variant[data-kind='chat'],
+html[data-banner='ask'] .dash-shell-banner[data-state='ask'],
+html[data-banner='denied'] .dash-shell-banner[data-state='denied'] { display: block; }
 
 /* THE MOBILE "UNFIT AFTER REFRESH" FIX: iOS Safari auto-zooms whenever a
    focused input has a font-size under 16px — and the app's inputs are all
@@ -683,3 +757,51 @@
      does not slide in. */
   .bh-toast-out { opacity: 0; }
 }
+
+/* ===== MOTION =====
+   Short, purposeful, and cheap: only opacity plus the individual
+   translate/scale properties, which the GPU composites without layout.
+   The reduced-motion rule above flattens all of it to the end state. */
+:root { --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+/* Cards rise in when a section opens. Siblings stagger 30ms apart for the
+   first eight, so a list "deals out" instead of popping in as a slab;
+   anything further down arrives with the eighth. New cards that arrive
+   live (realtime inserts) get the same entrance on their own. */
+@keyframes cardEnter {
+  from { opacity: 0; translate: 0 8px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.content-enter .white-card { animation: cardEnter 0.35s var(--ease-out-soft) both; }
+.content-enter .white-card:nth-child(2) { animation-delay: 30ms; }
+.content-enter .white-card:nth-child(3) { animation-delay: 60ms; }
+.content-enter .white-card:nth-child(4) { animation-delay: 90ms; }
+.content-enter .white-card:nth-child(5) { animation-delay: 120ms; }
+.content-enter .white-card:nth-child(6) { animation-delay: 150ms; }
+.content-enter .white-card:nth-child(7) { animation-delay: 180ms; }
+.content-enter .white-card:nth-child(n+8) { animation-delay: 210ms; }
+
+/* Press feedback: anything tappable gives a little under the finger.
+   `scale` (not transform) so it can't fight the entrance animation. */
+.btn-primary,
+.white-card:is(button, a, [role='button']),
+.glass-card:is(button, a, [role='button']) {
+  transition-property: box-shadow, border-color, background-color, scale, translate;
+  transition-duration: .2s;
+}
+:is(.btn-primary, .white-card:is(button, a, [role='button']), .glass-card:is(button, a, [role='button'])):active:not(:disabled) {
+  scale: 0.98;
+  transition-duration: .08s;
+}
+
+/* Hover lift, pointer devices only (touch "hover" sticks after a tap). */
+@media (hover: hover) {
+  .white-card:is(button, a, [role='button']):hover:not(:disabled) { translate: 0 -2px; }
+}
+
+/* Sidebar: the active-section bar grows in from its centre. */
+@keyframes navIndicatorIn {
+  from { scale: 1 0; opacity: 0; }
+  to   { scale: 1 1; opacity: 1; }
+}
+.nav-indicator { animation: navIndicatorIn 0.25s var(--ease-out-soft) both; }

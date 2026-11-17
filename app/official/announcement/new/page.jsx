@@ -3,6 +3,8 @@ import { PageHeader, AppButton } from '@/components/AppUI'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { Bell, AlignLeft, CheckCircle, Sparkles, Megaphone, Info, AlertTriangle, Lightbulb, Users, Eye, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -124,7 +126,7 @@ export default function NewAnnouncement() {
     async function loadProfile() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.push('/login')
+        router.replace(loginHref())
         return
       }
       const { data: prof, error: profError } = await supabase
@@ -200,7 +202,7 @@ export default function NewAnnouncement() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
         toast.error('Your session has expired. Please log in again.')
-        router.push('/login')
+        router.replace(loginHref())
         return
       }
 
@@ -255,7 +257,7 @@ export default function NewAnnouncement() {
         .update({ published_at: new Date(Date.now() - 1000).toISOString() })
         .eq('id', postedId)
         .then(({ error }) => { if (error) console.error('Publishing announcement failed:', error) })
-        .finally(() => router.push('/official'))
+        .finally(() => router.push('/official?section=announcements'))
       return
     }
     const timer = setTimeout(() => setUndoSecondsLeft(s => s - 1), 1000)
@@ -333,7 +335,7 @@ export default function NewAnnouncement() {
             <button
               onClick={() => {
                 try { sessionStorage.removeItem(DRAFT_KEY) } catch {}
-                router.push('/official')
+                router.push('/official?section=announcements')
               }}
               className="px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-105"
               style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
@@ -364,7 +366,7 @@ export default function NewAnnouncement() {
         />
       </div>
 
-      <PageHeader title="New Announcement" description="Share an update with your barangay" icon={Megaphone} onBack={() => router.back()} />
+      <PageHeader title="New Announcement" description="Share an update with your barangay" icon={Megaphone} onBack={() => goBack(router, '/official?section=announcements')} />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${styles.main}`}>
 

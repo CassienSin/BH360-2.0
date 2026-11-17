@@ -1,9 +1,11 @@
     'use client'
-import { PageHeader, AppButton, PageState } from '@/components/AppUI'
+import { PageSkeleton } from '@/components/Skeletons'
+import { PageHeader, AppButton } from '@/components/AppUI'
 import { useBrowserValue } from '@/lib/useHydrated'
 
     import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
     import { AlarmClock, Bell, CalendarDays, Check, Clock3, Plus, UserRound } from 'lucide-react'
     import toast from 'react-hot-toast'
     import { createClient } from '@/lib/supabase'
@@ -67,7 +69,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
         try {
             const { data: { user }, error: authError } = await supabase.auth.getUser()
             if (authError || !user) {
-            router.push('/login')
+            router.replace(loginHref())
             return
             }
             const { data: prof, error } = await supabase.from('profiles')
@@ -77,7 +79,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
             if (cancelled) return
             if (error || prof?.role !== 'official' || !prof?.barangay_id) {
             toast.error(error ? 'Could not load your official profile.' : 'Officials only.')
-            router.push('/login')
+            router.replace(loginHref())
             return
             }
             setProfile(prof)
@@ -217,7 +219,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
     }
 
     if (loading) {
-        return <PageState fullPage kind="loading" title="Loading appointments…" description="Preparing your barangay schedule." />
+        return <PageSkeleton cards={2} />
     }
 
     return (

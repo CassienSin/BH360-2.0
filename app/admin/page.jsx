@@ -1,6 +1,11 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { PageSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
 import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -120,7 +125,9 @@ function UserAvatar({ src, name }) {
   return <img loading="lazy" decoding="async" src={src} alt="" onError={() => setFailedSrc(src)} className="w-full h-full object-cover" />
 }
 
-export default function AdminPanel() {
+const ADMIN_TABS = ['applications', 'incidents', 'codes', 'barangays', 'users']
+
+function AdminPanel() {
   const router = useRouter()
   // Memoize so we don't construct a new client on every render.
   const supabase = useMemo(() => createClient(), [])
@@ -149,7 +156,7 @@ export default function AdminPanel() {
   const [loadingIncidentAnalytics, setLoadingIncidentAnalytics] = useState(false)
   const [incidentAnalyticsError, setIncidentAnalyticsError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('applications')
+  const [activeTab, setActiveTab] = useUrlSection(ADMIN_TABS, 'applications', { param: 'tab' })
   const [statusFilter, setStatusFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [reviewing, setReviewing] = useState(null)
@@ -274,7 +281,7 @@ export default function AdminPanel() {
     let cancelled = false
     async function init() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) return router.push('/login')
+      if (authError || !user) return router.replace(loginHref())
 
       const { data: prof, error: profError } = await supabase
         .from('profiles').select('*').eq('id', user.id).single()
@@ -284,7 +291,7 @@ export default function AdminPanel() {
       // (and ideally a middleware/server-component check on this route).
       if (profError || !prof?.is_super_admin) {
         toast.error('Access denied. Super admin only.')
-        return router.push('/login')
+        return router.replace(loginHref())
       }
       if (cancelled) return
 
@@ -638,13 +645,10 @@ export default function AdminPanel() {
     [users]
   )
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  // The open tab eases in when you switch tabs, not on page load.
+  const tabEnter = useSectionEntrance(activeTab, !loading) ? 'fade-up' : ''
+
+  if (loading) return <PageSkeleton cards={3} maxWidth={1168} tabs={5} />
 
   return (
     <div className="min-h-screen relative overflow-clip bg-brand">
@@ -849,7 +853,7 @@ export default function AdminPanel() {
 
         {/* APPLICATIONS TAB */}
         {activeTab === 'applications' && (
-          <div className="w-full min-w-0 space-y-3 fade-up">
+          <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
             {/* Filters */}
             <div className="white-card w-full min-w-0 overflow-hidden p-4">
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1029,7 +1033,7 @@ export default function AdminPanel() {
             that spans them, so it leads with the cross-barangay numbers
             (which barangays are affected, and who is falling behind). */}
         {activeTab === 'incidents' && (
-          <div className="w-full min-w-0 space-y-3 fade-up">
+          <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
 
             <div className="white-card flex w-full min-w-0 flex-wrap gap-2 p-2" role="tablist" aria-label="Incident views">
               <button role="tab" aria-selected={incidentView === 'list'} onClick={() => setIncidentView('list')}
@@ -1361,7 +1365,7 @@ export default function AdminPanel() {
 
         {/* INVITE CODES TAB */}
         {activeTab === 'codes' && (
-          <div className="space-y-4 fade-up">
+          <div className={`space-y-4 ${tabEnter}`}>
             <div className="white-card p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
@@ -1511,7 +1515,7 @@ export default function AdminPanel() {
 
         {/* BARANGAYS TAB */}
         {activeTab === 'barangays' && (
-          <div className="white-card p-5 fade-up">
+          <div className={`white-card p-5 ${tabEnter}`}>
             <h3 className="font-bold text-gray-800 mb-4">Active Barangays ({totalBarangaysWithUsers})</h3>
             <div className="space-y-2">
               {Array.from(new Set(users.map(u => u.barangay_id))).filter(Boolean).map(bId => {
@@ -1542,7 +1546,7 @@ export default function AdminPanel() {
 
         {/* USERS TAB */}
         {activeTab === 'users' && (
-          <div className="space-y-4 fade-up">
+          <div className={`space-y-4 ${tabEnter}`}>
 
             {/* Stats by role */}
             <div className="grid grid-cols-3 gap-3">
@@ -1679,5 +1683,18 @@ export default function AdminPanel() {
         variant="logout"
       />
     </div>
+  )
+}
+
+/**
+ * The tab lives in the URL (?tab=…), read with useSearchParams — see
+ * components/ClientBoundary.jsx. The fallback matches the page's own
+ * loading skeleton, so a refresh shows one skeleton throughout.
+ */
+export default function AdminPage() {
+  return (
+    <ClientBoundary fallback={<PageSkeleton cards={3} maxWidth={1168} tabs={5} />}>
+      <AdminPanel />
+    </ClientBoundary>
   )
 }

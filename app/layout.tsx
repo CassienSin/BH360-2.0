@@ -5,6 +5,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import InstallPrompt from "@/components/InstallPrompt";
 import OfflineBanner from "@/components/OfflineBanner";
+import { BOOT_SCRIPT } from "@/lib/dashboardSkeletons";
 
 // Sora is the font the entire app actually renders in — it was previously
 // loaded via a render-blocking Google Fonts @import in globals.css while
@@ -53,7 +54,20 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${sora.variable} ${geistMono.variable} h-full antialiased`}
+      // The boot script below adds data-* attributes to <html> before React
+      // hydrates; this tells React they are expected (this element only).
+      suppressHydrationWarning
     >
+      <head>
+        {/* Runs while the HTML is parsed, before the first paint: records the
+            saved sidebar width, the dashboard section's skeleton and the
+            notification banner on <html>, so the static loading skeleton
+            matches the page it stands in for. See lib/dashboardSkeletons.js.
+            A plain inline script on purpose: next/script's beforeInteractive
+            only queues inline code (self.__next_s) for Next's bootstrap
+            bundle to run, which is after the first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <Toaster
           position="top-right"
@@ -109,8 +123,17 @@ export default function RootLayout({
               // So the swap happens here, at the one moment it is safe: a
               // full reload, where the page that loads is served entirely by
               // the new worker rather than half by each.
+              //
+              // Only when a worker is being *replaced*, though. sw.js calls
+              // clients.claim(), so a first install also fires
+              // controllerchange (none -> the new worker) — and reloading
+              // then loaded every first visit twice, and left
+              // document.referrer pointing at the page itself (which made
+              // lib/goBack.js send a fresh tab's Back to a blank page).
               var reloading = false
+              var hadController = !!navigator.serviceWorker.controller
               navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (!hadController) { hadController = true; return }
                 if (reloading) return
                 reloading = true
                 window.location.reload()

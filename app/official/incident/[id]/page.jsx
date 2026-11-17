@@ -1,11 +1,14 @@
 'use client'
+import { IncidentDetailSkeleton } from '@/components/Skeletons'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
   MapPin, Phone, Clock, Shield, Scale, ShieldAlert, Check, Send,
-  Pencil, Star, User, Loader2, X, Navigation, FileText, Bell, AlertTriangle,
+  Pencil, Star, User, X, Navigation, FileText, Bell, AlertTriangle,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
@@ -187,7 +190,7 @@ export default function IncidentDetail() {
     async function load() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (cancelled) return
-      if (authError || !user) { router.replace('/login'); return }
+      if (authError || !user) { router.replace(loginHref()); return }
 
       const { data: prof, error: profError } = await supabase
         .from('profiles').select('role, barangay_id').eq('id', user.id).single()
@@ -199,7 +202,7 @@ export default function IncidentDetail() {
         setLoading(false)
         return
       }
-      if (prof?.role !== 'official') { router.replace('/login'); return }
+      if (prof?.role !== 'official') { router.replace(loginHref()); return }
 
       const { data, error } = await supabase
         .from('incidents')
@@ -280,13 +283,7 @@ export default function IncidentDetail() {
     toast.success('Tanod dispatched')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={30} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  if (loading) return <IncidentDetailSkeleton />
 
   if (notFound) {
     return (
@@ -330,7 +327,7 @@ export default function IncidentDetail() {
         description={`${incident.category} · reported ${timeAgo(incident.created_at)}`}
         iconElement={<CategoryIcon category={incident.category} size={21} />}
         iconStyle={{ background: `${cat.color}18`, color: cat.color }}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/official?section=incidents')}
         actionsDesktopOnly
         maxWidth={1040}
         actions={<>

@@ -2,6 +2,7 @@
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { goBack } from '@/lib/goBack'
 import { ArrowLeft, Send, Bot, Lightbulb, FileText, Bell, MessageCircle, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import ReactMarkdown from 'react-markdown'
@@ -190,7 +191,7 @@ export default function AIAssistant() {
         }}
       >
         <button
-          onClick={() => router.back()}
+          onClick={() => goBack(router, '/resident')}
           aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0"
         >

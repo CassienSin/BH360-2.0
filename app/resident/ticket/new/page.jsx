@@ -3,6 +3,8 @@ import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { FileText, AlignLeft, Tag, CheckCircle, Send, Sparkles, HelpCircle, Loader2, Lightbulb, FileQuestion, AlertCircle, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -103,7 +105,7 @@ export default function NewTicket() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
         toast.error('Your session has expired. Please log in again.')
-        router.push('/login')
+        router.replace(loginHref())
         return
       }
 
@@ -200,7 +202,7 @@ export default function NewTicket() {
         title="Create New Ticket"
         description="A barangay official will respond shortly"
         icon={FileText}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/resident?section=tickets')}
       />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-5 ${desktop.ticketPage}`}>

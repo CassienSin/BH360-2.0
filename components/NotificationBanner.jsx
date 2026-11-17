@@ -100,14 +100,33 @@ export default function NotificationBanner() {
   // there's nothing to say: unsupported browser, already granted, dismissed.
   if (!mounted || !isSupported() || permission === 'granted' || dismissed) return null
 
-  // Blocked. Previously this rendered nothing at all, so an official whose
-  // browser had denied the permission saw no banner, got no notifications,
-  // and had nothing telling them why — the app looked simply broken. The
-  // page cannot re-ask once denied; only the browser's own settings can
-  // undo it, so the honest thing is to say where that is.
-  if (permission === 'denied') {
+  return (
+    <NotificationBannerView
+      state={permission === 'denied' ? 'denied' : 'ask'}
+      enabling={enabling}
+      onEnable={handleEnable}
+      onDismiss={handleDismiss}
+    />
+  )
+}
+
+/**
+ * The banner's markup alone. The dashboards' static loading skeleton draws
+ * this same view (inert, before any JavaScript runs) when the boot script in
+ * lib/dashboardSkeletons.js predicts the banner will show, so the skeleton
+ * reserves exactly the banner's height at every screen width and nothing
+ * below it jumps when the page takes over.
+ *
+ * state 'denied' — blocked. Previously this rendered nothing at all, so an
+ * official whose browser had denied the permission saw no banner, got no
+ * notifications, and had nothing telling them why — the app looked simply
+ * broken. The page cannot re-ask once denied; only the browser's own
+ * settings can undo it, so the honest thing is to say where that is.
+ */
+export function NotificationBannerView({ state, enabling = false, onEnable, onDismiss }) {
+  if (state === 'denied') {
     return (
-      <div className="fade-up mb-4" role="status">
+      <div className="mb-4" role="status">
         <div className="rounded-2xl p-4 flex items-center gap-3"
           style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -121,7 +140,7 @@ export default function NotificationBanner() {
               browser: tap the padlock (or ⓘ) beside the address bar → Notifications → Allow.
             </p>
           </div>
-          <button onClick={handleDismiss} aria-label="Dismiss notification banner"
+          <button onClick={onDismiss} aria-label="Dismiss notification banner"
             className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors hover:bg-white"
             style={{ color: '#b45309' }}>
             <X size={14} />
@@ -132,7 +151,7 @@ export default function NotificationBanner() {
   }
 
   return (
-    <div className="fade-up mb-4" role="status">
+    <div className="mb-4" role="status">
       <div className="rounded-2xl p-4 flex items-center gap-3"
         style={{
           background: 'linear-gradient(135deg, var(--brand-soft), var(--brand-border))',
@@ -147,12 +166,12 @@ export default function NotificationBanner() {
           <p className="text-xs text-gray-500">Get alerted to critical incidents and updates — even when BarangayHub is closed.</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button onClick={handleEnable} disabled={enabling}
+          <button onClick={onEnable} disabled={enabling}
             className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 flex items-center gap-1.5 disabled:opacity-60 disabled:hover:scale-100"
             style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
             {enabling ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Enable
           </button>
-          <button onClick={handleDismiss} aria-label="Dismiss notification banner"
+          <button onClick={onDismiss} aria-label="Dismiss notification banner"
             className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-white hover:text-gray-600 transition-colors">
             <X size={14} />
           </button>

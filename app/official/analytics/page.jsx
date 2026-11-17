@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { useNow } from '@/lib/useNow'
 import { PageHeader, AppButton } from '@/components/AppUI'
@@ -112,7 +114,7 @@ export default function AIAnalytics() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         const { data: prof, error: profError } = await supabase
@@ -132,7 +134,7 @@ export default function AIAnalytics() {
           return
         }
         if (prof?.role !== 'official') {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         setProfile(prof)
@@ -364,7 +366,7 @@ export default function AIAnalytics() {
     return (
       <div className="min-h-screen relative overflow-clip bg-brand">
         <AnimatedDots />
-        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => router.back()} />
+        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
@@ -404,7 +406,7 @@ export default function AIAnalytics() {
         title="Analytics Dashboard"
         description={`Insights and trends${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
         icon={BarChart2} maxWidth={1168}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/official?section=analytics')}
         actions={
           <AppButton onClick={generateAnalysis} disabled={!dataLoaded} busy={loading} busyLabel="Analyzing…">
             <RefreshCw size={15} aria-hidden="true" />

@@ -1,6 +1,8 @@
 'use client'
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { KINDS } from '@/lib/offline/outbox'
 import { enqueue } from '@/lib/offline/sync'
@@ -344,7 +346,7 @@ export default function ReportIncident() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (authError || !user) {
         toast.error('Your session has expired. Please log in again.')
-        router.replace('/login')
+        router.replace(loginHref())
         return
       }
 
@@ -458,7 +460,7 @@ export default function ReportIncident() {
         title={outcome ? 'Report submitted' : 'Report an Incident'}
         description={outcome ? 'What happens next' : 'Notify the barangay immediately'}
         icon={AlertTriangle}
-        onBack={() => (outcome ? router.replace('/resident') : router.back())}
+        onBack={() => (outcome ? router.replace('/resident') : goBack(router, '/resident'))}
         backLabel={outcome ? 'Back to dashboard' : 'Go back'}
         maxWidth={outcome ? 688 : 1376}
       />

@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import IncidentMapScreen from '@/components/IncidentMapScreen'
@@ -110,7 +112,7 @@ export default function MapView() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
 
@@ -131,7 +133,7 @@ export default function MapView() {
           return
         }
         if (prof?.role !== 'official' || !prof?.barangay_id) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         setBarangayId(prof.barangay_id)
@@ -308,7 +310,7 @@ export default function MapView() {
       tanodTrails={tanodTrails}
       onDispatch={handleDispatch}
       onOpenIncident={(inc) => router.push(`/official/incident/${inc.id}`)}
-      onBack={() => router.push('/official')}
+      onBack={() => goBack(router, '/official?section=map')}
     />
   )
 }
