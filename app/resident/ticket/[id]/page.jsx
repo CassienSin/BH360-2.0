@@ -199,7 +199,7 @@ export default function TicketChat() {
   // ---- Not found state ----
   if (notFound) {
     return (
-      <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden px-4">
+      <div className="h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-4">
         <AnimatedDots />
         <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
           <AlertCircle size={28} className="text-white opacity-90" />
@@ -218,7 +218,7 @@ export default function TicketChat() {
   }
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden bg-brand">
+    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
       <AnimatedDots />
 
       {/* Background effects */}
@@ -239,7 +239,7 @@ export default function TicketChat() {
 
       {/* Header */}
       <header
-        className={`bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
+        className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
       >
         <button
@@ -421,7 +421,7 @@ export default function TicketChat() {
         </div>
 
         {ticket?.status !== 'closed' ? (
-          <form onSubmit={sendMessage} className="flex gap-2 mt-3 sticky bottom-0">
+          <form onSubmit={sendMessage} className="flex gap-2 mt-3 sticky bottom-0 pb-[env(safe-area-inset-bottom,0px)]">
             <input
               ref={inputRef}
               value={newMessage}

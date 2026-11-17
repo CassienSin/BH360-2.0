@@ -29,7 +29,7 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-brand flex items-center justify-center p-4">
+    <div className="min-h-dvh relative overflow-hidden bg-brand flex items-center justify-center p-4">
       {/* Animated background dots */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {DOTS.map((dot, i) => (

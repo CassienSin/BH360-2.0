@@ -41,6 +41,7 @@ import { verificationStyle } from '@/lib/verification'
 import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { isPhoneLayout } from '@/lib/layout'
 
 // Profile picture with graceful fallback to the initial-letter circle.
 // Used in User Management and Tanod Management — avatar_url was never
@@ -565,7 +566,7 @@ function OfficialDashboard() {
 
   const navClick = useCallback((key) => {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    if (isPhoneLayout()) setSidebarOpen(false)
   }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
@@ -982,7 +983,7 @@ function OfficialDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
+    <div className="min-h-dvh flex relative overflow-hidden">
       <DashboardSidebar
         profile={profile}
         sidebarOpen={sidebarOpen}
@@ -1018,7 +1019,7 @@ function OfficialDashboard() {
         ]}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-screen overflow-hidden ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
         <DashboardHeader
           profile={profile}
           sidebarOpen={sidebarOpen}
@@ -1079,7 +1080,8 @@ function OfficialDashboard() {
           }}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto [scrollbar-gutter:stable]">
+        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
            <NotificationBanner />
            <AppointmentReminderWatcher profile={profile} />
 
@@ -1126,6 +1128,9 @@ function OfficialDashboard() {
                 )} />
               </div>
 
+              {/* Wide screens: actions and roster beside the recent incidents. */}
+              <div className="grid gap-6 items-start xl:grid-cols-2">
+              <div className="space-y-6 min-w-0">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
                 <button onClick={() => navClick('announcements')}
@@ -1149,8 +1154,9 @@ function OfficialDashboard() {
               </div>
 
               <TanodRoster profile={profile} />
+              </div>
 
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Recent Incidents</p>
                   <button onClick={() => navClick('incidents')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
@@ -1180,6 +1186,7 @@ function OfficialDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </div>
           )}
@@ -1700,6 +1707,7 @@ function OfficialDashboard() {
             </div>
           )}
           </SectionContent>
+          </div>
         </main>
       </div>
 

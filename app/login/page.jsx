@@ -151,7 +151,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-brand relative overflow-hidden">
+    <div className="min-h-dvh flex bg-brand relative overflow-hidden">
 
       <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
         <ArrowLeft size={15} aria-hidden="true" /> Home
@@ -223,12 +223,16 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
 
           {/* Mobile logo */}
-          <div className="lg:hidden text-center mb-8 fade-up">
-            <div className="w-16 h-16 mx-auto mb-3 relative">
+          {/* On a short screen (phone held sideways) the logo sits beside
+              the name, so the sign-in card starts above the fold. */}
+          <div className="lg:hidden text-center mb-8 short:mb-3 short:flex short:items-center short:justify-center short:gap-3 fade-up">
+            <div className="w-16 h-16 mx-auto mb-3 short:mx-0 short:mb-0 short:w-10 short:h-10 relative">
               <Image src="/logo.png" alt="" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
             </div>
-            <p className="text-2xl font-bold text-white">BarangayHub 360</p>
-            <p className="text-purple-50 text-xs mt-1">Smart barangay management</p>
+            <div>
+              <p className="text-2xl short:text-lg font-bold text-white">BarangayHub 360</p>
+              <p className="text-purple-50 text-xs mt-1 short:mt-0">Smart barangay management</p>
+            </div>
           </div>
 
           {/* Card */}

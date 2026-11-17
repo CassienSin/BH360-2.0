@@ -205,7 +205,7 @@ export default function LandingPage() {
   // while a signed-in user is redirected to their dashboard.
   if (!ready) {
     return (
-      <div className="min-h-screen bg-brand flex flex-col items-center justify-center gap-6">
+      <div className="min-h-dvh bg-brand flex flex-col items-center justify-center gap-6">
         <div style={{ animation: 'float 2.5s ease-in-out infinite' }}>
           <Logo size={80} alt="BH360" />
         </div>
@@ -218,7 +218,7 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white overflow-x-hidden">
+    <div className="min-h-dvh bg-white overflow-x-hidden">
 
       {/* Navbar */}
       <nav className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"

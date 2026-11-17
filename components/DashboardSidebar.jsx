@@ -10,8 +10,9 @@ import { createPortal } from 'react-dom'
 import styles from './dashboard-sidebar.module.css'
 import { lockBodyScroll } from '@/lib/modalScrollLock'
 import { useHydrated } from '@/lib/useHydrated'
+import { PHONE_LAYOUT, isPhoneLayout } from '@/lib/layout'
 
-const mobileQuery = '(max-width: 767px)'
+const mobileQuery = PHONE_LAYOUT
 function subscribeMobile(onChange) {
   const media = window.matchMedia(mobileQuery)
   media.addEventListener('change', onChange)
@@ -146,7 +147,7 @@ export default function DashboardSidebar({
   function navClick(key) {
     setSearch('')
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    if (isPhoneLayout()) setSidebarOpen(false)
   }
 
   function togglePin(key, e) {

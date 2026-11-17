@@ -65,7 +65,7 @@ function LabelSkeleton({ className = 'w-36' }) {
 
 /** Mirrors components/HomeSummary.jsx: greeting card, tile grid, an action. */
 function OverviewSkeleton({ tiles = 4 }) {
-  const cols = tiles === 6 ? 'grid-cols-2 lg:grid-cols-3' : 'grid-cols-2 lg:grid-cols-4'
+  const cols = tiles === 6 ? 'grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4'
   return (
     <div className="space-y-6">
       <div className="white-card p-5 sm:p-6">
@@ -117,7 +117,36 @@ function RecordListSkeleton({ rows = 4 }) {
         </div>
       </div>
       <Skeleton tone="brand" className="h-3 w-24 rounded-md !mt-4" />
-      {[...Array(rows)].map((_, i) => <RecordCardSkeleton key={i} />)}
+      {/* Same container grid as RecordGroup / IncidentsSection. */}
+      <div className="@container">
+        <div className="grid gap-3 @5xl:grid-cols-2">
+          {[...Array(rows)].map((_, i) => <RecordCardSkeleton key={i} />)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** A resident list (incidents, tickets, documents, blotter): the count and
+ *  the section's action button, a group label, then cards. */
+function ResidentRecordListSkeleton({ rows = 3 }) {
+  // Same elements and classes as the resident sections and RecordGroup,
+  // with placeholders in place of the text, so the spacing is identical.
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2">
+        <Skeleton tone="brand" className="h-3 w-16 rounded-md my-0.5" />
+        <div className="h-10 w-40 rounded-2xl bg-white/90" />
+      </div>
+      <div className="flex items-center gap-2.5 mt-2 mb-0.5 px-0.5">
+        <Skeleton tone="brand" className="h-3 w-24 rounded-md my-0.5" />
+        <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
+      </div>
+      <div className="@container">
+        <div className="grid gap-3 @5xl:grid-cols-2">
+          {[...Array(rows)].map((_, i) => <RecordCardSkeleton key={i} />)}
+        </div>
+      </div>
     </div>
   )
 }
@@ -255,7 +284,7 @@ export function SectionSkeleton({ kind = 'records', path }) {
     case 'analytics': return <AnalyticsSkeleton />
     case 'launcher': return <LauncherSkeleton />
     case 'chat': return <ChatSkeleton />
-    default: return <RecordListSkeleton />
+    default: return path === '/resident' ? <ResidentRecordListSkeleton /> : <RecordListSkeleton />
   }
 }
 
@@ -283,7 +312,7 @@ function DutySkeleton({ column }) {
  *  shows is CSS (see .dash-shell in globals.css). */
 function SidebarSkeleton() {
   return (
-    <aside className="dash-shell-aside hidden md:flex fixed top-0 left-0 h-dvh flex-col bg-white overflow-hidden z-30"
+    <aside className="dash-shell-aside hidden desk:flex fixed top-0 left-0 h-dvh flex-col bg-white overflow-hidden z-30"
       style={{ boxShadow: '4px 0 24px rgba(91,84,232,0.1)' }} aria-hidden="true">
       {/* Open (w-64) */}
       <div className="dash-shell-sb-open flex-col h-full">
@@ -348,9 +377,9 @@ function SidebarSkeleton() {
 /** Mirrors components/DashboardHeader.jsx (76px). */
 function DashboardHeaderSkeleton() {
   return (
-    <div className={`bg-white min-h-[76px] px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader || ''}`} aria-hidden="true">
+    <div className={`bg-white min-h-[76px] px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader || ''} ${ui.safeTop}`} aria-hidden="true">
       <div className="flex items-center gap-3 min-w-0">
-        <Skeleton className="w-9 h-9 rounded-xl md:hidden flex-shrink-0" />
+        <Skeleton className="w-11 h-11 rounded-xl desk:hidden flex-shrink-0" />
         <div className="space-y-2 min-w-0">
           <Skeleton className="h-5 w-36" />
           <Skeleton className="h-3 w-52 max-w-full" />
@@ -401,17 +430,22 @@ export function DashboardShellSkeleton({ path, kind, sidebarOpen, banner }) {
       <SidebarSkeleton />
       <div className="dash-shell-column flex-1 flex flex-col min-w-0 relative z-10 h-dvh overflow-hidden">
         <DashboardHeaderSkeleton />
-        <div className="flex-1 p-4 sm:p-6 overflow-hidden [scrollbar-gutter:stable]">
-          {banner === undefined ? <BootBanner /> : banner}
+        <div className="flex-1 pad-safe overflow-hidden [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
           {kinds.map((k, i) => (
             <div key={k} className={kind ? undefined : 'dash-shell-variant'}
               data-kind={kind ? undefined : k} data-default={!kind && i === 0 ? '' : undefined}>
+              {/* The banner sits in the section's column, as on the page. */}
+              <div className={`${path === '/resident' ? dashboardColumn(path, k) : ''} mx-auto`}>
+                {banner === undefined ? <BootBanner /> : banner}
+              </div>
               {lead === 'duty' && <DutySkeleton column={dashboardColumn(path, k) || 'max-w-2xl'} />}
               <div className={`${dashboardColumn(path, k)} mx-auto`}>
                 <SectionSkeleton kind={k} path={path} />
               </div>
             </div>
           ))}
+          </div>
         </div>
       </div>
       {/* End of the static skeleton: the boot script holds the first paint
@@ -455,7 +489,7 @@ function PageHeaderSkeleton({ title, description, icon: Icon, actions = false })
 
 function PageFrame({ header, children }) {
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand" role="status" aria-label="Loading" aria-busy="true">
+    <div className="min-h-dvh relative overflow-clip bg-brand" role="status" aria-label="Loading" aria-busy="true">
       <PageHeaderSkeleton {...header} />
       {children}
       {/* End of the static skeleton: the boot script holds the first paint
@@ -568,70 +602,156 @@ export function PageSkeleton({ header = {}, layout, cards = 3, maxWidth = 768, t
   return <PageFrame header={header}>{body}</PageFrame>
 }
 
-/** Incident detail: report column, facts column. */
-export function IncidentDetailSkeleton() {
+/** Header of a detail page: back, the category tile, title lines, and (from
+ *  640px) the status pills — like PageHeader with actionsDesktopOnly. */
+function DetailHeaderSkeleton({ pills = true, maxWidth }) {
   return (
-    <PageFrame header={{}}>
-      <div className="max-w-5xl mx-auto px-4 py-5">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-          <div className="space-y-4">
-            <div className="white-card p-5 space-y-3">
-              <div className="flex gap-2">
-                <Skeleton className="h-6 w-20 rounded-full" />
-                <Skeleton className="h-6 w-24 rounded-full" />
-              </div>
-              <Skeleton className="h-6 w-2/3" />
-              <Skeleton className="h-56 w-full rounded-2xl" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-5/6" />
-              <Skeleton className="h-3 w-3/5" />
-            </div>
-            <div className="white-card p-5 space-y-3">
-              <Skeleton className="h-3 w-28" />
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex gap-3">
-                  <Skeleton className="w-3 h-3 rounded-full mt-1" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-3 w-1/2" />
-                    <Skeleton className="h-2.5 w-1/3" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div className="white-card p-5 space-y-3">
-              <Skeleton className="h-3 w-24" />
-              <div className="grid grid-cols-2 gap-3">
-                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
-              </div>
-            </div>
-            <Skeleton className="h-48 w-full rounded-3xl" />
-          </div>
+    <header className={ui.header} aria-hidden="true">
+      <div className={ui.headerInner} style={maxWidth ? { maxWidth } : undefined}>
+        <span className={ui.back}><ArrowLeft size={19} /></span>
+        <span className={ui.headerIcon}><Skeleton className="w-5 h-5 rounded-md" /></span>
+        <div className={`${ui.heading} space-y-2`}>
+          <Skeleton className="h-5 w-48 max-w-full" />
+          <Skeleton className="h-3 w-40 max-w-full" />
         </div>
+        {pills && (
+          <div className={`${ui.headerActions} ${ui.desktopOnly}`}>
+            <Skeleton className="h-[26px] w-20 rounded-[9px]" />
+            <Skeleton className="h-[26px] w-20 rounded-[9px]" />
+          </div>
+        )}
       </div>
-    </PageFrame>
+    </header>
   )
 }
 
-/** Ticket conversation: header card, thread, composer. */
-export function TicketDetailSkeleton() {
+/** "What was reported": text, the reporter facts, an action. */
+function ReportCardSkeleton() {
   return (
-    <PageFrame header={{}}>
-      <div className="max-w-3xl mx-auto p-4 sm:p-6 space-y-4">
-        <div className="white-card p-5 space-y-3">
-          <div className="flex items-center gap-3">
-            <Skeleton className="w-10 h-10 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-1/2" />
-              <Skeleton className="h-3 w-1/3" />
-            </div>
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
-          <Skeleton className="h-3 w-full" />
-        </div>
-        <ChatSkeleton />
+    <div className="white-card p-5 space-y-3">
+      <Skeleton className="h-3 w-32" />
+      <Skeleton className="h-3.5 w-full" />
+      <Skeleton className="h-3.5 w-3/4" />
+      <div className="flex flex-wrap gap-2 pt-2">
+        <Skeleton className="h-11 w-32 rounded-xl" />
+        <Skeleton className="h-11 w-44 rounded-xl" />
       </div>
-    </PageFrame>
+      <Skeleton className="h-11 w-full rounded-2xl" />
+    </div>
+  )
+}
+
+/** Location: address line, the map (same fluid height as MiniMap there), directions. */
+function LocationCardSkeleton() {
+  return (
+    <div className="white-card p-5 space-y-3">
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="h-3.5 w-40" />
+      <Skeleton className="w-full rounded-2xl" style={{ height: 'clamp(180px, 32dvh, 340px)' }} />
+      <Skeleton className="h-11 w-full rounded-2xl" />
+    </div>
+  )
+}
+
+function FactsCardSkeleton({ lines = 4 }) {
+  return (
+    <div className="white-card p-5 space-y-3">
+      <Skeleton className="h-3 w-28" />
+      {[...Array(lines)].map((_, i) => <Skeleton key={i} className={`h-3 ${i % 3 === 2 ? 'w-2/3' : 'w-full'}`} />)}
+    </div>
+  )
+}
+
+/**
+ * Incident detail, matching each page's layout:
+ * - official: two columns (1fr / 340px) from 1024px; pills under the header
+ *   on phones (app/official/incident/[id]).
+ * - resident: the status panel across the top, then the report and side
+ *   columns of desktop.incidentPage (app/resident/incident/[id]).
+ */
+export function IncidentDetailSkeleton({ variant = 'official' }) {
+  if (variant === 'resident') {
+    return (
+      <div className="min-h-dvh relative overflow-clip bg-brand" role="status" aria-label="Loading" aria-busy="true">
+        <DetailHeaderSkeleton pills={false} />
+        <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
+          <div className={`rounded-2xl px-4 py-4 flex items-start gap-3 bg-white/85 ${desktop.wide}`}>
+            <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
+            <div className="flex-1 space-y-2 pt-0.5">
+              <Skeleton className="h-3.5 w-48" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-2/3 sm:hidden" />
+            </div>
+          </div>
+          <div className={`space-y-4 ${desktop.incidentMain}`}>
+            <ReportCardSkeleton />
+            <LocationCardSkeleton />
+          </div>
+          <div className={`space-y-4 ${desktop.incidentSide}`}>
+            <FactsCardSkeleton lines={5} />
+            <FactsCardSkeleton lines={3} />
+          </div>
+        </main>
+        <div id="page-shell-end" hidden />
+      </div>
+    )
+  }
+  return (
+    <div className="min-h-dvh bg-brand" role="status" aria-label="Loading" aria-busy="true">
+      <DetailHeaderSkeleton maxWidth={1040} />
+      <main className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
+        <div className="flex sm:hidden items-center gap-1.5 mb-3">
+          <Skeleton tone="brand" className="h-[26px] w-20 rounded-full" />
+          <Skeleton tone="brand" className="h-[26px] w-20 rounded-full" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+          <div className="space-y-4">
+            <ReportCardSkeleton />
+            <LocationCardSkeleton />
+          </div>
+          <div className="space-y-4">
+            <FactsCardSkeleton lines={6} />
+            <FactsCardSkeleton lines={3} />
+          </div>
+        </div>
+      </main>
+      <div id="page-shell-end" hidden />
+    </div>
+  )
+}
+
+/** Ticket conversation, matching the official and resident ticket pages: the chat header (back,
+ *  avatar, title and status), the message column, the composer at the
+ *  bottom of the screen. */
+export function TicketDetailSkeleton() {
+  const bubbles = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5'], ['left', 'w-1/2']]
+  return (
+    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand" role="status" aria-label="Loading" aria-busy="true">
+      <div className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 ${desktop.header}`}
+        style={{ borderBottom: '1px solid var(--brand-soft)' }} aria-hidden="true">
+        <span className={ui.back}><ArrowLeft size={19} /></span>
+        <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <Skeleton className="h-4 w-40 max-w-full" />
+          <Skeleton className="h-3 w-56 max-w-full" />
+        </div>
+        <Skeleton className="h-9 w-20 rounded-xl flex-shrink-0" />
+      </div>
+      <main className={`flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden ${desktop.chatPage}`}>
+        <div className="flex-1 flex flex-col gap-3 overflow-hidden">
+          <Skeleton tone="brand" className="h-6 w-24 rounded-full self-center" />
+          {bubbles.map(([side, w], i) => (
+            <div key={i} className={`flex items-end gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
+              {side === 'left' && <Skeleton tone="brand" className="w-7 h-7 rounded-full flex-shrink-0" />}
+              <div className={`${w} h-16 rounded-2xl ${side === 'left' ? 'bg-white/90 p-3 space-y-2' : 'skeleton-shimmer skeleton-on-brand'}`}>
+                {side === 'left' && <><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-4/5" /></>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <Skeleton tone="brand" className="h-12 w-full rounded-2xl mt-3 flex-shrink-0" />
+      </main>
+      <div id="page-shell-end" hidden />
+    </div>
   )
 }

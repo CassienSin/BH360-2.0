@@ -160,7 +160,7 @@ export default function AIAssistant() {
   const showWelcome = messages.length === 1
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden bg-brand">
+    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
       {/* Animated background */}
       <AnimatedDots />
 
@@ -344,7 +344,7 @@ export default function AIAssistant() {
         </div>
 
         {/* Input */}
-        <form onSubmit={sendMessage} className="flex-shrink-0 fade-up">
+        <form onSubmit={sendMessage} className="flex-shrink-0 fade-up pb-[env(safe-area-inset-bottom,0px)]">
           <div
             className="flex items-end gap-2 rounded-3xl p-2 pl-3"
             style={{
@@ -371,7 +371,7 @@ export default function AIAssistant() {
               rows={1}
               maxLength={MAX_INPUT_LENGTH}
               aria-label="Message"
-              className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-white py-2.5 placeholder-white/50"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none resize-none text-sm text-white py-2.5 placeholder-white/50 placeholder:text-sm [&::placeholder]:whitespace-nowrap [&::placeholder]:overflow-hidden [&::placeholder]:text-ellipsis"
               style={{ maxHeight: '120px' }}
               placeholder="Ask me anything about your barangay..."
             />

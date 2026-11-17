@@ -203,12 +203,12 @@ export default function CriticalAlert({
       `}</style>
 
       <div
-        className="crit-overlay fixed inset-0 z-[100] flex items-center justify-center p-4"
+        className="crit-overlay fixed inset-0 z-[100] sheet-overlay"
         style={{ backdropFilter: 'blur(8px)' }}
         role="alertdialog" aria-modal="true" aria-labelledby="crit-title"
       >
-        <div className="crit-card w-full max-w-md rounded-3xl overflow-hidden flex flex-col"
-          style={{ background: 'white', boxShadow: '0 32px 90px rgba(0,0,0,0.5)', maxHeight: '90vh' }}>
+        <div className="crit-card sheet-panel max-w-md overflow-hidden flex flex-col"
+          style={{ background: 'white', boxShadow: '0 32px 90px rgba(0,0,0,0.5)' }}>
 
           {/* Header */}
           <div className="px-6 py-5 text-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #dc2626, #991b1b)' }}>

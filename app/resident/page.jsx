@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { DashboardShellSkeleton } from '@/components/Skeletons'
 import ClientBoundary from '@/components/ClientBoundary'
 import DashboardBackdrop from '@/components/DashboardBackdrop'
-import { DASHBOARD_SKELETONS } from '@/lib/dashboardSkeletons'
+import { DASHBOARD_SKELETONS, dashboardColumn } from '@/lib/dashboardSkeletons'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import SectionContent from '@/components/SectionContent'
 import { useUrlSection } from '@/lib/useUrlSection'
@@ -32,6 +32,7 @@ import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified
 import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 
 // Hoisted — these were recreated on every render
@@ -560,7 +561,7 @@ function ResidentDashboard() {
   // Stable, so the home tiles that call it are not rebuilt every render.
   const navClick = useCallback((key) => {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    if (isPhoneLayout()) setSidebarOpen(false)
   }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
@@ -794,7 +795,7 @@ function ResidentDashboard() {
         ]}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
         <DashboardHeader
           profile={profile}
           sidebarOpen={sidebarOpen}
@@ -828,8 +829,12 @@ function ResidentDashboard() {
           }}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto [scrollbar-gutter:stable]">
-          <NotificationBanner />
+        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
+          {/* In the same column as the section below it. */}
+          <div className={`${dashboardColumn('/resident', RESIDENT_SKELETONS[activeSection])} mx-auto`}>
+            <NotificationBanner />
+          </div>
 
           {/* Keyed on the section: switching sections remounts it, which
               eases the new section in (only after a switch — see `entering`
@@ -847,7 +852,7 @@ function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'home' && (
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="space-y-6 max-w-4xl 2xl:max-w-5xl mx-auto">
               <HomeSummary
                 greeting={greeting()}
                 name={profile?.full_name?.split(' ')[0]}
@@ -1096,7 +1101,7 @@ function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'incidents' && (
-            <div className="space-y-3 max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{incidents.length} total</p>
                 <button onClick={() => router.push('/resident/report')}
@@ -1130,7 +1135,7 @@ function ResidentDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tickets' && (
-            <div className="space-y-3 max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{tickets.length} total</p>
                 <button onClick={() => router.push('/resident/ticket/new')}
@@ -1165,7 +1170,7 @@ function ResidentDashboard() {
           {/* MY DOCUMENTS — barangay certifications, and the clock RA 11032
               puts the barangay on for each one. */}
           {!loading && profile?.barangay_id && activeSection === 'documents' && (
-            <div className="space-y-3 max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
 
               <div className="flex items-center justify-between mb-2 gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">
@@ -1231,7 +1236,7 @@ function ResidentDashboard() {
               but they should be able to see where their case has got to and
               what the law says happens next. */}
           {!loading && profile?.barangay_id && activeSection === 'blotter' && (
-            <div className="space-y-3 max-w-3xl mx-auto">
+            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
 
               <div className="white-card p-4">
                 <div className="flex items-start gap-2">
@@ -1289,6 +1294,7 @@ function ResidentDashboard() {
           )}
 
           </SectionContent>
+          </div>
         </main>
       </div>
       <RatingModal

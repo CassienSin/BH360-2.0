@@ -7,7 +7,7 @@ import { SectionEntranceContext } from '@/lib/useSectionEntrance'
  * painted, when called from a layout effect. Infinite ones (spinners, live
  * dots) are left running.
  */
-function settleEntrances(root) {
+export function settleEntrances(root) {
   if (!root || typeof root.getAnimations !== 'function') return
   for (const animation of root.getAnimations({ subtree: true })) {
     if (animation.effect?.getComputedTiming().iterations !== Infinity) animation.finish()

@@ -1,6 +1,7 @@
 'use client'
 import { IncidentDetailSkeleton } from '@/components/Skeletons'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
+import { settleEntrances } from '@/components/SectionContent'
 import { useRouter, useParams } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
@@ -176,6 +177,7 @@ export default function IncidentDetail() {
   const [people, setPeople] = useState({})
   const [tanods, setTanods] = useState([])
   const [loading, setLoading] = useState(true)
+  const mainRef = useRef(null)
   const [notFound, setNotFound] = useState(false)
   const [lightbox, setLightbox] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -283,11 +285,15 @@ export default function IncidentDetail() {
     toast.success('Tanod dispatched')
   }
 
+  // The report replaces its skeleton in place: finish the timeline's own
+  // entrance before the first paint (items added later still animate).
+  useLayoutEffect(() => { if (!loading) settleEntrances(mainRef.current) }, [loading])
+
   if (loading) return <IncidentDetailSkeleton />
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-brand flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-brand flex items-center justify-center p-6">
         <div className="white-card p-8 text-center max-w-sm">
           <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
           <h1 className="text-lg font-bold text-gray-800">Incident not found</h1>
@@ -306,7 +312,7 @@ export default function IncidentDetail() {
   const assignedTanod = incident.assigned_to ? people[incident.assigned_to] : null
 
   return (
-    <div className="min-h-screen bg-brand">
+    <div className="min-h-dvh bg-brand">
       <style>{`
         .idt-line::before {
           content: ''; position: absolute; left: 15px; top: 30px; bottom: -14px;
@@ -336,7 +342,7 @@ export default function IncidentDetail() {
         </>}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
+      <main ref={mainRef} className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
         {/* Mobile pills */}
         <div className="flex sm:hidden items-center gap-1.5 mb-3">
           <Pill bg={pri.bg} color={pri.color}>{pri.icon} {incident.priority}</Pill>
@@ -415,7 +421,7 @@ export default function IncidentDetail() {
               </p>
               {Number.isFinite(incident.latitude) ? (
                 <>
-                  <MiniMap lat={incident.latitude} lng={incident.longitude} height={200} />
+                  <MiniMap lat={incident.latitude} lng={incident.longitude} height="clamp(180px, 32dvh, 340px)" />
                   <a href={`https://www.google.com/maps/dir/?api=1&destination=${incident.latitude},${incident.longitude}`}
                     target="_blank" rel="noopener noreferrer"
                     className="idt-press mt-3 flex items-center justify-center gap-2 h-10 rounded-2xl text-xs font-bold"
@@ -609,7 +615,7 @@ export default function IncidentDetail() {
             <X size={18} />
           </button>
           <img src={lightbox.src} alt={lightbox.alt} onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} />
+            style={{ maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16, objectFit: 'contain' }} />
         </div>
       )}
     </div>
@@ -691,7 +697,7 @@ function TanodSelect({ tanods, onPick, busy }) {
           onClick={() => setOpen(false)}>
           <div onClick={e => e.stopPropagation()}
             className="w-full sm:max-w-sm bg-white flex flex-col"
-            style={{ borderRadius: '24px 24px 0 0', maxHeight: '80vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            style={{ borderRadius: '24px 24px 0 0', maxHeight: '80dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
               style={{ borderBottom: '1px solid var(--brand-soft)' }}>
               <h3 className="text-sm font-bold text-gray-800">Dispatch a tanod</h3>

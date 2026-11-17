@@ -651,7 +651,7 @@ function AdminPanel() {
   if (loading) return <PageSkeleton cards={3} maxWidth={1168} tabs={5} />
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -748,9 +748,9 @@ function AdminPanel() {
 
         {/* Stats Overview — a swipeable row on phones so the tabs stay
             near the top; a grid from small tablets up. */}
-        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none]
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none] rail-fade
           [&>*]:shrink-0 [&>*]:w-[150px] [&>*]:snap-start
-          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto"
+          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto sm:[mask-image:none] sm:[-webkit-mask-image:none]"
           aria-label="Platform totals">
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -821,8 +821,8 @@ function AdminPanel() {
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        {/* Tabs — scroll sideways when they don't fit (phones, 200% zoom). */}
+        <div className="flex gap-2 overflow-x-auto pb-1 rail-fade lg:[mask-image:none] lg:[-webkit-mask-image:none]">
           {[
             { value: 'applications', label: 'Applications', icon: Inbox, count: pendingCount },
             { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical, countLabel: 'critical open' },
@@ -1329,7 +1329,7 @@ function AdminPanel() {
                       <p className="mb-4 mt-1 text-xs text-gray-500">Every barangay with registered users or reports, ranked by total reports</p>
                       {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-500">No incident reports yet.</p> : (
                         <div className="max-h-[480px] overflow-auto">
-                          <table className="w-full min-w-[600px] text-left text-xs">
+                          <table className="stack-table w-full md:min-w-[600px] text-left text-xs">
                             <thead className="sticky top-0 bg-white text-gray-500">
                               <tr>
                                 <th className="py-2 pr-3 font-semibold">Barangay</th>
@@ -1343,10 +1343,10 @@ function AdminPanel() {
                               {incidentAnalytics.barangays.map(barangay => (
                                 <tr key={barangay.id} className="border-t border-gray-100">
                                   <td className="py-3 pr-3 font-semibold text-gray-700">{barangay.name}</td>
-                                  <td className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
-                                  <td className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
-                                  <td className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
-                                  <td className="py-3 text-right text-red-600">{barangay.critical}</td>
+                                  <td data-span="full" className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
+                                  <td data-label="Reports" className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
+                                  <td data-label="Open" className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
+                                  <td data-label="Critical open" className="py-3 text-right text-red-600">{barangay.critical}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1448,12 +1448,12 @@ function AdminPanel() {
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0 ml-auto">
                       <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
                         + Official
                       </button>
                       <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
                         + Tanod
                       </button>
@@ -1502,7 +1502,7 @@ function AdminPanel() {
                     </div>
                     {!code.used && (
                       <button onClick={() => copyToClipboard(code.code)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
+                        className="w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
                         <Copy size={12} style={{ color: 'var(--brand)' }} />
                       </button>
                     )}

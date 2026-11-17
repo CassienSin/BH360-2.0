@@ -172,7 +172,7 @@ export default function DutyToggle({ profile, onStatusChange }) {
         <p className="text-sm font-bold" style={{ color: onDuty ? '#15803d' : '#6b7280' }}>
           {onDuty ? 'On Duty' : 'Off Duty'}
         </p>
-        <p className="text-xs text-gray-500 flex items-center gap-1">
+        <p className="text-xs text-gray-500 flex items-center gap-1 text-keep">
           {saving ? 'Updating…'
             : onDuty
               ? (<>

@@ -232,7 +232,7 @@
 .legendToggle { display: none; }
 .sheet {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; max-height: 72%; overflow-y: auto; box-sizing: border-box;
-  display: flex; flex-direction: column; gap: 12px; padding: 4px 16px 20px;
+  display: flex; flex-direction: column; gap: 12px; padding: 4px 16px max(20px, env(safe-area-inset-bottom, 0px));
   border-radius: 24px 24px 0 0; background: var(--cm-surface); box-shadow: 0 -8px 32px rgba(41,35,56,.18);
 }
 .sheetHandle { align-self: center; flex-shrink: 0; width: 72px; height: 28px; border: 0; background: none; display: grid; place-items: center; cursor: pointer; }
@@ -263,6 +263,12 @@
   /* Zoom buttons and credits move to the top on phones, under the toolbar,
      so the bottom sheet never covers them. */
   .mapArea :global(.maplibregl-ctrl-top-right) { top: 64px; }
+}
+/* Phones: the four stats as a 2×2 grid. The single scrolling row hid
+   "On duty" off the right edge with no sign there was more. */
+@media (max-width: 639px) {
+  .statBar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; overflow: visible; }
+  .stat { min-width: 0; justify-content: flex-start; }
 }
 @media (prefers-reduced-motion: reduce) { .console * { transition: none !important; } }
 .mapLoading { position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; color: var(--cm-sub); background: var(--cm-raised); }

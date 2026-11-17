@@ -77,7 +77,7 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
   const current = RATING_LABELS[displayRating]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 sheet-overlay"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
       onClick={() => { if (!submitting) onClose() }}>
 
@@ -87,7 +87,7 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="rating-modal-title"
-        className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1 max-h-[90vh] flex flex-col outline-none"
+        className="sheet-panel max-w-md overflow-hidden fade-up-1 flex flex-col outline-none"
         style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
         onClick={e => e.stopPropagation()}>
 

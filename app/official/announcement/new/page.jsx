@@ -284,7 +284,7 @@ export default function NewAnnouncement() {
 
   if (success) {
     return (
-      <div className="min-h-screen relative overflow-clip bg-brand flex items-center justify-center p-4">
+      <div className="min-h-dvh relative overflow-clip bg-brand flex items-center justify-center p-4">
         <AnimatedDots />
         <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
           <div
@@ -353,7 +353,7 @@ export default function NewAnnouncement() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div

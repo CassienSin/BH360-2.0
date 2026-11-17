@@ -43,6 +43,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // Draw edge to edge under the notch and home bar; headers, composers,
+  // sheets and toasts pad themselves with env(safe-area-inset-*).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -72,6 +75,12 @@ export default function RootLayout({
         <Toaster
           position="top-right"
           gutter={10}
+          // Clear the notch / status bar and a landscape phone's notch side.
+          containerStyle={{
+            top: "max(16px, env(safe-area-inset-top, 0px))",
+            right: "max(16px, env(safe-area-inset-right, 0px))",
+            left: "max(16px, env(safe-area-inset-left, 0px))",
+          }}
           toastOptions={{
             /* The COMPACT density of components/Toast.jsx — one-line
                confirmations like "Saved" or "Copied". Same radius, shadow and

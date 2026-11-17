@@ -364,7 +364,7 @@ export default function AIAnalytics() {
   // ---- Page loading skeleton ----
   if (pageLoading) {
     return (
-      <div className="min-h-screen relative overflow-clip bg-brand">
+      <div className="min-h-dvh relative overflow-clip bg-brand">
         <AnimatedDots />
         <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
@@ -389,7 +389,7 @@ export default function AIAnalytics() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div
@@ -650,10 +650,12 @@ export default function AIAnalytics() {
                 <span className="text-xs text-gray-500 ml-auto">When incidents are reported</span>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Phones: the 24 hours scroll sideways under a fixed day column. */}
+              <p className="sm:hidden text-xs text-gray-500 mb-2">Swipe sideways to see all 24 hours.</p>
+              <div className="overflow-x-auto rail-fade sm:[mask-image:none] sm:[-webkit-mask-image:none]">
                 <div className="min-w-[600px]">
                   <div className="flex items-center gap-1 mb-1">
-                    <div className="w-10 flex-shrink-0"></div>
+                    <div className="w-10 flex-shrink-0 sticky left-0 z-[1] bg-white"></div>
                     {heatmapData.hours.map(h => (
                       <div key={h} className="flex-1 text-[11px] text-gray-500 text-center">
                         {h % 3 === 0 ? `${h}h` : ''}
@@ -662,7 +664,7 @@ export default function AIAnalytics() {
                   </div>
                   {heatmapData.days.map(day => (
                     <div key={day} className="flex items-center gap-1 mb-1">
-                      <div className="w-10 flex-shrink-0 text-xs font-semibold text-gray-500">{day}</div>
+                      <div className="w-10 flex-shrink-0 self-stretch flex items-center sticky left-0 z-[1] bg-white text-xs font-semibold text-gray-500">{day}</div>
                       {heatmapData.hours.map(h => {
                         const value = heatmapData.grid[`${day}-${h}`] || 0
                         return (

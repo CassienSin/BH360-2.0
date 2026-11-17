@@ -223,7 +223,7 @@ import { loginHref } from '@/lib/loginRedirect'
     }
 
     return (
-        <div className="min-h-screen relative overflow-clip bg-brand">
+        <div className="min-h-dvh relative overflow-clip bg-brand">
         <PageHeader title="New Appointment" description={`${profile?.barangays?.name || 'Barangay'} · Schedule and reminders`} icon={CalendarDays} onBack={() => router.push('/official/calendar/appointments')} backLabel="Back to appointments" actions={<AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}>Appointments list</AppButton>} />
 
         <main className="relative z-10 mx-auto grid w-full max-w-[1320px] gap-4 px-4 py-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

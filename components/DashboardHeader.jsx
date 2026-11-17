@@ -265,7 +265,7 @@ export default function DashboardHeader({
 
   return (
     <>
-      <header className={`bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader}`}
+      <header className={`bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4 ${ui.dashboardHeader} ${ui.safeTop}`}
         style={{
           boxShadow: '0 2px 12px rgba(91,84,232,0.06)',
           borderBottom: '1px solid var(--brand-soft)',
@@ -286,7 +286,8 @@ export default function DashboardHeader({
           <div className="min-w-0 flex items-center gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.5px' }}>
+                {/* Phones: up to two lines rather than "User Manag…" */}
+                <h1 className="text-base sm:text-lg leading-tight sm:leading-normal font-bold text-gray-800 line-clamp-2 sm:line-clamp-1 break-words" style={{ letterSpacing: '-0.5px' }}>
                   {sectionTitle}
                 </h1>
                 <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
@@ -296,7 +297,7 @@ export default function DashboardHeader({
                 </div>
               </div>
               {profile?.barangays ? (
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="hidden sm:flex items-center gap-1.5 mt-0.5">
                   <p className="text-xs text-gray-500 truncate">
                     <span className="font-semibold text-gray-700">{profile.barangays.name}</span>
                     <span className="text-gray-300 mx-1">·</span>
@@ -304,7 +305,7 @@ export default function DashboardHeader({
                   </p>
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 truncate mt-0.5">{sectionDesc}</p>
+                <p className="hidden sm:block text-xs text-gray-500 truncate mt-0.5">{sectionDesc}</p>
               )}
             </div>
           </div>
@@ -329,7 +330,7 @@ export default function DashboardHeader({
 
           {/* Mobile search */}
           <button onClick={openSearch} aria-label="Open search"
-            className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
+            className="md:hidden w-11 h-11 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
             <Search size={16} />
           </button>
 
@@ -338,7 +339,7 @@ export default function DashboardHeader({
             <button onClick={() => setNotifOpen(!notifOpen)}
               aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
               aria-expanded={notifOpen}
-              className="relative w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+              className="relative w-11 h-11 lg:w-9 lg:h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors">
               <Bell size={16} />
               {unread > 0 && (
                 <>
@@ -349,7 +350,7 @@ export default function DashboardHeader({
             </button>
 
             {notifOpen && (
-              <div className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-80 sm:max-w-none rounded-2xl overflow-hidden fade-up z-50"
+              <div className="fixed sm:absolute right-3 sm:right-0 top-[calc(76px+env(safe-area-inset-top,0px))] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-80 sm:max-w-none rounded-2xl overflow-hidden fade-up z-50"
                 style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
 
                 <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"
@@ -372,7 +373,8 @@ export default function DashboardHeader({
                   )}
                 </div>
 
-                <div className="max-h-80 overflow-y-auto">
+                {/* Fits a short screen (a phone held sideways is ~390px tall). */}
+                <div className="max-h-[min(20rem,calc(100dvh-11rem))] overflow-y-auto">
                   {visibleNotifications.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"

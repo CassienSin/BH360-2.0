@@ -217,7 +217,7 @@ export default function OfficialTicketChat() {
   // ---- Not found state ----
   if (notFound) {
     return (
-      <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden px-4">
+      <div className="h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-4">
         <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
           <AlertCircle size={28} className="text-white opacity-90" />
           <p className="text-white text-sm font-bold">Ticket not found</p>
@@ -235,7 +235,7 @@ export default function OfficialTicketChat() {
   }
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden bg-brand">
+    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
 
       {/* Background effects */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
@@ -255,7 +255,7 @@ export default function OfficialTicketChat() {
 
       {/* Header */}
       <header
-        className={`bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
+        className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
       >
         <button
@@ -454,10 +454,10 @@ export default function OfficialTicketChat() {
         </div>
 
         {ticket?.status !== 'closed' ? (
-          <div className="mt-3 sticky bottom-0 space-y-2">
+          <div className="mt-3 sticky bottom-0 space-y-2 pb-[env(safe-area-inset-bottom,0px)]">
             {/* Quick replies — one tap for the phrases officials type all day */}
             {newMessage === '' && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 rail-fade" style={{ scrollbarWidth: 'none' }}>
                 {QUICK_REPLIES.map((reply, i) => (
                   <button
                     key={i}

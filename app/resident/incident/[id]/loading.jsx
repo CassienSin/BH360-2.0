@@ -2,5 +2,5 @@
 import { IncidentDetailSkeleton } from '@/components/Skeletons'
 
 export default function Loading() {
-  return <IncidentDetailSkeleton />
+  return <IncidentDetailSkeleton variant="resident" />
 }

@@ -158,7 +158,7 @@ function Sheet({ open, onClose, labelledBy, children }) {
         style={{
           borderRadius: '24px 24px 0 0',
           boxShadow: '0 -8px 48px rgba(17,17,27,0.25)',
-          maxHeight: '85vh',
+          maxHeight: '85dvh',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}>
         <div className="sm:hidden flex justify-center pt-2.5 pb-1 flex-shrink-0">
@@ -437,7 +437,7 @@ function Lightbox({ src, alt, onClose }) {
       <img src={src} alt={alt} onClick={e => e.stopPropagation()}
         className={closing ? '' : 'inc-zoom'}
         style={{
-          maxWidth: '100%', maxHeight: '85vh', borderRadius: 16,
+          maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16,
           objectFit: 'contain', boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
         }} />
     </div>
@@ -845,6 +845,11 @@ export default function IncidentsSection({
       {/* Live first, then the settled ones under their own heading. An
           official works the queue; a month of resolved reports at the same
           height as today's buries the ones that still need dispatching. */}
+      {/* One column, two once the list itself is 64rem+ wide (a wide
+          monitor) — extra columns rather than 2000px-wide cards. A
+          container query, so it follows the space the list actually has. */}
+      <div className="@container">
+      <div className="grid gap-3 items-start @5xl:grid-cols-2">
       {grouped.map(({ inc, firstSettled }, index) => {
         const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
         const pri = PRIORITY_CONFIG[inc.priority] || PRIORITY_CONFIG.Medium
@@ -874,7 +879,7 @@ export default function IncidentsSection({
         return (
           <Fragment key={inc.id}>
           {firstSettled && (
-            <div className="flex items-center gap-2.5 mt-3 mb-0.5 px-0.5">
+            <div className="col-span-full flex items-center gap-2.5 mt-3 mb-0.5 px-0.5">
               <span className="inc-t10 font-bold uppercase tracking-[0.12em] text-white/70">
                 Resolved · {settledCount}
               </span>
@@ -1108,6 +1113,8 @@ export default function IncidentsSection({
           </Fragment>
         )
       })}
+      </div>
+      </div>
 
       {hasMore && (
         <div className="pt-1 pb-2 text-center">

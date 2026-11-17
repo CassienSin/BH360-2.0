@@ -35,6 +35,7 @@ import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 import {
   RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
@@ -337,7 +338,7 @@ function TanodDashboard() {
   // Stable, so the home tiles that call it are not rebuilt every render.
   const navClick = useCallback((key) => {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    if (isPhoneLayout()) setSidebarOpen(false)
   }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
@@ -605,7 +606,7 @@ function TanodDashboard() {
   }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
+    <div className="min-h-dvh flex relative overflow-hidden">
 
 
 
@@ -625,7 +626,7 @@ function TanodDashboard() {
         navItems={navItems}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-screen overflow-hidden ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
         <DashboardHeader
           profile={profile}
           sidebarOpen={sidebarOpen}
@@ -647,7 +648,8 @@ function TanodDashboard() {
           onSearchResultClick={() => setActiveSection('active')}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto [scrollbar-gutter:stable]">
+        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
           <NotificationBanner />
 
           {!loading && profile && (
@@ -1162,6 +1164,7 @@ function TanodDashboard() {
           )}
 
           </SectionContent>
+          </div>
         </main>
       </div>
 
