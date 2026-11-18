@@ -150,6 +150,16 @@ export default function RootLayout({
                 window.location.reload()
               })
 
+              // Before skipping a push for "this conversation is already on
+              // screen", the worker asks where the page is now (whereIs in
+              // sw.js): the address it has for a window stays the one the
+              // page was loaded at, however far the app has navigated since.
+              navigator.serviceWorker.addEventListener('message', function (event) {
+                if (!event.data || event.data.type !== 'BH360_WHERE' || !event.ports || !event.ports[0]) return
+                event.ports[0].postMessage({ path: location.pathname, visible: document.visibilityState === 'visible' })
+              })
+              navigator.serviceWorker.startMessages()
+
               navigator.serviceWorker.register('/sw.js')
                 .then(function (reg) {
                   function promote(worker) {

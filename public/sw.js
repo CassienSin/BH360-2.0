@@ -176,14 +176,40 @@ self.addEventListener('push', (event) => {
       const target = new URL(payload.url, self.location.origin)
       if (/\/ticket\//.test(target.pathname)) {
         const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-        const viewing = windows.some(c =>
-          c.visibilityState === 'visible' && new URL(c.url).pathname === target.pathname)
-        if (viewing) return
+        const places = await Promise.all(windows.filter(c => c.visibilityState === 'visible').map(whereIs))
+        if (places.some(p => p.visible && p.path === target.pathname)) return
       }
     }
     await self.registration.showNotification(title, options)
   })())
 })
+
+// Where a window is right now. Client.url is the address the page was
+// loaded at, and an in-app navigation (Next's router.push, which only
+// changes the history entry) does not update it: a ticket opened by a tap
+// on the resident home still read "/resident", so its replies were shown
+// as notifications over the open conversation. So the page itself is asked
+// (app/layout.tsx answers). A page that does not answer in time (still
+// loading, or running code from before this) falls back to Client.url,
+// which is right for a page that was loaded directly.
+function whereIs(client) {
+  const fallback = { path: new URL(client.url).pathname, visible: client.visibilityState === 'visible' }
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), 500)
+    try {
+      const channel = new MessageChannel()
+      channel.port1.onmessage = (event) => {
+        clearTimeout(timer)
+        const answer = event.data
+        resolve(answer && typeof answer.path === 'string' ? answer : fallback)
+      }
+      client.postMessage({ type: 'BH360_WHERE' }, [channel.port2])
+    } catch {
+      clearTimeout(timer)
+      resolve(fallback)
+    }
+  })
+}
 
 // Tapping a notification.
 //
