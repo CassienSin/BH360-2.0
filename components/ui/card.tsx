@@ -1,105 +1,95 @@
 import * as React from "react"
-import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Crafted card (DESIGN.md §5): white, 1px hairline, radius 14, overflow
+ * hidden, no shadow. `lift` adds the soft shadow the stat strip and the
+ * phone's first card use; `interactive` darkens the border on hover (no
+ * lift). `as` picks the element (section by default).
+ */
 function Card({
   className,
-  size = "default",
+  lift = false,
+  interactive = false,
+  as: Comp = "section",
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
-  return (
-    <div
-      data-slot="card"
-      data-size={size}
-      className={cn(
-        // has-[>img:last-child]:pb-0 mirrors the existing first-child rule:
-        // a full-bleed image at the BOTTOM of a card previously sat on top
-        // of the card's bottom padding, leaving a bg-colored strip under it.
-        "group/card flex flex-col gap-4 overflow-hidden rounded-xl bg-card py-4 text-sm text-card-foreground ring-1 ring-foreground/10 has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 has-[>img:last-child]:pb-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "group/card-header @container/card-header grid auto-rows-min items-start gap-1 rounded-t-xl px-4 group-data-[size=sm]/card:px-3 has-data-[slot=card-action]:grid-cols-[1fr_auto] has-data-[slot=card-description]:grid-rows-[auto_auto] [.border-b]:pb-4 group-data-[size=sm]/card:[.border-b]:pb-3",
-        className
-      )}
-      {...props}
-    />
-  )
-}
-
-function CardTitle({
-  className,
-  asChild = false,
-  ...props
-}: React.ComponentProps<"div"> & { asChild?: boolean }) {
-  // asChild lets consumers supply a real heading element so cards
-  // participate in the document outline for screen readers:
-  //   <CardTitle asChild><h3>Pending applications</h3></CardTitle>
-  // Without it the title renders as the same styled <div> as before.
-  const Comp = asChild ? Slot.Root : "div"
+}: React.ComponentProps<"section"> & {
+  lift?: boolean
+  interactive?: boolean
+  as?: React.ElementType
+}) {
   return (
     <Comp
-      data-slot="card-title"
+      data-slot="card"
       className={cn(
-        "font-heading text-base leading-snug font-medium group-data-[size=sm]/card:text-sm",
+        "overflow-hidden rounded-[14px] border border-line bg-surface text-ink",
+        lift && "shadow-[var(--shadow-lift)]",
+        interactive && "transition-colors hover:border-line-strong",
         className
       )}
       {...props}
     />
   )
+}
+
+/**
+ * The card's head row: a 15px/800 title, an optional 12px muted subtitle,
+ * and an action on the right (kit.py card_head()). `titleAs` sets the
+ * heading level (h2 by default).
+ */
+function CardHead({
+  title,
+  sub,
+  action,
+  titleAs: Title = "h2",
+  className,
+  children,
+  ...props
+}: Omit<React.ComponentProps<"div">, "title"> & {
+  title: React.ReactNode
+  sub?: React.ReactNode
+  action?: React.ReactNode
+  titleAs?: React.ElementType
+}) {
+  return (
+    <div data-slot="card-head" className={cn("flex items-center gap-2.5 px-[18px] py-3.5", className)} {...props}>
+      <div className="min-w-0 flex-1">
+        <Title className="m-0 text-[15px] font-extrabold text-ink">{title}</Title>
+        {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
+        {children}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/* shadcn-compatible pieces, restyled. */
+function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-header" className={cn("flex flex-col gap-0.5 px-[18px] py-3.5", className)} {...props} />
+}
+
+function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="card-title" className={cn("text-[15px] font-extrabold text-ink", className)} {...props} />
 }
 
 function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-description"
-      className={cn("text-sm text-muted-foreground", className)}
-      {...props}
-    />
-  )
+  return <div data-slot="card-description" className={cn("text-xs text-muted-foreground", className)} {...props} />
 }
 
 function CardAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-action"
-      className={cn(
-        "col-start-2 row-span-2 row-start-1 self-start justify-self-end",
-        className
-      )}
-      {...props}
-    />
-  )
+  return <div data-slot="card-action" className={cn("ml-auto", className)} {...props} />
 }
 
 function CardContent({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-content"
-      className={cn("px-4 group-data-[size=sm]/card:px-3", className)}
-      {...props}
-    />
-  )
+  return <div data-slot="card-content" className={cn("px-[18px] pb-4", className)} {...props} />
 }
 
 function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-footer"
-      className={cn(
-        "flex items-center rounded-b-xl border-t bg-muted/50 p-4 group-data-[size=sm]/card:p-3",
-        className
-      )}
+      className={cn("flex items-center gap-2 border-t border-line px-[18px] py-3", className)}
       {...props}
     />
   )
@@ -107,6 +97,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
 
 export {
   Card,
+  CardHead,
   CardHeader,
   CardFooter,
   CardTitle,
