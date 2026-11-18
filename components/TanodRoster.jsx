@@ -16,6 +16,7 @@ import { createClient } from '@/lib/supabase'
 import { Shield, Phone, AlertTriangle } from 'lucide-react'
 import { timeAgo } from '@/lib/timeAgo'
 import { useNow } from '@/lib/useNow'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const STALE_MS = 30 * 60 * 1000 // on duty but unseen for 30 min → warn
 
@@ -95,7 +96,7 @@ export default function TanodRoster({ profile }) {
           t.id === payload.new.id ? { ...t, ...payload.new } : t
         ))
       })
-      .subscribe()
+    const leaveProfileChannel = subscribeWhenSignedIn(supabase, profileChannel)
 
     const incidentChannel = supabase
       .channel('roster-incidents')
@@ -121,11 +122,11 @@ export default function TanodRoster({ profile }) {
         }
         setActiveAssignments(counts)
       })
-      .subscribe()
+    const leaveIncidentChannel = subscribeWhenSignedIn(supabase, incidentChannel)
 
     return () => {
-      supabase.removeChannel(profileChannel)
-      supabase.removeChannel(incidentChannel)
+      leaveProfileChannel()
+      leaveIncidentChannel()
     }
   }, [profile?.barangay_id, supabase])
 

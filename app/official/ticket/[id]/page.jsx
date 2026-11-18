@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Send, X, User, Clock, CheckCircle, AlertCircle, Sparkles, FileQuestion, FileText, AlertCircle as AlertIcon, Star, MapPin, Phone, Loader2, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const CATEGORY_CONFIG = {
   inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
@@ -54,6 +55,19 @@ export default function OfficialTicketChat() {
 
   const [ticket, setTicket] = useState(null)
   const [messages, setMessages] = useState([])
+
+  // While this conversation is open its notifications are read: the replies
+  // are right here. Runs on open and again as each new message arrives (the
+  // service worker also skips the push while this page is on screen).
+  useEffect(() => {
+    if (!id) return
+    supabase.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('entity_table', 'tickets')
+      .eq('entity_id', id)
+      .is('read_at', null)
+      .then(({ error }) => { if (error) console.error('Could not mark ticket notifications read:', error) })
+  }, [id, messages.length, supabase])
   const [newMessage, setNewMessage] = useState('')
   const [user, setUser] = useState(null)
   const [sending, setSending] = useState(false)
@@ -134,11 +148,11 @@ export default function OfficialTicketChat() {
           // Keep in sync if another official closes/reopens/claims this ticket
           setTicket(prev => (prev ? { ...prev, ...payload.new } : prev))
         })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      leaveChannel()
     }
   }, [id, supabase, router])
 

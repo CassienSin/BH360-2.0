@@ -8,6 +8,7 @@ import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Send, Clock, CheckCircle, AlertCircle, Sparkles, Shield, FileQuestion, FileText, AlertCircle as AlertIcon, Star, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const DOTS = Array.from({ length: 15 }, (_, i) => ({
   size: ((i * 7) % 6) + 3,
@@ -75,6 +76,19 @@ export default function TicketChat() {
 
   const [ticket, setTicket] = useState(null)
   const [messages, setMessages] = useState([])
+
+  // While this conversation is open its notifications are read: the replies
+  // are right here. Runs on open and again as each new message arrives (the
+  // service worker also skips the push while this page is on screen).
+  useEffect(() => {
+    if (!id) return
+    supabase.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('entity_table', 'tickets')
+      .eq('entity_id', id)
+      .is('read_at', null)
+      .then(({ error }) => { if (error) console.error('Could not mark ticket notifications read:', error) })
+  }, [id, messages.length, supabase])
   const [newMessage, setNewMessage] = useState('')
   const [user, setUser] = useState(null)
   const [sending, setSending] = useState(false)
@@ -152,11 +166,11 @@ export default function TicketChat() {
           }
           statusRef.current = nextStatus
         })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      leaveChannel()
     }
   }, [id, supabase, router])
 

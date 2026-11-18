@@ -19,12 +19,11 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
-import { useNotificationReads, unreadCount, notifKey } from '@/lib/notificationReads'
 import RecordCard, { RecordGroup, Chip, PriorityChip } from '@/components/RecordCard'
 import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { greeting, activityCounts, summarySentence, mostPressing } from '@/lib/homeSummary'
 import { isSettled, toneFor, progressOf, partitionByLiveness } from '@/lib/recordState'
-import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
+import { useNotifications } from '@/lib/useNotifications'
 import { notify } from '@/components/Toast'
 import { firstRealError } from '@/lib/dbError'
 import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
@@ -34,6 +33,7 @@ import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 // Hoisted — these were recreated on every render
 const priorityConfig = {
@@ -551,10 +551,10 @@ function ResidentDashboard() {
           }
         }
       })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
     return () => {
-      supabase.removeChannel(channel)
+      leaveChannel()
     }
   }, [profile?.id, profile?.barangay_id, supabase, router, setActiveSection])
 
@@ -615,36 +615,26 @@ function ResidentDashboard() {
     [blotterCases]
   )
 
-  const { readKeys, markRead } = useNotificationReads(profile?.id)
+  // What the database writes for this resident: replies and status changes
+  // on their tickets, progress on their reports, documents, blotter cases,
+  // verification, announcements (supabase/setup.sql Section 18). New
+  // announcements already get their own toast below, so the hook stays
+  // quiet for those.
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['announcement'] })
+  const { rows: notificationRows, markRead: markNotificationsRead } = notificationCenter
 
-  // An official replying on a ticket used to be silent unless you happened
-  // to have that ticket open.
-  const ticketHref = useCallback(id => `/resident/ticket/${id}`, [])
-  const openTicket = useCallback(id => router.push(`/resident/ticket/${id}`), [router])
-  const { messages: ticketReplies } = useTicketMessageAlerts({
-    profile, ticketHref, onOpen: openTicket,
-  })
-
-  // The same objects the header bell gets, so both sides key read state
-  // identically and one "mark read" clears both.
-  const announcementNotifs = useMemo(
-    () => announcements.map(a => ({
-      id: a.id,
-      type: 'announcement',
-      icon: '📢',
-      color: '#f0effe',
-      title: a.title,
-      subtitle: a.content?.slice(0, 60) + (a.content?.length > 60 ? '...' : ''),
-      created_at: a.created_at,
-      data: a,
-    })),
-    [announcements]
+  // Unread announcements are the ones with an unread notification. (Ones
+  // published before notifications existed have none, so they count as
+  // read rather than arriving as a backlog.)
+  const unreadAnnouncementRows = useMemo(
+    () => notificationRows.filter(n => n.type === 'announcement' && !n.read_at),
+    [notificationRows]
   )
-
-  // Unread, not total. The badge used to show announcements.length, so it
-  // sat at the same number forever no matter how many times the section was
-  // opened — there was nothing for reading one to change.
-  const unreadAnnouncementCount = unreadCount(announcementNotifs, readKeys)
+  const unreadAnnouncementIds = useMemo(
+    () => new Set(unreadAnnouncementRows.map(n => n.entity_id)),
+    [unreadAnnouncementRows]
+  )
+  const unreadAnnouncementCount = unreadAnnouncementIds.size
 
   // Everything the home screen says, derived once. The counts are of what
   // is outstanding, never of how many rows exist — the old tiles read "15"
@@ -735,9 +725,9 @@ function ResidentDashboard() {
   // clears the badge.
   useEffect(() => {
     if (activeSection !== 'announcements') return
-    if (announcementNotifs.length === 0) return
-    markRead(announcementNotifs)
-  }, [activeSection, announcementNotifs, markRead])
+    if (unreadAnnouncementRows.length === 0) return
+    markNotificationsRead(unreadAnnouncementRows.map(n => n.id))
+  }, [activeSection, unreadAnnouncementRows, markNotificationsRead])
 
   // Separate from unread: this one means "posted recently", which is why it
   // stays put while you read rather than vanishing under you.
@@ -802,26 +792,8 @@ function ResidentDashboard() {
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc="Stay connected with your barangay"
-          notifications={[
-            ...ticketReplies,
-            ...announcementNotifs.slice(0, 5),
-            ...incidents.filter(i => i.status === 'pending').map(i => ({
-              id: i.id,
-              type: 'incident',
-              icon: '⚠️',
-              color: '#fff7ed',
-              title: `Your incident: ${i.title}`,
-              subtitle: `Waiting for response at ${i.location}`,
-              created_at: i.created_at,
-              data: i,
-            })),
-          ]}
+          notificationCenter={notificationCenter}
           searchData={{ incidents, tickets, announcements }}
-          onNotificationClick={(notif) => {
-            if (notif.type === 'announcement') setActiveSection('announcements')
-            if (notif.type === 'incident') router.push(`/resident/incident/${notif.id}`)
-            if (notif.type === 'ticket-message') router.push(`/resident/ticket/${notif.data.ticket_id}`)
-          }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') router.push(`/resident/incident/${item.id}`)
             if (type === 'tickets') router.push(`/resident/ticket/${item.id}`)
@@ -969,11 +941,11 @@ function ResidentDashboard() {
                     </button>
                   </div>
                   <div className="space-y-2.5">
-                    {announcementNotifs.slice(0, 3).map(n => {
+                    {announcements.slice(0, 3).map(n => {
                       // Two posts sharing a title were indistinguishable before
                       // — there was no date on the card at all, and no sign of
                       // which you had already read.
-                      const unread = !readKeys.has(notifKey(n))
+                      const unread = unreadAnnouncementIds.has(n.id)
                       return (
                         <button key={n.id} onClick={() => navClick('announcements')}
                           className="white-card px-4 py-3 flex items-center gap-3 w-full text-left cursor-pointer
@@ -993,7 +965,7 @@ function ResidentDashboard() {
                               {n.title}
                             </span>
                             <span className="block text-xs text-gray-500 truncate">
-                              {n.data.content}
+                              {n.content}
                             </span>
                             <span className="block text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}
                               title={fullDate(n.created_at)}>

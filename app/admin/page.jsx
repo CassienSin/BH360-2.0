@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { PageSkeleton } from '@/components/Skeletons'
 import ClientBoundary from '@/components/ClientBoundary'
+import NotificationBell from '@/components/NotificationBell'
+import { useNotifications } from '@/lib/useNotifications'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
@@ -16,6 +18,7 @@ import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
 import LiveClock from '@/components/LiveClock'
 import { SITE_URL } from '@/lib/siteUrl'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -133,6 +136,9 @@ function AdminPanel() {
   const supabase = useMemo(() => createClient(), [])
 
   const [profile, setProfile] = useState(null)
+  // New barangay applications, written by the database for super admins
+  // (supabase/setup.sql Section 18).
+  const notificationCenter = useNotifications(profile?.id)
   const [applications, setApplications] = useState([])
   const [barangayResults, setBarangayResults] = useState([])
   const [barangaySearch, setBarangaySearch] = useState('')
@@ -337,9 +343,9 @@ function AdminPanel() {
           setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { leaveChannel() }
   }, [supabase, profile?.is_super_admin])
 
   async function refreshData() {
@@ -704,6 +710,8 @@ function AdminPanel() {
         <div className="flex items-center gap-2 flex-shrink-0">
 
           <LiveClock />
+
+          <NotificationBell center={notificationCenter} sizeClass="w-11 h-11" />
 
           {/* Refresh button */}
           <button onClick={refreshData} disabled={refreshing} aria-label="Refresh data"

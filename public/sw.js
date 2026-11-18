@@ -163,7 +163,22 @@ self.addEventListener('push', (event) => {
     data: { url: payload.url || '/', ...payload.data },
   }
 
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil((async () => {
+    // A reply on a ticket whose conversation is open and on screen is
+    // already in front of the person (that page also marks it read), so a
+    // system notification would only repeat it. Browsers allow skipping
+    // the notification while a page of the site is visible.
+    if (payload.url) {
+      const target = new URL(payload.url, self.location.origin)
+      if (/\/ticket\//.test(target.pathname)) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        const viewing = windows.some(c =>
+          c.visibilityState === 'visible' && new URL(c.url).pathname === target.pathname)
+        if (viewing) return
+      }
+    }
+    await self.registration.showNotification(title, options)
+  })())
 })
 
 // Tapping a notification.

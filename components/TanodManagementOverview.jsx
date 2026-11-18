@@ -7,6 +7,7 @@ import { timeAgo } from '@/lib/timeAgo'
 import { activityState, filterTanods, groupAssignments, loadTanodOverview } from '@/lib/tanodOverview.mjs'
 import styles from './tanod-management.module.css'
 import DutyScheduleSummary from './DutyScheduleSummary'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const EMPTY = []
 const FILTERS = [['all', 'All tanods'], ['on', 'On duty'], ['off', 'Off duty'], ['assigned', 'With assignments']]
@@ -55,10 +56,10 @@ export default function TanodManagementOverview({ profile, onInvite, onOpenIncid
     const channel = supabase.channel(`tanod-overview-${barangayId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `barangay_id=eq.${barangayId}` }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents', filter: `barangay_id=eq.${barangayId}` }, refresh)
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
     window.addEventListener('focus', refresh)
     const tick = setInterval(() => setNow(Date.now()), 60000)
-    return () => { cancelled = true; clearTimeout(debounce); clearInterval(tick); window.removeEventListener('focus', refresh); supabase.removeChannel(channel) }
+    return () => { cancelled = true; clearTimeout(debounce); clearInterval(tick); window.removeEventListener('focus', refresh); leaveChannel() }
   }, [supabase, profile?.barangay_id, profile?.role, reload])
 
   const sameBarangay = result.barangayId === profile?.barangay_id

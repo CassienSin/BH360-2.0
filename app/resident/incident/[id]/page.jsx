@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/AppUI'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { EmergencyContacts } from '@/components/ResponderAvailability'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -244,8 +245,8 @@ export default function ResidentIncidentDetail() {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'incidents', filter: `id=eq.${params.id}` },
         payload => setIncident(prev => ({ ...prev, ...payload.new })))
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const leaveCh = subscribeWhenSignedIn(supabase, ch)
+    return () => { leaveCh() }
   }, [params.id, supabase])
 
   const timeline = useMemo(() => buildTimeline(incident, responder), [incident, responder])

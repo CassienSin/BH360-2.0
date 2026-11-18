@@ -22,7 +22,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
-import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
+import { useNotifications } from '@/lib/useNotifications'
 import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
 import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
@@ -42,6 +42,7 @@ import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 // Profile picture with graceful fallback to the initial-letter circle.
 // Used in User Management and Tanod Management — avatar_url was never
@@ -152,17 +153,14 @@ function OfficialDashboard() {
   const now = useNow()
   const router = useRouter()
 
-  // A resident replying on a ticket used to be silent unless the official
-  // happened to have that ticket open.
-  const ticketHref = useCallback(id => `/official/ticket/${id}`, [])
-  const openTicket = useCallback(id => router.push(`/official/ticket/${id}`), [router])
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
-  const { messages: ticketReplies } = useTicketMessageAlerts({
-    profile, ticketHref, onOpen: openTicket,
-  })
+  // What the database writes for this official: new incidents, tickets and
+  // replies, document requests, residents to verify, appointment reminders
+  // (supabase/setup.sql Section 18). New incidents already sound the siren
+  // and toast below, so the hook stays quiet for those.
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['incident_new'] })
   const [announcements, setAnnouncements] = useState([])
-  const [appointments, setAppointments] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [tanods, setTanods] = useState([])
@@ -188,7 +186,7 @@ function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts] = await Promise.all([
+    const [inc, tix, ann, tan, allUsers, codes, docs, blotter] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -231,14 +229,9 @@ function OfficialDashboard() {
         .eq('barangay_id', bid)
         .order('filed_at', { ascending: false })
         .limit(BLOTTER_LIMIT),
-      supabase.from('appointments')
-        .select('*')
-        .eq('barangay_id', bid)
-        .order('starts_at', { ascending: true })
-        .limit(200),
     ])
     const loadError = firstRealError(
-      [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts], 'the official dashboard')
+      [inc, tix, ann, tan, allUsers, codes, docs, blotter], 'the official dashboard')
     if (loadError) {
       console.error('Barangay data load failed:', loadError)
       toast.error('Some of the dashboard could not load. Try refreshing.')
@@ -254,7 +247,6 @@ function OfficialDashboard() {
     setInviteCodes(codes.data || [])
     setDocumentRequests(docs.data || [])
     setBlotterCases(blotter.data || [])
-    setAppointments(appts.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -348,18 +340,18 @@ function OfficialDashboard() {
           setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
         }
       })
-      .subscribe((status) => {
-        // Reconnected after a drop → refetch everything that happened during
-        // the gap (phone sleep / wifi blip / backgrounded tab)
-        if (status === 'SUBSCRIBED') {
-          if (hadDropRef.current) {
-            hadDropRef.current = false
-            loadBarangayData(bid).catch(err => console.error('Reconnect refresh failed:', err))
-          }
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          hadDropRef.current = true
+    const leaveIncidentChannel = subscribeWhenSignedIn(supabase, incidentChannel, (status) => {
+      // Reconnected after a drop → refetch everything that happened during
+      // the gap (phone sleep / wifi blip / backgrounded tab)
+      if (status === 'SUBSCRIBED') {
+        if (hadDropRef.current) {
+          hadDropRef.current = false
+          loadBarangayData(bid).catch(err => console.error('Reconnect refresh failed:', err))
         }
-      })
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        hadDropRef.current = true
+      }
+    })
 
     // Subscribe to ticket changes
     const ticketChannel = supabase
@@ -393,7 +385,7 @@ function OfficialDashboard() {
           ))
         }
       })
-      .subscribe()
+    const leaveTicketChannel = subscribeWhenSignedIn(supabase, ticketChannel)
 
     // Subscribe to announcement changes
     const announcementChannel = supabase
@@ -411,27 +403,10 @@ function OfficialDashboard() {
           setAnnouncements(prev => prev.filter(a => a.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveAnnouncementChannel = subscribeWhenSignedIn(supabase, announcementChannel)
 
-    const appointmentChannel = supabase
-      .channel('official-appointments')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'appointments',
-        filter: `barangay_id=eq.${bid}`,
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setAppointments(prev => (prev.some(a => a.id === payload.new.id) ? prev : [...prev, payload.new]))
-        }
-        if (payload.eventType === 'UPDATE') {
-          setAppointments(prev => prev.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a))
-        }
-        if (payload.eventType === 'DELETE') {
-          setAppointments(prev => prev.filter(a => a.id !== payload.old.id))
-        }
-      })
-      .subscribe()
+    // Appointment reminders now arrive as notifications written by the
+    // database (supabase/setup.sql Section 18), so nothing here loads them.
 
     // Profile changes: keeps the dispatch dropdown, tanod list, AND the
     // user directory live. The old handler only patched existing tanods —
@@ -473,7 +448,7 @@ function OfficialDashboard() {
           setTanods(prev => prev.filter(t => t.id !== p.id)) // role changed away
         }
       })
-      .subscribe()
+    const leaveProfileChannel = subscribeWhenSignedIn(supabase, profileChannel)
 
     // Document requests. A request the office never sees is a request the
     // office will let run past its RA 11032 deadline, so new ones land in
@@ -509,15 +484,14 @@ function OfficialDashboard() {
           setDocumentRequests(prev => prev.filter(d => d.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveDocumentChannel = subscribeWhenSignedIn(supabase, documentChannel)
 
     return () => {
-      supabase.removeChannel(incidentChannel)
-      supabase.removeChannel(ticketChannel)
-      supabase.removeChannel(announcementChannel)
-      supabase.removeChannel(appointmentChannel)
-      supabase.removeChannel(profileChannel)
-      supabase.removeChannel(documentChannel)
+      leaveIncidentChannel()
+      leaveTicketChannel()
+      leaveAnnouncementChannel()
+      leaveProfileChannel()
+      leaveDocumentChannel()
     }
   }, [profile?.barangay_id, supabase, loadBarangayData, router, setActiveSection])
 
@@ -1026,52 +1000,11 @@ function OfficialDashboard() {
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc={sectionDesc[activeSection]}
-          notifications={[
-            ...ticketReplies,
-            ...incidents.filter(i => i.status === 'pending').map(i => ({
-              id: i.id,
-              type: 'incident',
-              icon: '⚠️',
-              color: '#fff7ed',
-              title: i.title,
-              subtitle: `Pending incident at ${i.location}`,
-              created_at: i.created_at,
-              data: i,
-            })),
-            ...tickets.filter(t => t.status === 'open').map(t => ({
-              id: t.id,
-              type: 'ticket',
-              icon: '📋',
-              color: '#f0effe',
-              title: t.title,
-              subtitle: `Open ticket from ${t.profiles?.full_name || 'a resident'}`,
-              created_at: t.created_at,
-              data: t,
-            })),
-            ...appointments.filter(a => a.created_by === profile?.id && new Date(a.starts_at) > new Date()).map(a => ({
-              id: a.id,
-              type: 'appointment',
-              icon: '📅',
-              color: '#f0effe',
-              title: `Appointment: ${a.title}`,
-              subtitle: `Reminder ${a.reminder_sent_at ? 'sent' : 'scheduled'} · ${a.participant_name || 'No participant listed'}`,
-              created_at: a.reminder_sent_at || a.remind_at,
-              starts_at: a.starts_at,
-              remind_at: a.remind_at,
-              reminder_sent_at: a.reminder_sent_at,
-              data: a,
-            }))
-          ]}
+          notificationCenter={notificationCenter}
           searchData={{
             incidents,
             tickets,
             announcements,
-          }}
-          onNotificationClick={(notif) => {
-            if (notif.type === 'incident') setActiveSection('incidents')
-            if (notif.type === 'ticket') router.push(`/official/ticket/${notif.id}`)
-            if (notif.type === 'ticket-message') router.push(`/official/ticket/${notif.data.ticket_id}`)
-            if (notif.type === 'appointment') router.push('/official/calendar/appointments')
           }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') setActiveSection('incidents')

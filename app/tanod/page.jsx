@@ -35,8 +35,10 @@ import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useNotifications } from '@/lib/useNotifications'
 import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 import {
   RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
   tanodSummary, mostUrgentAssignment, tanodStats,
@@ -93,6 +95,10 @@ function TanodDashboard() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
+  // What the database writes for this tanod (supabase/setup.sql Section
+  // 18). Dispatches already raise the alert below, so the hook stays quiet
+  // for those and the bell keeps the record.
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['incident_assigned'] })
   const [incidents, setIncidents] = useState([])
   const [activeSection, setActiveSection] = useUrlSection(TANOD_SECTIONS, TANOD_HOME)
   // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
@@ -328,10 +334,10 @@ function TanodDashboard() {
           setIncidents(prev => (prev.some(i => i.id === payload.new.id) ? prev : [payload.new, ...prev]))
         }
       })
-      .subscribe()
+    const leaveIncidentChannel = subscribeWhenSignedIn(supabase, incidentChannel)
 
     return () => {
-      supabase.removeChannel(incidentChannel)
+      leaveIncidentChannel()
     }
   }, [profile?.id, supabase, setActiveSection])
 
@@ -633,18 +639,8 @@ function TanodDashboard() {
           setSidebarOpen={setSidebarOpen}
           sectionTitle={SECTION_TITLES[activeSection]}
           sectionDesc="Field officer portal"
-          notifications={assignedIncidents.map(i => ({
-            id: i.id,
-            type: 'assignment',
-            icon: PRIORITY_CONFIG[i.priority]?.icon || '🛡️',
-            color: PRIORITY_CONFIG[i.priority]?.bg || '#fef9c3',
-            title: `${i.priority || ''}: ${i.title}`,
-            subtitle: `📍 ${i.location}`,
-            created_at: i.created_at,
-            data: i,
-          }))}
+          notificationCenter={notificationCenter}
           searchData={{ incidents, tickets: [], announcements: [] }}
-          onNotificationClick={() => setActiveSection('active')}
           onSearchResultClick={() => setActiveSection('active')}
         />
 

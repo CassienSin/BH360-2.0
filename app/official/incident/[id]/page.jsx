@@ -18,6 +18,7 @@ import { computeStanding, activeWindowLabel } from '@/lib/triage'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
 import { PageHeader } from '@/components/AppUI'
 import { CategoryIcon } from '@/lib/categoryIcons'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -251,8 +252,8 @@ export default function IncidentDetail() {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'incidents', filter: `id=eq.${params.id}` },
         payload => setIncident(prev => ({ ...prev, ...payload.new })))
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const leaveCh = subscribeWhenSignedIn(supabase, ch)
+    return () => { leaveCh() }
   }, [params.id, supabase])
 
   const timeline = useMemo(() => buildTimeline(incident, people), [incident, people])

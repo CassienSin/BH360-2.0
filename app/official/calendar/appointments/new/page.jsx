@@ -6,6 +6,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
     import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
     import { AlarmClock, Bell, CalendarDays, Check, Clock3, Plus, UserRound } from 'lucide-react'
     import toast from 'react-hot-toast'
     import { createClient } from '@/lib/supabase'
@@ -118,8 +119,8 @@ import { loginHref } from '@/lib/loginRedirect'
             setAppointments(previous => previous.filter(item => item.id !== payload.old.id))
             }
         })
-        .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const leaveChannel = subscribeWhenSignedIn(supabase, channel)
+        return () => { leaveChannel() }
     }, [profile?.barangay_id, supabase])
 
     const checkReminders = useCallback(async () => {

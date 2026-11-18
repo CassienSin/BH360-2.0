@@ -10,6 +10,7 @@ import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
 import styles from './calendar.module.css'
 import { PageHeader, AppButton } from '@/components/AppUI'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: '#087f8c' }, incidents: { label: 'Incidents', singular: 'Incident', color: '#d97706' }, announcements: { label: 'Announcements', singular: 'Announcement', color: '#6554dc' } }
 const PRIORITIES = { Low: '#15803d', Medium: '#2563eb', High: '#c2410c', Critical: '#dc2626' }
@@ -71,10 +72,10 @@ export default function CalendarView() {
     reload()
     const channel = supabase.channel(`calendar-${profile.barangay_id}`)
     for (const table of Object.keys(TYPES)) channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `barangay_id=eq.${profile.barangay_id}` }, scheduleReload)
-    channel.subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
     function onFocus() { setToday(dateKey(new Date())); scheduleReload() }
     window.addEventListener('focus', onFocus)
-    return () => { cancelled = true; clearTimeout(debounce); window.removeEventListener('focus', onFocus); supabase.removeChannel(channel) }
+    return () => { cancelled = true; clearTimeout(debounce); window.removeEventListener('focus', onFocus); leaveChannel() }
   }, [supabase, profile?.barangay_id, month, refresh])
 
   const data = snapshot.month === month ? snapshot.data : EMPTY

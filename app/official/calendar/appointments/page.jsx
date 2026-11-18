@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { AppButton, PageHeader, PageState, StatusBadge } from '@/components/AppUI'
 import { useNow } from '@/lib/useNow'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 function formatDateTime(value) {
   if (!value) return 'Not set'
@@ -98,8 +99,8 @@ export default function AppointmentsPage() {
           setAppointments(previous => previous.filter(item => item.id !== payload.old.id))
         }
       })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
+    return () => { leaveChannel() }
   }, [profile?.barangay_id, supabase])
 
   const visibleAppointments = appointments.filter(appointment => {

@@ -5,6 +5,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import InstallPrompt from "@/components/InstallPrompt";
 import OfflineBanner from "@/components/OfflineBanner";
+import NotificationLinkReader from "@/components/NotificationLinkReader";
 import { BOOT_SCRIPT } from "@/lib/dashboardSkeletons";
 
 // Sora is the font the entire app actually renders in — it was previously
@@ -118,6 +119,7 @@ export default function RootLayout({
         {children}
         <InstallPrompt />
         <OfflineBanner />
+        <NotificationLinkReader />
         {/* next/script instead of a raw inline tag — Next controls when it
             runs (after hydration) and dedupes it across navigations */}
         <Script id="sw-register" strategy="afterInteractive">
