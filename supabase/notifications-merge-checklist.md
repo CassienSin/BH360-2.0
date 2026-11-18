@@ -70,6 +70,14 @@ in which an event is pushed twice or not at all.
       `{"sent":0,"ignored":true,…}` for the old triggers' posts. No 400s.
 - [ ] One real event end to end (e.g. a ticket reply) shows in the bell and
       arrives once as a push on a subscribed device.
+- [ ] Retest on a real Android phone against **bh-360.vercel.app** (not the
+      preview): subscribe, then with Chrome in the background send a ticket
+      reply and use Settings → "Send test notification". Check that each
+      arrives within seconds, shows the barangay-hall badge, and is **not**
+      marked "possible spam". On the preview, Chrome's on-device spam filter
+      flagged a push; the preview's long, unfamiliar domain (and a site with
+      no history on the phone) likely contributed, so it has to be judged on
+      the real domain.
 
 ## Then
 

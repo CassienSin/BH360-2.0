@@ -2403,6 +2403,24 @@ revoke all on function private.notify_role(uuid, text, uuid, text, text, text, t
 -- Tickets: replies go to the other side; status changes to the author.
 -- ----------------------------------------------------------------------------
 
+create or replace function private.snippet(p_text text, p_max int)
+returns text
+language sql
+immutable
+set search_path = public, private
+as $$
+  -- Text for a notification: whitespace and line breaks collapsed, and cut
+  -- at p_max characters with an ellipsis rather than mid-word bluntly.
+  select case
+           when s is null or s = '' then null
+           when char_length(s) <= p_max then s
+           else rtrim(left(s, p_max - 1)) || '…'
+         end
+  from (select btrim(regexp_replace(p_text, '\s+', ' ', 'g')) as s) x
+$$;
+
+revoke all on function private.snippet(text, int) from public;
+
 create or replace function private.notify_ticket_message()
 returns trigger
 language plpgsql
@@ -2420,15 +2438,16 @@ begin
     end if;
     select full_name into v_sender from profiles where id = new.sender_id;
 
+    -- The title says where; the body is who said what, as a chat app shows it.
     if new.sender_id = t.created_by then
       perform private.notify_role(t.barangay_id, 'official', new.sender_id, 'ticket_reply',
-        coalesce(v_sender, 'The resident') || ' replied',
-        t.title || ': ' || left(new.message, 140),
+        'New reply on “' || private.snippet(t.title, 50) || '”',
+        private.snippet(coalesce(v_sender, 'Resident') || ': ' || new.message, 160),
         '/official/ticket/' || t.id, 'tickets', t.id, 'ticket-reply:' || t.id);
     else
       perform private.notify(t.created_by, new.sender_id, t.barangay_id, 'ticket_reply',
-        coalesce(v_sender, 'The barangay') || ' replied',
-        t.title || ': ' || left(new.message, 140),
+        'New reply on your ticket',
+        private.snippet(coalesce(v_sender, 'Barangay') || ': ' || new.message, 160),
         '/resident/ticket/' || t.id, 'tickets', t.id, 'ticket-reply:' || t.id);
     end if;
   exception when others then
@@ -2444,21 +2463,30 @@ language plpgsql
 security definer
 set search_path = public, private
 as $$
+declare
+  v_name text;
+  v_title text := '“' || private.snippet(new.title, 60) || '”';
 begin
   begin
     if tg_op = 'INSERT' then
+      select full_name into v_name from profiles where id = new.created_by;
       perform private.notify_role(new.barangay_id, 'official', new.created_by, 'ticket_new',
-        'New ticket: ' || new.title,
-        coalesce(new.category || ' · ', '') || left(new.description, 140),
+        'New ticket: ' || private.snippet(new.title, 60),
+        private.snippet(coalesce(v_name, 'A resident') || ': ' || new.description, 160),
         '/official/ticket/' || new.id, 'tickets', new.id, null);
     elsif new.status is distinct from old.status then
+      select full_name into v_name from profiles where id = auth.uid();
       perform private.notify(new.created_by, auth.uid(), new.barangay_id, 'ticket_status',
         case new.status
           when 'in_progress' then 'Your ticket is being handled'
           when 'closed' then 'Your ticket was closed'
           else 'Your ticket was reopened'
         end,
-        new.title,
+        case new.status
+          when 'in_progress' then coalesce(v_name, 'The barangay') || ' is working on ' || v_title || '.'
+          when 'closed' then coalesce(v_name, 'The barangay') || ' closed ' || v_title || '.'
+          else v_title || ' is open again.'
+        end,
         '/resident/ticket/' || new.id, 'tickets', new.id, 'ticket-status:' || new.id);
     end if;
   exception when others then
@@ -2485,17 +2513,25 @@ declare
   -- On an update the actor is whoever made it; a change made by the system
   -- (no signed-in user) excludes nobody, so the reporter still hears.
   v_actor uuid := auth.uid();
+  v_title text;
+  v_what text;
+  v_tanod text;
 begin
   begin
+    v_title := private.snippet(new.title, 60);
+    -- "Noise at Purok 3, Mabini St."
+    v_what := concat_ws(' at ', coalesce(new.category, 'Incident'), private.snippet(new.location, 80));
+
     if tg_op = 'INSERT' then
+      -- A critical title must start with "Critical": push treats it as one.
       perform private.notify_role(new.barangay_id, 'official', new.reported_by, 'incident_new',
-        case when new.priority = 'Critical' then 'Critical incident: ' else 'New incident: ' end || new.title,
-        concat_ws(' · ', new.priority, new.category, new.location),
+        case when new.priority = 'Critical' then 'Critical report: ' else 'New report: ' end || v_title,
+        case when new.priority in ('High', 'Critical') then new.priority || ' priority · ' else '' end || v_what,
         '/official/incident/' || new.id, 'incidents', new.id, null);
       if new.assigned_to is not null then
         perform private.notify(new.assigned_to, new.reported_by, new.barangay_id, 'incident_assigned',
-          'You have been dispatched: ' || new.title,
-          concat_ws(' · ', new.priority, new.location),
+          'New assignment: ' || v_title,
+          concat_ws(' · ', new.priority || ' priority', private.snippet(new.location, 80)),
           '/tanod?section=active', 'incidents', new.id, null);
       end if;
       return new;
@@ -2504,19 +2540,23 @@ begin
     -- A dispatch, or a reassignment to someone else.
     if new.assigned_to is not null and new.assigned_to is distinct from old.assigned_to then
       perform private.notify(new.assigned_to, v_actor, new.barangay_id, 'incident_assigned',
-        'You have been dispatched: ' || new.title,
-        concat_ws(' · ', new.priority, new.location),
+        'New assignment: ' || v_title,
+        concat_ws(' · ', new.priority || ' priority', private.snippet(new.location, 80)),
         '/tanod?section=active', 'incidents', new.id, null);
     end if;
 
     -- Progress, told to whoever reported it.
     if new.status is distinct from old.status and new.status in ('assigned', 'resolved') then
+      select full_name into v_tanod from profiles where id = new.assigned_to;
       perform private.notify(new.reported_by, v_actor, new.barangay_id, 'incident_status',
         case new.status
           when 'assigned' then 'A tanod is on the way'
-          else 'Resolved. Rate the response'
+          else 'Your report was resolved'
         end,
-        new.title,
+        case new.status
+          when 'assigned' then coalesce(v_tanod, 'A tanod') || ' is responding to “' || v_title || '”.'
+          else '“' || v_title || '” is resolved. You can rate the response in the app.'
+        end,
         '/resident/incident/' || new.id, 'incidents', new.id, 'incident-status:' || new.id);
     end if;
   exception when others then
@@ -2573,8 +2613,8 @@ begin
 
   insert into public.notifications
     (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
-  select p.id, a.barangay_id, 'announcement', left('New announcement: ' || a.title, 200),
-         left(a.content, 200),
+  select p.id, a.barangay_id, 'announcement', 'Announcement: ' || private.snippet(a.title, 80),
+         private.snippet(a.content, 160),
          case p.role
            when 'official' then '/official?section=announcements'
            when 'tanod' then '/tanod'
@@ -2645,12 +2685,16 @@ language plpgsql
 security definer
 set search_path = public, private
 as $$
+declare
+  v_name text;
+  v_ref text := 'Reference ' || new.reference_code || '.';
 begin
   begin
     if tg_op = 'INSERT' then
+      select full_name into v_name from profiles where id = new.requested_by;
       perform private.notify_role(new.barangay_id, 'official', new.requested_by, 'document_new',
-        'New document request: ' || new.document_type,
-        left(new.purpose, 140),
+        'New request: ' || new.document_type,
+        private.snippet(coalesce(v_name, 'A resident') || ': ' || new.purpose, 160),
         '/official?section=documents', 'document_requests', new.id, null);
     elsif new.status is distinct from old.status then
       perform private.notify(new.requested_by, auth.uid(), new.barangay_id, 'document_status',
@@ -2661,7 +2705,12 @@ begin
           when 'denied' then 'Your ' || new.document_type || ' request was declined'
           else 'Your ' || new.document_type || ' request was updated'
         end,
-        case when new.status = 'denied' then new.denial_reason else new.reference_code end,
+        case new.status
+          when 'processing' then concat_ws(' ', v_ref, 'You’ll get a notification when it’s ready.')
+          when 'ready' then concat_ws(' ', v_ref, 'Bring a valid ID to the barangay hall.')
+          when 'denied' then coalesce('Reason: ' || private.snippet(new.denial_reason, 140), 'Open the request to see why.')
+          else v_ref
+        end,
         '/resident?section=documents', 'document_requests', new.id, 'document:' || new.id);
     end if;
   exception when others then
@@ -2685,16 +2734,20 @@ set search_path = public, private
 as $$
 declare
   v_when text;
+  v_case text;
 begin
   begin
     if new.complainant_id is null then
       return new;
     end if;
+    -- "Case KP-2026-0002 against Juan Dela Cruz."
+    v_case := concat_ws(' against ', coalesce('Case ' || new.case_number, 'Your case'),
+                        private.snippet(new.respondent_name, 60)) || '.';
 
     if tg_op = 'INSERT' then
       perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
-        'Your case ' || new.case_number || ' was filed',
-        'Against ' || new.respondent_name,
+        'Your complaint was filed',
+        v_case,
         '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
       return new;
     end if;
@@ -2702,32 +2755,31 @@ begin
     if new.first_meeting_at is not null and new.first_meeting_at is distinct from old.first_meeting_at then
       v_when := to_char(new.first_meeting_at at time zone 'Asia/Manila', 'Mon FMDD, YYYY "at" FMHH12:MI AM');
       perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
-        'Mediation hearing set: case ' || new.case_number,
-        v_when || ', Philippine time',
+        'Mediation hearing scheduled',
+        v_when || ' (Philippine time). ' || v_case,
         '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
     end if;
 
     if new.pangkat_convened_at is not null and new.pangkat_convened_at is distinct from old.pangkat_convened_at then
       perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
-        'Pangkat convened: case ' || new.case_number,
-        'The conciliation panel will hear your case.',
+        'Your case goes to the Pangkat',
+        'A conciliation panel will hear it. ' || v_case,
         '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
     end if;
 
     if new.status is distinct from old.status then
       perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
-        'Case ' || new.case_number || ': ' ||
         case new.status
-          when 'mediation' then 'now in mediation'
-          when 'pangkat' then 'referred to the Pangkat'
-          when 'settled' then 'settled'
-          when 'repudiated' then 'settlement repudiated'
-          when 'cfa_issued' then 'Certificate to File Action issued'
-          when 'referred' then 'referred to another office'
-          when 'withdrawn' then 'withdrawn'
-          else 'updated'
+          when 'mediation' then 'Your case is in mediation'
+          when 'pangkat' then 'Your case was referred to the Pangkat'
+          when 'settled' then 'Your case was settled'
+          when 'repudiated' then 'The settlement was repudiated'
+          when 'cfa_issued' then 'A Certificate to File Action was issued'
+          when 'referred' then 'Your case was referred to another office'
+          when 'withdrawn' then 'Your case was withdrawn'
+          else 'Your case was updated'
         end,
-        'Against ' || new.respondent_name,
+        v_case,
         '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
     end if;
   exception when others then
@@ -2754,8 +2806,8 @@ begin
     if tg_op = 'INSERT' then
       if new.role = 'resident' and new.verification_status = 'pending' then
         perform private.notify_role(new.barangay_id, 'official', new.id, 'verification_new',
-          'New resident to verify: ' || new.full_name,
-          new.address,
+          'New resident to verify: ' || private.snippet(new.full_name, 60),
+          private.snippet(new.address, 120),
           '/official?section=verifications', 'profiles', new.id, null);
       end if;
     elsif new.verification_status is distinct from old.verification_status
@@ -2763,13 +2815,15 @@ begin
       perform private.notify(new.id, coalesce(auth.uid(), new.verified_by), new.barangay_id, 'verification',
         case new.verification_status
           when 'verified' then 'Your account is verified'
-          else 'Your verification was not approved'
+          else 'Your verification wasn’t approved'
         end,
         -- Tanods and officials can be verified too: their text and link
         -- must not send them to the resident pages.
         case
-          when new.verification_status = 'rejected' then new.verification_note
-          when new.role = 'resident' then 'You can now request barangay documents.'
+          when new.verification_status = 'rejected'
+            then coalesce('Reason: ' || private.snippet(new.verification_note, 140), 'Open the app to see what to update.')
+          when new.role = 'resident' then 'You can now request barangay clearances and certificates.'
+          else 'You now have full access to BarangayHub.'
         end,
         case new.role
           when 'official' then '/official'
@@ -2822,10 +2876,10 @@ begin
       insert into private.notified_appointments (appointment_id) values (r.id) on conflict do nothing;
       if found then
         perform private.notify(r.created_by, null, r.barangay_id, 'appointment',
-          'Appointment reminder: ' || r.title,
-          concat_ws(' · ',
-            to_char(r.starts_at at time zone 'Asia/Manila', 'Mon FMDD, FMHH12:MI AM'),
-            r.participant_name),
+          'Upcoming appointment: ' || private.snippet(r.title, 60),
+          concat_ws(' with ',
+            to_char(r.starts_at at time zone 'Asia/Manila', 'Mon FMDD "at" FMHH12:MI AM'),
+            private.snippet(r.participant_name, 60)),
           '/official/calendar/appointments', 'appointments', r.id, null);
       end if;
     exception when others then
@@ -2850,8 +2904,9 @@ begin
     insert into public.notifications
       (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
     select p.id, new.barangay_id, 'application',
-           left('New barangay application: ' || new.full_name, 200),
-           left(concat_ws(' · ', new.position, new.email), 500),
+           private.snippet(new.full_name, 60) || ' applied for barangay access',
+           private.snippet(concat_ws(' · ', new.position,
+             (select b.name from barangays b where b.id = new.barangay_id)), 160),
            '/admin?tab=applications', 'barangay_applications', new.id, 'applications'
     from profiles p
     where p.is_super_admin and p.deactivated_at is null;
