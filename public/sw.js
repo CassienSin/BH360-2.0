@@ -177,7 +177,7 @@ self.addEventListener('push', (event) => {
       if (/\/ticket\//.test(target.pathname)) {
         const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
         const places = await Promise.all(windows.filter(c => c.visibilityState === 'visible').map(whereIs))
-        if (places.some(p => p.visible && p.path === target.pathname)) return
+        if (places.some(p => p && p.visible && p.path === target.pathname)) return
       }
     }
     await self.registration.showNotification(title, options)
@@ -189,11 +189,14 @@ self.addEventListener('push', (event) => {
 // changes the history entry) does not update it: a ticket opened by a tap
 // on the resident home still read "/resident", so its replies were shown
 // as notifications over the open conversation. So the page itself is asked
-// (app/layout.tsx answers). A page that does not answer in time (still
-// loading, or running code from before this) falls back to Client.url,
-// which is right for a page that was loaded directly.
+// (app/layout.tsx answers).
+//
+// Only an answer counts. A page that does not answer in time (paused in the
+// background, still loading, or running code from before this) resolves to
+// null, and the notification is shown: Client.url and Client.visibilityState
+// are not to be trusted for that page, and a notification over an open
+// conversation is a small annoyance where a missed one is not.
 function whereIs(client) {
-  const fallback = { path: new URL(client.url).pathname, visible: client.visibilityState === 'visible' }
   return new Promise((resolve) => {
     let channel = null
     const done = (place) => {
@@ -201,16 +204,16 @@ function whereIs(client) {
       if (channel) channel.port1.close()
       resolve(place)
     }
-    const timer = setTimeout(() => done(fallback), 500)
+    const timer = setTimeout(() => done(null), 500)
     try {
       channel = new MessageChannel()
       channel.port1.onmessage = (event) => {
         const answer = event.data
-        done(answer && typeof answer.path === 'string' ? answer : fallback)
+        done(answer && typeof answer.path === 'string' ? answer : null)
       }
       client.postMessage({ type: 'BH360_WHERE' }, [channel.port2])
     } catch {
-      done(fallback)
+      done(null)
     }
   })
 }
