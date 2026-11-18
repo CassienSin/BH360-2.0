@@ -1,8 +1,15 @@
 'use client'
 import { PageState } from '@/components/AppUI'
-import { Skeleton, CardSkeleton } from '@/components/Skeletons'
+import { DashboardShellSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import DashboardBackdrop from '@/components/DashboardBackdrop'
+import { DASHBOARD_SKELETONS } from '@/lib/dashboardSkeletons'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import SectionContent from '@/components/SectionContent'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
 import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -15,7 +22,7 @@ import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
-import { useTicketMessageAlerts } from '@/lib/useTicketMessageAlerts'
+import { useNotifications } from '@/lib/useNotifications'
 import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
 import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
@@ -33,42 +40,9 @@ import { stageDeadline as blotterDeadline, isOpen as blotterIsOpen } from '@/lib
 import { verificationStyle } from '@/lib/verification'
 import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 import { useNow } from '@/lib/useNow'
-import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useSidebarState } from '@/lib/useSidebarState'
-
-const DOTS = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-// Ambient decoration only — skipped for users who prefer reduced motion.
-const AnimatedDots = () => {
-  // Server and hydration render assume reduced motion (nothing drawn), so
-  // the dots appear only once the browser says motion is welcome.
-  const show = !useMediaQuery('(prefers-reduced-motion: reduce)', true)
-  if (!show) return null
-  return (
-    <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
-      {DOTS.map((dot, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }} />
-      ))}
-    </div>
-  )
-}
+import { isPhoneLayout } from '@/lib/layout'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 // Profile picture with graceful fallback to the initial-letter circle.
 // Used in User Management and Tanod Management — avatar_url was never
@@ -171,33 +145,22 @@ function OfficialTicketCard({ t, live, onOpen }) {
   )
 }
 
-// Dashboard loading state. Module level so it is not rebuilt each render.
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-28 w-full rounded-3xl" />
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-3xl" />)}
-      </div>
-    </div>
-  )
-}
+// Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
+const { kinds: OFFICIAL_SKELETONS, fallback: OFFICIAL_HOME } = DASHBOARD_SKELETONS['/official']
+const OFFICIAL_SECTIONS = Object.keys(OFFICIAL_SKELETONS)
 
-export default function OfficialDashboard() {
+function OfficialDashboard() {
   const now = useNow()
   const router = useRouter()
 
-  // A resident replying on a ticket used to be silent unless the official
-  // happened to have that ticket open.
-  const ticketHref = useCallback(id => `/official/ticket/${id}`, [])
-  const openTicket = useCallback(id => router.push(`/official/ticket/${id}`), [router])
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
-  const { messages: ticketReplies } = useTicketMessageAlerts({
-    profile, ticketHref, onOpen: openTicket,
-  })
+  // What the database writes for this official: new incidents, tickets and
+  // replies, document requests, residents to verify, appointment reminders
+  // (supabase/setup.sql Section 18). New incidents already sound the siren
+  // and toast below, so the hook stays quiet for those.
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['incident_new'] })
   const [announcements, setAnnouncements] = useState([])
-  const [appointments, setAppointments] = useState([])
   const [incidents, setIncidents] = useState([])
   const [tickets, setTickets] = useState([])
   const [tanods, setTanods] = useState([])
@@ -207,7 +170,7 @@ export default function OfficialDashboard() {
   const [blotterCases, setBlotterCases] = useState([])
   const [incidentsHasMore, setIncidentsHasMore] = useState(false)
   const [loadingMoreIncidents, setLoadingMoreIncidents] = useState(false)
-  const [activeSection, setActiveSection] = useState('dashboard')
+  const [activeSection, setActiveSection] = useUrlSection(OFFICIAL_SECTIONS, OFFICIAL_HOME)
   // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
   const [sidebarOpen, setSidebarOpen] = useSidebarState(true)
   const [loading, setLoading] = useState(true)
@@ -223,7 +186,7 @@ export default function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts] = await Promise.all([
+    const [inc, tix, ann, tan, allUsers, codes, docs, blotter] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -266,14 +229,9 @@ export default function OfficialDashboard() {
         .eq('barangay_id', bid)
         .order('filed_at', { ascending: false })
         .limit(BLOTTER_LIMIT),
-      supabase.from('appointments')
-        .select('*')
-        .eq('barangay_id', bid)
-        .order('starts_at', { ascending: true })
-        .limit(200),
     ])
     const loadError = firstRealError(
-      [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts], 'the official dashboard')
+      [inc, tix, ann, tan, allUsers, codes, docs, blotter], 'the official dashboard')
     if (loadError) {
       console.error('Barangay data load failed:', loadError)
       toast.error('Some of the dashboard could not load. Try refreshing.')
@@ -289,7 +247,6 @@ export default function OfficialDashboard() {
     setInviteCodes(codes.data || [])
     setDocumentRequests(docs.data || [])
     setBlotterCases(blotter.data || [])
-    setAppointments(appts.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -298,7 +255,7 @@ export default function OfficialDashboard() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (cancelled) return
-        if (!session) return router.replace('/login')
+        if (!session) return router.replace(loginHref())
         const user = session.user
         const { data: prof, error: profError } = await supabase.from('profiles')
           .select('*, barangays(id, name, city, province)')
@@ -307,7 +264,7 @@ export default function OfficialDashboard() {
         // A failed query is not the same as being the wrong role — the catch
         // below reports it rather than signing a valid session out.
         if (profError) throw profError
-        if (prof?.role !== 'official') return router.replace('/login')
+        if (prof?.role !== 'official') return router.replace(loginHref())
         setProfile(prof)
 
         if (!prof?.barangay_id) {
@@ -383,18 +340,18 @@ export default function OfficialDashboard() {
           setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
         }
       })
-      .subscribe((status) => {
-        // Reconnected after a drop → refetch everything that happened during
-        // the gap (phone sleep / wifi blip / backgrounded tab)
-        if (status === 'SUBSCRIBED') {
-          if (hadDropRef.current) {
-            hadDropRef.current = false
-            loadBarangayData(bid).catch(err => console.error('Reconnect refresh failed:', err))
-          }
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          hadDropRef.current = true
+    const leaveIncidentChannel = subscribeWhenSignedIn(supabase, incidentChannel, (status) => {
+      // Reconnected after a drop → refetch everything that happened during
+      // the gap (phone sleep / wifi blip / backgrounded tab)
+      if (status === 'SUBSCRIBED') {
+        if (hadDropRef.current) {
+          hadDropRef.current = false
+          loadBarangayData(bid).catch(err => console.error('Reconnect refresh failed:', err))
         }
-      })
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        hadDropRef.current = true
+      }
+    })
 
     // Subscribe to ticket changes
     const ticketChannel = supabase
@@ -428,7 +385,7 @@ export default function OfficialDashboard() {
           ))
         }
       })
-      .subscribe()
+    const leaveTicketChannel = subscribeWhenSignedIn(supabase, ticketChannel)
 
     // Subscribe to announcement changes
     const announcementChannel = supabase
@@ -446,27 +403,10 @@ export default function OfficialDashboard() {
           setAnnouncements(prev => prev.filter(a => a.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveAnnouncementChannel = subscribeWhenSignedIn(supabase, announcementChannel)
 
-    const appointmentChannel = supabase
-      .channel('official-appointments')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'appointments',
-        filter: `barangay_id=eq.${bid}`,
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setAppointments(prev => (prev.some(a => a.id === payload.new.id) ? prev : [...prev, payload.new]))
-        }
-        if (payload.eventType === 'UPDATE') {
-          setAppointments(prev => prev.map(a => a.id === payload.new.id ? { ...a, ...payload.new } : a))
-        }
-        if (payload.eventType === 'DELETE') {
-          setAppointments(prev => prev.filter(a => a.id !== payload.old.id))
-        }
-      })
-      .subscribe()
+    // Appointment reminders now arrive as notifications written by the
+    // database (supabase/setup.sql Section 18), so nothing here loads them.
 
     // Profile changes: keeps the dispatch dropdown, tanod list, AND the
     // user directory live. The old handler only patched existing tanods —
@@ -508,7 +448,7 @@ export default function OfficialDashboard() {
           setTanods(prev => prev.filter(t => t.id !== p.id)) // role changed away
         }
       })
-      .subscribe()
+    const leaveProfileChannel = subscribeWhenSignedIn(supabase, profileChannel)
 
     // Document requests. A request the office never sees is a request the
     // office will let run past its RA 11032 deadline, so new ones land in
@@ -544,17 +484,16 @@ export default function OfficialDashboard() {
           setDocumentRequests(prev => prev.filter(d => d.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveDocumentChannel = subscribeWhenSignedIn(supabase, documentChannel)
 
     return () => {
-      supabase.removeChannel(incidentChannel)
-      supabase.removeChannel(ticketChannel)
-      supabase.removeChannel(announcementChannel)
-      supabase.removeChannel(appointmentChannel)
-      supabase.removeChannel(profileChannel)
-      supabase.removeChannel(documentChannel)
+      leaveIncidentChannel()
+      leaveTicketChannel()
+      leaveAnnouncementChannel()
+      leaveProfileChannel()
+      leaveDocumentChannel()
     }
-  }, [profile?.barangay_id, supabase, loadBarangayData, router])
+  }, [profile?.barangay_id, supabase, loadBarangayData, router, setActiveSection])
 
   // Export order: open work first, then priority, then newest. (Filtering
   // lives in IncidentsSection; the export takes every incident.)
@@ -601,8 +540,8 @@ export default function OfficialDashboard() {
 
   const navClick = useCallback((key) => {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
-  }, [setSidebarOpen])
+    if (isPhoneLayout()) setSidebarOpen(false)
+  }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
   const mainRef = useRef(null)
@@ -910,6 +849,9 @@ export default function OfficialDashboard() {
     blotter: 'Barangay justice — mediation, Pangkat and Certificates to File Action'
   }
 
+  // Each section gets its own browser-tab title (history entries, tab strip).
+  useEffect(() => { document.title = `${sectionTitle[activeSection] || 'Dashboard'} · BH360` }, [activeSection]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleExportIncidents(format) {
     const columns = [
       { label: 'Title', key: 'title' },
@@ -1000,19 +942,22 @@ export default function OfficialDashboard() {
     }
   }
 
+  // Sections animate in when the user switches to one — not when the page
+  // first loads (lib/useSectionEntrance.js).
+  const entering = useSectionEntrance(activeSection, !loading)
+
+  // While loading, the same frame the static HTML showed before JavaScript
+  // ran — now with the real sidebar width and banner — so a refresh shows
+  // one skeleton throughout, then the content in its place.
+  if (loading) {
+    return (
+      <DashboardShellSkeleton path="/official" kind={OFFICIAL_SKELETONS[activeSection]}
+        sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
+    )
+  }
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite'}} />
-        <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite'}} />
-      </div>
-
-
-
+    <div className="min-h-dvh flex relative overflow-hidden">
       <DashboardSidebar
         profile={profile}
         sidebarOpen={sidebarOpen}
@@ -1048,59 +993,18 @@ export default function OfficialDashboard() {
         ]}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-screen overflow-hidden ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
         <DashboardHeader
           profile={profile}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc={sectionDesc[activeSection]}
-          notifications={[
-            ...ticketReplies,
-            ...incidents.filter(i => i.status === 'pending').map(i => ({
-              id: i.id,
-              type: 'incident',
-              icon: '⚠️',
-              color: '#fff7ed',
-              title: i.title,
-              subtitle: `Pending incident at ${i.location}`,
-              created_at: i.created_at,
-              data: i,
-            })),
-            ...tickets.filter(t => t.status === 'open').map(t => ({
-              id: t.id,
-              type: 'ticket',
-              icon: '📋',
-              color: '#f0effe',
-              title: t.title,
-              subtitle: `Open ticket from ${t.profiles?.full_name || 'a resident'}`,
-              created_at: t.created_at,
-              data: t,
-            })),
-            ...appointments.filter(a => a.created_by === profile?.id && new Date(a.starts_at) > new Date()).map(a => ({
-              id: a.id,
-              type: 'appointment',
-              icon: '📅',
-              color: '#f0effe',
-              title: `Appointment: ${a.title}`,
-              subtitle: `Reminder ${a.reminder_sent_at ? 'sent' : 'scheduled'} · ${a.participant_name || 'No participant listed'}`,
-              created_at: a.reminder_sent_at || a.remind_at,
-              starts_at: a.starts_at,
-              remind_at: a.remind_at,
-              reminder_sent_at: a.reminder_sent_at,
-              data: a,
-            }))
-          ]}
+          notificationCenter={notificationCenter}
           searchData={{
             incidents,
             tickets,
             announcements,
-          }}
-          onNotificationClick={(notif) => {
-            if (notif.type === 'incident') setActiveSection('incidents')
-            if (notif.type === 'ticket') router.push(`/official/ticket/${notif.id}`)
-            if (notif.type === 'ticket-message') router.push(`/official/ticket/${notif.data.ticket_id}`)
-            if (notif.type === 'appointment') router.push('/official/calendar/appointments')
           }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') setActiveSection('incidents')
@@ -1109,22 +1013,17 @@ export default function OfficialDashboard() {
           }}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
            <NotificationBanner />
            <AppointmentReminderWatcher profile={profile} />
 
-          {loading && (
-            <div className="fade-up">
-              {activeSection === 'dashboard' ? <DashboardSkeleton /> : (
-                <div className="space-y-3">
-                  {[...Array(4)].map((_, i) => <CardSkeleton key={i} />)}
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* Keyed on the section: switching sections remounts it, which
+              eases the new section in (only after a switch — see `entering`
+              above and components/SectionContent.jsx). */}
+          <SectionContent key={activeSection} entering={entering}>
           {!loading && !profile?.barangay_id && (
-            <div className="white-card p-8 max-w-2xl mx-auto text-center fade-up">
+            <div className="white-card p-8 max-w-2xl mx-auto text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{background: '#fff7ed'}}>
                 <AlertTriangle size={28} className="text-orange-500" />
               </div>
@@ -1134,7 +1033,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'dashboard' && (
-            <div className="space-y-6 fade-up">
+            <div className="space-y-6">
               <HomeSummary
                 greeting={greeting()}
                 name={profile?.full_name?.split(' ')[0]}
@@ -1162,6 +1061,9 @@ export default function OfficialDashboard() {
                 )} />
               </div>
 
+              {/* Wide screens: actions and roster beside the recent incidents. */}
+              <div className="grid gap-6 items-start xl:grid-cols-2">
+              <div className="space-y-6 min-w-0">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
                 <button onClick={() => navClick('announcements')}
@@ -1185,8 +1087,9 @@ export default function OfficialDashboard() {
               </div>
 
               <TanodRoster profile={profile} />
+              </div>
 
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Recent Incidents</p>
                   <button onClick={() => navClick('incidents')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
@@ -1217,6 +1120,7 @@ export default function OfficialDashboard() {
                   )}
                 </div>
               </div>
+              </div>
             </div>
           )}
 
@@ -1235,7 +1139,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tickets' && (
-            <div className="space-y-3 fade-up">
+            <div className="space-y-3">
 
               {tickets.length > 0 && (
                 <div className="white-card p-4 mb-2">
@@ -1337,7 +1241,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
-            <div className="space-y-3 fade-up">
+            <div className="space-y-3">
 
               {/* Header with stats + New button */}
               <div className="white-card p-5">
@@ -1464,7 +1368,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'analytics' && (
-            <div className="fade-up space-y-4">
+            <div className="space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
                   style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
@@ -1482,7 +1386,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'users' && (
-            <div className="space-y-6 fade-up">
+            <div className="space-y-6">
               <div className="white-card p-5">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
@@ -1669,7 +1573,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'verifications' && (
-            <div className="fade-up">
+            <div className="">
               <VerificationQueue
                 profile={profile}
                 users={users}
@@ -1679,7 +1583,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'documents' && (
-            <div className="fade-up">
+            <div className="">
               <DocumentQueue
                 profile={profile}
                 requests={documentRequests}
@@ -1689,7 +1593,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'blotter' && (
-            <div className="fade-up">
+            <div className="">
               <BlotterQueue
                 profile={profile}
                 cases={blotterCases}
@@ -1701,7 +1605,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'map' && (
-            <div className="fade-up space-y-4">
+            <div className="space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
                   style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
@@ -1719,7 +1623,7 @@ export default function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'calendar' && (
-            <div className="fade-up space-y-4">
+            <div className="space-y-4">
               <div className="white-card p-8 text-center">
                 <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
                   style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
@@ -1735,6 +1639,8 @@ export default function OfficialDashboard() {
               </div>
             </div>
           )}
+          </SectionContent>
+          </div>
         </main>
       </div>
 
@@ -1754,5 +1660,22 @@ export default function OfficialDashboard() {
         onView={(inc) => router.push(`/official/incident/${inc.id}`)}   
       />
     </div>
+  )
+}
+
+/**
+ * The section lives in the URL (?section=…), read with useSearchParams, and
+ * the sidebar width in localStorage — see components/ClientBoundary.jsx.
+ * The fallback is the static loading frame; the backdrop sits outside the
+ * boundary so it is drawn once and never restarts.
+ */
+export default function OfficialDashboardPage() {
+  return (
+    <>
+      <DashboardBackdrop />
+      <ClientBoundary fallback={<DashboardShellSkeleton path="/official" />}>
+        <OfficialDashboard />
+      </ClientBoundary>
+    </>
   )
 }

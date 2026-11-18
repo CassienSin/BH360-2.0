@@ -5,6 +5,8 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import InstallPrompt from "@/components/InstallPrompt";
 import OfflineBanner from "@/components/OfflineBanner";
+import NotificationLinkReader from "@/components/NotificationLinkReader";
+import { BOOT_SCRIPT } from "@/lib/dashboardSkeletons";
 
 // Sora is the font the entire app actually renders in — it was previously
 // loaded via a render-blocking Google Fonts @import in globals.css while
@@ -42,6 +44,9 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // Draw edge to edge under the notch and home bar; headers, composers,
+  // sheets and toasts pad themselves with env(safe-area-inset-*).
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -53,11 +58,30 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${sora.variable} ${geistMono.variable} h-full antialiased`}
+      // The boot script below adds data-* attributes to <html> before React
+      // hydrates; this tells React they are expected (this element only).
+      suppressHydrationWarning
     >
+      <head>
+        {/* Runs while the HTML is parsed, before the first paint: records the
+            saved sidebar width, the dashboard section's skeleton and the
+            notification banner on <html>, so the static loading skeleton
+            matches the page it stands in for. See lib/dashboardSkeletons.js.
+            A plain inline script on purpose: next/script's beforeInteractive
+            only queues inline code (self.__next_s) for Next's bootstrap
+            bundle to run, which is after the first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <Toaster
           position="top-right"
           gutter={10}
+          // Clear the notch / status bar and a landscape phone's notch side.
+          containerStyle={{
+            top: "max(16px, env(safe-area-inset-top, 0px))",
+            right: "max(16px, env(safe-area-inset-right, 0px))",
+            left: "max(16px, env(safe-area-inset-left, 0px))",
+          }}
           toastOptions={{
             /* The COMPACT density of components/Toast.jsx — one-line
                confirmations like "Saved" or "Copied". Same radius, shadow and
@@ -95,6 +119,7 @@ export default function RootLayout({
         {children}
         <InstallPrompt />
         <OfflineBanner />
+        <NotificationLinkReader />
         {/* next/script instead of a raw inline tag — Next controls when it
             runs (after hydration) and dedupes it across navigations */}
         <Script id="sw-register" strategy="afterInteractive">
@@ -109,12 +134,40 @@ export default function RootLayout({
               // So the swap happens here, at the one moment it is safe: a
               // full reload, where the page that loads is served entirely by
               // the new worker rather than half by each.
+              //
+              // Only when a worker is being *replaced*, though. sw.js calls
+              // clients.claim(), so a first install also fires
+              // controllerchange (none -> the new worker) — and reloading
+              // then loaded every first visit twice, and left
+              // document.referrer pointing at the page itself (which made
+              // lib/goBack.js send a fresh tab's Back to a blank page).
               var reloading = false
+              var hadController = !!navigator.serviceWorker.controller
               navigator.serviceWorker.addEventListener('controllerchange', function () {
+                if (!hadController) { hadController = true; return }
                 if (reloading) return
                 reloading = true
                 window.location.reload()
               })
+
+              navigator.serviceWorker.addEventListener('message', function (event) {
+                var data = event.data
+                if (!data) return
+                // Before skipping a push for "this conversation is already
+                // on screen", the worker asks where the page is now (whereIs
+                // in sw.js): the address it has for a window stays the one
+                // the page was loaded at, however far the app has navigated.
+                if (data.type === 'BH360_WHERE' && event.ports && event.ports[0]) {
+                  event.ports[0].postMessage({ path: location.pathname, visible: document.visibilityState === 'visible' })
+                }
+                // A tapped notification, for a window the worker cannot
+                // navigate itself (openFromNotification in sw.js).
+                if (data.type === 'BH360_OPEN' && typeof data.url === 'string') {
+                  var url = new URL(data.url, location.href)
+                  if (url.origin === location.origin) location.assign(url.href)
+                }
+              })
+              navigator.serviceWorker.startMessages()
 
               navigator.serviceWorker.register('/sw.js')
                 .then(function (reg) {

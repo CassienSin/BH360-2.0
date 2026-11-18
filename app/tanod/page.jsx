@@ -1,7 +1,14 @@
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
-import { CardSkeleton } from '@/components/Skeletons'
+import { DashboardShellSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import DashboardBackdrop from '@/components/DashboardBackdrop'
+import { DASHBOARD_SKELETONS } from '@/lib/dashboardSkeletons'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import SectionContent from '@/components/SectionContent'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
 import { MapPin, CheckCircle, Clock, AlertTriangle, Home, Phone, Navigation, TrendingUp, Award, Zap, FileText, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -28,7 +35,10 @@ import * as snapshot from '@/lib/offline/snapshot'
 import { toneFor } from '@/lib/recordState'
 import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useNotifications } from '@/lib/useNotifications'
+import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 import {
   RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
   tanodSummary, mostUrgentAssignment, tanodStats,
@@ -40,37 +50,6 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 const PAGE_SIZE = 50
 const INCIDENT_SELECT = '*, profiles!incidents_reported_by_fkey(full_name, phone)'
 const SEEN_ALERTS_KEY = 'bh360-tanod-alerts-seen'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
 
 // Incident photos live in a private bucket, so the URL has to be signed
 // per viewer. Opening in a new tab still works — the signed URL carries its
@@ -106,12 +85,22 @@ const ACHIEVEMENTS = [
   { icon: '💎', title: 'Excellence', desc: '90% resolution rate', target: 90, type: 'rate' },
 ]
 
-export default function TanodDashboard() {
+
+// Which placeholder each section shows while its data loads.
+// Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
+const { kinds: TANOD_SKELETONS, fallback: TANOD_HOME } = DASHBOARD_SKELETONS['/tanod']
+const TANOD_SECTIONS = Object.keys(TANOD_SKELETONS)
+
+function TanodDashboard() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
+  // What the database writes for this tanod (supabase/setup.sql Section
+  // 18). Dispatches already raise the alert below, so the hook stays quiet
+  // for those and the bell keeps the record.
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['incident_assigned'] })
   const [incidents, setIncidents] = useState([])
-  const [activeSection, setActiveSection] = useState('home')
+  const [activeSection, setActiveSection] = useUrlSection(TANOD_SECTIONS, TANOD_HOME)
   // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
   const [sidebarOpen, setSidebarOpen] = useSidebarState(true)
   const [loading, setLoading] = useState(true)
@@ -166,7 +155,7 @@ export default function TanodDashboard() {
       try {
         const { data: { session }, error: authError } = await supabase.auth.getSession()
         if (authError || !session) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         const user = session.user
@@ -204,7 +193,7 @@ export default function TanodDashboard() {
           return
         }
         if (prof?.role !== 'tanod') {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         setProfile(prof)
@@ -345,22 +334,25 @@ export default function TanodDashboard() {
           setIncidents(prev => (prev.some(i => i.id === payload.new.id) ? prev : [payload.new, ...prev]))
         }
       })
-      .subscribe()
+    const leaveIncidentChannel = subscribeWhenSignedIn(supabase, incidentChannel)
 
     return () => {
-      supabase.removeChannel(incidentChannel)
+      leaveIncidentChannel()
     }
-  }, [profile?.id, supabase])
+  }, [profile?.id, supabase, setActiveSection])
 
   // Stable, so the home tiles that call it are not rebuilt every render.
   const navClick = useCallback((key) => {
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
-  }, [setSidebarOpen])
+    if (isPhoneLayout()) setSidebarOpen(false)
+  }, [setSidebarOpen, setActiveSection])
 
   // Sections share one scrolling <main>; start each one at the top.
   const mainRef = useRef(null)
   useEffect(() => { mainRef.current?.scrollTo({ top: 0 }) }, [activeSection])
+
+  // Each section gets its own browser-tab title (history entries, tab strip).
+  useEffect(() => { document.title = `${SECTION_TITLES[activeSection] || 'Dashboard'} · BH360` }, [activeSection])
 
   /**
    * Record having seen an assignment, or having reached it.
@@ -605,15 +597,22 @@ export default function TanodDashboard() {
     ]},
   ]
 
+  // Sections animate in when the user switches to one — not when the page
+  // first loads (lib/useSectionEntrance.js).
+  const entering = useSectionEntrance(activeSection, !loading)
+
+  // While loading, the same frame the static HTML showed before JavaScript
+  // ran — now with the real sidebar width and banner — so a refresh shows
+  // one skeleton throughout, then the content in its place.
+  if (loading) {
+    return (
+      <DashboardShellSkeleton path="/tanod" kind={TANOD_SKELETONS[activeSection]}
+        sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
+    )
+  }
+
   return (
-    <div className="min-h-screen flex relative overflow-hidden bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-        <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-      </div>
+    <div className="min-h-dvh flex relative overflow-hidden">
 
 
 
@@ -633,45 +632,34 @@ export default function TanodDashboard() {
         navItems={navItems}
       />
 
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-screen overflow-hidden ${sidebarOpen ? 'md:ml-64' : 'md:ml-16'}`}>
+      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
         <DashboardHeader
           profile={profile}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={SECTION_TITLES[activeSection]}
           sectionDesc="Field officer portal"
-          notifications={assignedIncidents.map(i => ({
-            id: i.id,
-            type: 'assignment',
-            icon: PRIORITY_CONFIG[i.priority]?.icon || '🛡️',
-            color: PRIORITY_CONFIG[i.priority]?.bg || '#fef9c3',
-            title: `${i.priority || ''}: ${i.title}`,
-            subtitle: `📍 ${i.location}`,
-            created_at: i.created_at,
-            data: i,
-          }))}
+          notificationCenter={notificationCenter}
           searchData={{ incidents, tickets: [], announcements: [] }}
-          onNotificationClick={() => setActiveSection('active')}
           onSearchResultClick={() => setActiveSection('active')}
         />
 
-        <main ref={mainRef} className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
+          <div className="mx-auto w-full max-w-[100rem]">
           <NotificationBanner />
 
           {!loading && profile && (
-            <div className={`${activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto mb-4 fade-up`}>
+            <div className={`${activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto mb-4`}>
               <DutyToggle profile={profile} />
             </div>
           )}
 
-          {loading && (
-            <div className="space-y-3 fade-up max-w-2xl mx-auto">
-              {[...Array(3)].map((_, i) => <CardSkeleton key={i} />)}
-            </div>
-          )}
-
+          {/* Keyed on the section: switching sections remounts it, which
+              eases the new section in (only after a switch — see `entering`
+              above and components/SectionContent.jsx). */}
+          <SectionContent key={activeSection} entering={entering}>
           {!loading && activeSection === 'home' && (
-            <div className="space-y-6 fade-up max-w-2xl mx-auto">
+            <div className="space-y-6 max-w-2xl mx-auto">
               {staleSince && (
                 <div className="rounded-2xl px-4 py-2.5 flex items-center gap-2.5"
                   style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.28)' }}>
@@ -750,7 +738,7 @@ export default function TanodDashboard() {
           )}
 
           {!loading && activeSection === 'active' && (
-            <div className="space-y-4 fade-up max-w-2xl mx-auto">
+            <div className="space-y-4 max-w-2xl mx-auto">
               {assignedIncidents.length === 0 && (
                 <div className="white-card p-10 text-center">
                   <CheckCircle size={40} className="mx-auto text-emerald-300 mb-3" />
@@ -949,7 +937,7 @@ export default function TanodDashboard() {
           )}
 
           {!loading && activeSection === 'resolved' && (
-            <div className="space-y-3 fade-up max-w-2xl mx-auto">
+            <div className="space-y-3 max-w-2xl mx-auto">
               {resolvedIncidents.length === 0 && (
                 <div className="white-card p-10 text-center">
                   <p className="text-gray-500 text-sm">No resolved incidents yet.</p>
@@ -998,7 +986,7 @@ export default function TanodDashboard() {
           )}
 
           {!loading && activeSection === 'stats' && (
-            <div className="space-y-6 fade-up max-w-3xl mx-auto">
+            <div className="space-y-6 max-w-3xl mx-auto">
               <div className="white-card p-6 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Performance Dashboard</p>
@@ -1171,6 +1159,8 @@ export default function TanodDashboard() {
             </div>
           )}
 
+          </SectionContent>
+          </div>
         </main>
       </div>
 
@@ -1191,5 +1181,22 @@ export default function TanodDashboard() {
         userId={profile?.id}
       />
     </div>
+  )
+}
+
+/**
+ * The section lives in the URL (?section=…), read with useSearchParams, and
+ * the sidebar width in localStorage — see components/ClientBoundary.jsx.
+ * The fallback is the static loading frame; the backdrop sits outside the
+ * boundary so it is drawn once and never restarts.
+ */
+export default function TanodDashboardPage() {
+  return (
+    <>
+      <DashboardBackdrop />
+      <ClientBoundary fallback={<DashboardShellSkeleton path="/tanod" />}>
+        <TanodDashboard />
+      </ClientBoundary>
+    </>
   )
 }

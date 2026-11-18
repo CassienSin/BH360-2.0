@@ -271,6 +271,9 @@ create index if not exists tanod_locations_tanod_time on tanod_locations(tanod_i
 -- Notification Reads (which in-app notifications a user has dismissed).
 -- notif_key is a client-composed string, not a foreign key, because a
 -- notification can stand for a row in any of several tables.
+-- TO BE REMOVED after the notifications merge (read state moved to
+-- notifications.read_at, Section 18). Kept until then because the live
+-- site's older code still reads it: supabase/cleanup-after-notifications.sql.
 create table if not exists notification_reads (
   user_id uuid not null references profiles(id) on delete cascade,
   notif_key text not null,
@@ -1263,6 +1266,9 @@ do $$ begin alter publication supabase_realtime add table ticket_messages; excep
 do $$ begin alter publication supabase_realtime add table announcements;   exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table profiles;        exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table tanod_locations; exception when duplicate_object then null; end $$;
+-- The duty-records view (and the duty summary on both dashboards) listens
+-- for these; until they were published it only caught up on its timer.
+do $$ begin alter publication supabase_realtime add table duty_logs;       exception when duplicate_object then null; end $$;
 
 
 -- ============================================================================
@@ -2044,6 +2050,10 @@ revoke all on private.app_config from public;
 -- Fires on a row worth telling somebody about and hands it to
 -- /api/push/send, which decides who hears. Generic over the table so a new
 -- kind of alert is a trigger, not another copy of this function.
+-- TO BE REMOVED after the notifications merge, with the three triggers
+-- below: push now comes from one trigger on notifications (Section 18).
+-- Kept until then because the live site still runs the older code.
+-- supabase/cleanup-after-notifications.sql removes them.
 create or replace function private.dispatch_push()
 returns trigger
 language plpgsql
@@ -2124,10 +2134,15 @@ drop function if exists private.dispatch_incident_push();
 -- not overwrite a working configuration with a placeholder.
 --
 --   insert into private.app_config (key, value) values
---     ('push_endpoint_url',    'https://<your-app>.vercel.app/api/push/send'),
---     ('push_webhook_secret',  '<the same PUSH_WEBHOOK_SECRET as in Vercel>')
+--     ('notifications_push_endpoint_url', 'https://<your-app>.vercel.app/api/push/send'),
+--     ('push_webhook_secret',             '<the same PUSH_WEBHOOK_SECRET as in Vercel>')
 --   on conflict (key) do update
 --     set value = excluded.value, updated_at = now();
+--
+-- notifications_push_endpoint_url is read by Section 18's trigger, the one
+-- that pushes. push_endpoint_url (read by dispatch_push above) is only
+-- needed by older installs during the notifications merge; the current
+-- /api/push/send ignores what those triggers send.
 --
 -- To check what was queued and what the app answered:
 --
@@ -2247,6 +2262,814 @@ revoke all on function public.cancel_tanod_duty_schedule(uuid,timestamptz) from 
 grant execute on function public.save_tanod_duty_schedule(uuid,uuid,timestamptz,timestamptz,text,text,timestamptz) to authenticated;
 grant execute on function public.cancel_tanod_duty_schedule(uuid,timestamptz) to authenticated;
 notify pgrst, 'reload schema';
+
+-- The duty-schedule view and the duty summary listen for changes here.
+do $$ begin alter publication supabase_realtime add table public.tanod_duty_schedules; exception when duplicate_object then null; end $$;
+commit;
+
+-- ============================================================================
+-- SECTION 18 — NOTIFICATIONS
+-- ============================================================================
+-- One row per thing a person should hear about: a reply on their ticket, a
+-- tanod on the way, a document ready for pickup, a new announcement. The
+-- database writes them itself (the SECURITY DEFINER triggers below), so a
+-- notification exists whether or not anyone had the app open, survives a
+-- refresh, and follows the person to every device. The bell on each
+-- dashboard reads this table; push is sent from one trigger on it.
+--
+-- This section can be run on its own after the base schema is installed,
+-- and re-run safely.
+--
+-- ADDITIVE ONLY. Production and preview share this database, and the live
+-- site runs older code until this branch is merged, so nothing here changes
+-- or drops an earlier object: notification_reads, private.dispatch_push()
+-- and its three per-table push triggers stay exactly as they are. Removing
+-- them is supabase/cleanup-after-notifications.sql, run after the merge.
+--
+-- Every trigger body catches its own errors and only raises a WARNING: a
+-- notification that fails to write must never cost a resident their report,
+-- reply or request.
+-- ============================================================================
+
+begin;
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,  -- the recipient
+  barangay_id uuid references barangays(id) on delete cascade,
+  type text not null,            -- e.g. ticket_reply, incident_assigned (lib/notificationTypes.js)
+  title text not null,
+  body text,
+  link text,                     -- in-app path, using the ?section= URLs
+  entity_table text,             -- what it is about, e.g. 'tickets'
+  entity_id uuid,
+  group_key text,                -- repeats collapse in the bell ("3 new replies on …")
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+create index if not exists notifications_user_created_idx
+  on public.notifications (user_id, created_at desc);
+create index if not exists notifications_user_unread_idx
+  on public.notifications (user_id) where read_at is null;
+create index if not exists notifications_entity_idx
+  on public.notifications (entity_table, entity_id);
+
+comment on table public.notifications is
+  'Per-person notifications written by database triggers (Section 18). '
+  'Clients may read their own rows and set read_at; nothing else.';
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "notifications: read own" on public.notifications;
+create policy "notifications: read own" on public.notifications
+  for select to authenticated
+  using (user_id = auth.uid());
+
+drop policy if exists "notifications: mark own read" on public.notifications;
+create policy "notifications: mark own read" on public.notifications
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Column privileges do the rest: a client can read its rows and change
+-- read_at, and cannot insert, delete, or rewrite anything else.
+revoke all on public.notifications from public, anon, authenticated;
+grant select on public.notifications to authenticated;
+grant update (read_at) on public.notifications to authenticated;
+
+alter table public.notifications replica identity full;
+do $$ begin alter publication supabase_realtime add table public.notifications; exception when duplicate_object then null; end $$;
+
+-- ----------------------------------------------------------------------------
+-- Writing rows. p_actor is whoever caused the event; they are never told
+-- about their own action. Deactivated accounts hear nothing.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify(
+  p_user uuid, p_actor uuid, p_barangay uuid, p_type text,
+  p_title text, p_body text, p_link text,
+  p_entity_table text, p_entity_id uuid, p_group_key text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  if p_user is null or p_user = p_actor then
+    return;
+  end if;
+  insert into public.notifications
+    (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
+  select p.id, p_barangay, p_type, left(p_title, 200), left(p_body, 500), p_link,
+         p_entity_table, p_entity_id, p_group_key
+  from profiles p
+  where p.id = p_user and p.deactivated_at is null;
+end;
+$$;
+
+-- Everyone with a given role in a barangay (e.g. its officials), except the actor.
+create or replace function private.notify_role(
+  p_barangay uuid, p_role text, p_actor uuid, p_type text,
+  p_title text, p_body text, p_link text,
+  p_entity_table text, p_entity_id uuid, p_group_key text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  if p_barangay is null then
+    return;
+  end if;
+  insert into public.notifications
+    (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
+  select p.id, p_barangay, p_type, left(p_title, 200), left(p_body, 500), p_link,
+         p_entity_table, p_entity_id, p_group_key
+  from profiles p
+  where p.barangay_id = p_barangay
+    and p.role = p_role
+    and p.deactivated_at is null
+    and p.id is distinct from p_actor;
+end;
+$$;
+
+revoke all on function private.notify(uuid, uuid, uuid, text, text, text, text, text, uuid, text) from public;
+revoke all on function private.notify_role(uuid, text, uuid, text, text, text, text, text, uuid, text) from public;
+
+-- ----------------------------------------------------------------------------
+-- Tickets: replies go to the other side; status changes to the author.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.snippet(p_text text, p_max int)
+returns text
+language sql
+immutable
+set search_path = public, private
+as $$
+  -- Text for a notification: whitespace and line breaks collapsed, and cut
+  -- at p_max characters with an ellipsis rather than mid-word bluntly.
+  select case
+           when s is null or s = '' then null
+           when char_length(s) <= p_max then s
+           else rtrim(left(s, p_max - 1)) || '…'
+         end
+  from (select btrim(regexp_replace(p_text, '\s+', ' ', 'g')) as s) x
+$$;
+
+revoke all on function private.snippet(text, int) from public;
+
+create or replace function private.notify_ticket_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  t record;
+  v_sender text;
+begin
+  begin
+    select id, title, created_by, barangay_id into t from tickets where id = new.ticket_id;
+    if not found then
+      return new;
+    end if;
+    select full_name into v_sender from profiles where id = new.sender_id;
+
+    -- The title says where; the body is who said what, as a chat app shows it.
+    if new.sender_id = t.created_by then
+      perform private.notify_role(t.barangay_id, 'official', new.sender_id, 'ticket_reply',
+        'New reply on “' || private.snippet(t.title, 50) || '”',
+        private.snippet(coalesce(v_sender, 'Resident') || ': ' || new.message, 160),
+        '/official/ticket/' || t.id, 'tickets', t.id, 'ticket-reply:' || t.id);
+    else
+      perform private.notify(t.created_by, new.sender_id, t.barangay_id, 'ticket_reply',
+        'New reply on your ticket',
+        private.snippet(coalesce(v_sender, 'Barangay') || ': ' || new.message, 160),
+        '/resident/ticket/' || t.id, 'tickets', t.id, 'ticket-reply:' || t.id);
+    end if;
+  exception when others then
+    raise warning 'notify_ticket_message: %', sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+create or replace function private.notify_ticket()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_name text;
+  v_title text := '“' || private.snippet(new.title, 60) || '”';
+begin
+  begin
+    if tg_op = 'INSERT' then
+      select full_name into v_name from profiles where id = new.created_by;
+      perform private.notify_role(new.barangay_id, 'official', new.created_by, 'ticket_new',
+        'New ticket: ' || private.snippet(new.title, 60),
+        private.snippet(coalesce(v_name, 'A resident') || ': ' || new.description, 160),
+        '/official/ticket/' || new.id, 'tickets', new.id, null);
+    elsif new.status is distinct from old.status then
+      select full_name into v_name from profiles where id = auth.uid();
+      perform private.notify(new.created_by, auth.uid(), new.barangay_id, 'ticket_status',
+        case new.status
+          when 'in_progress' then 'Your ticket is being handled'
+          when 'closed' then 'Your ticket was closed'
+          else 'Your ticket was reopened'
+        end,
+        case new.status
+          when 'in_progress' then coalesce(v_name, 'The barangay') || ' is working on ' || v_title || '.'
+          when 'closed' then coalesce(v_name, 'The barangay') || ' closed ' || v_title || '.'
+          else v_title || ' is open again.'
+        end,
+        '/resident/ticket/' || new.id, 'tickets', new.id, 'ticket-status:' || new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_ticket(%): %', tg_op, sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Incidents: new reports to the barangay's officials (and the tanod the
+-- auto-dispatch picked); a dispatch to that tanod; progress to the reporter.
+-- auto-dispatch is a BEFORE INSERT trigger, so assigned_to is already set
+-- here when the report was auto-assigned.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify_incident()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  -- On an update the actor is whoever made it; a change made by the system
+  -- (no signed-in user) excludes nobody, so the reporter still hears.
+  v_actor uuid := auth.uid();
+  v_title text;
+  v_what text;
+  v_tanod text;
+begin
+  begin
+    v_title := private.snippet(new.title, 60);
+    -- "Noise at Purok 3, Mabini St."
+    v_what := concat_ws(' at ', coalesce(new.category, 'Incident'), private.snippet(new.location, 80));
+
+    if tg_op = 'INSERT' then
+      -- A critical title must start with "Critical": push treats it as one.
+      perform private.notify_role(new.barangay_id, 'official', new.reported_by, 'incident_new',
+        case when new.priority = 'Critical' then 'Critical report: ' else 'New report: ' end || v_title,
+        case when new.priority in ('High', 'Critical') then new.priority || ' priority · ' else '' end || v_what,
+        '/official/incident/' || new.id, 'incidents', new.id, null);
+      if new.assigned_to is not null then
+        perform private.notify(new.assigned_to, new.reported_by, new.barangay_id, 'incident_assigned',
+          'New assignment: ' || v_title,
+          concat_ws(' · ', new.priority || ' priority', private.snippet(new.location, 80)),
+          '/tanod?section=active', 'incidents', new.id, null);
+      end if;
+      return new;
+    end if;
+
+    -- A dispatch, or a reassignment to someone else.
+    if new.assigned_to is not null and new.assigned_to is distinct from old.assigned_to then
+      perform private.notify(new.assigned_to, v_actor, new.barangay_id, 'incident_assigned',
+        'New assignment: ' || v_title,
+        concat_ws(' · ', new.priority || ' priority', private.snippet(new.location, 80)),
+        '/tanod?section=active', 'incidents', new.id, null);
+    end if;
+
+    -- Progress, told to whoever reported it.
+    if new.status is distinct from old.status and new.status in ('assigned', 'resolved') then
+      select full_name into v_tanod from profiles where id = new.assigned_to;
+      perform private.notify(new.reported_by, v_actor, new.barangay_id, 'incident_status',
+        case new.status
+          when 'assigned' then 'A tanod is on the way'
+          else 'Your report was resolved'
+        end,
+        case new.status
+          when 'assigned' then coalesce(v_tanod, 'A tanod') || ' is responding to “' || v_title || '”.'
+          else '“' || v_title || '” is resolved. You can rate the response in the app.'
+        end,
+        '/resident/incident/' || new.id, 'incidents', new.id, 'incident-status:' || new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_incident(%): %', tg_op, sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Announcements. An official's post is saved with published_at a minute
+-- ahead (the undo window), and undo deletes it. So nobody is told until
+-- published_at has passed: either the official's page moves published_at
+-- to now when the window closes (an UPDATE, handled here), or the
+-- once-a-minute job below catches it if they closed the tab first. An
+-- announcement deleted later takes its notifications with it.
+-- ----------------------------------------------------------------------------
+
+create table if not exists private.notified_announcements (
+  announcement_id uuid primary key,
+  notified_at timestamptz not null default now()
+);
+alter table private.notified_announcements enable row level security;
+revoke all on private.notified_announcements from public;
+
+-- Everything already published counts as announced: installing this must
+-- not tell every resident about every announcement there has ever been.
+insert into private.notified_announcements (announcement_id)
+select id from announcements where published_at <= now()
+on conflict do nothing;
+
+create or replace function private.deliver_announcement(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  a record;
+begin
+  select id, title, content, posted_by, barangay_id, published_at into a
+  from announcements where id = p_id;
+  if not found or a.published_at > now() or a.barangay_id is null then
+    return;
+  end if;
+
+  -- Claim it first, so a concurrent call (the UPDATE and the job) cannot
+  -- announce it twice.
+  insert into private.notified_announcements (announcement_id) values (a.id)
+  on conflict do nothing;
+  if not found then
+    return;
+  end if;
+
+  insert into public.notifications
+    (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
+  select p.id, a.barangay_id, 'announcement', 'Announcement: ' || private.snippet(a.title, 80),
+         private.snippet(a.content, 160),
+         case p.role
+           when 'official' then '/official?section=announcements'
+           when 'tanod' then '/tanod'
+           else '/resident?section=announcements'
+         end,
+         'announcements', a.id, 'announcements'
+  from profiles p
+  where p.barangay_id = a.barangay_id
+    and p.deactivated_at is null
+    and p.id is distinct from a.posted_by;
+end;
+$$;
+
+create or replace function private.deliver_due_announcements()
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  r record;
+begin
+  for r in
+    select a.id from announcements a
+    where a.published_at <= now()
+      and a.published_at > now() - interval '1 day'
+      and not exists (select 1 from private.notified_announcements n where n.announcement_id = a.id)
+  loop
+    begin
+      perform private.deliver_announcement(r.id);
+    exception when others then
+      raise warning 'deliver_due_announcements(%): %', r.id, sqlerrm;
+    end;
+  end loop;
+end;
+$$;
+
+create or replace function private.notify_announcement()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  begin
+    if tg_op = 'DELETE' then
+      delete from public.notifications where entity_table = 'announcements' and entity_id = old.id;
+      return old;
+    end if;
+    if new.published_at <= now() then
+      perform private.deliver_announcement(new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_announcement(%): %', tg_op, sqlerrm;
+  end;
+  return coalesce(new, old);
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Document requests: new ones to officials; every status change to the
+-- person who asked.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify_document_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_name text;
+  v_ref text := 'Reference ' || new.reference_code || '.';
+begin
+  begin
+    if tg_op = 'INSERT' then
+      select full_name into v_name from profiles where id = new.requested_by;
+      perform private.notify_role(new.barangay_id, 'official', new.requested_by, 'document_new',
+        'New request: ' || new.document_type,
+        private.snippet(coalesce(v_name, 'A resident') || ': ' || new.purpose, 160),
+        '/official?section=documents', 'document_requests', new.id, null);
+    elsif new.status is distinct from old.status then
+      perform private.notify(new.requested_by, auth.uid(), new.barangay_id, 'document_status',
+        case new.status
+          when 'processing' then 'Your ' || new.document_type || ' is being processed'
+          when 'ready' then 'Your ' || new.document_type || ' is ready for pickup'
+          when 'released' then 'Your ' || new.document_type || ' was released'
+          when 'denied' then 'Your ' || new.document_type || ' request was declined'
+          else 'Your ' || new.document_type || ' request was updated'
+        end,
+        case new.status
+          when 'processing' then concat_ws(' ', v_ref, 'You’ll get a notification when it’s ready.')
+          when 'ready' then concat_ws(' ', v_ref, 'Bring a valid ID to the barangay hall.')
+          when 'denied' then coalesce('Reason: ' || private.snippet(new.denial_reason, 140), 'Open the request to see why.')
+          else v_ref
+        end,
+        '/resident?section=documents', 'document_requests', new.id, 'document:' || new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_document_request(%): %', tg_op, sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Blotter cases: the complainant, when they have an account (respondents
+-- are recorded by name only). Filing, a mediation hearing being set, the
+-- Pangkat being convened, and every status change.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify_blotter_case()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_when text;
+  v_case text;
+begin
+  begin
+    if new.complainant_id is null then
+      return new;
+    end if;
+    -- "Case KP-2026-0002 against Juan Dela Cruz."
+    v_case := concat_ws(' against ', coalesce('Case ' || new.case_number, 'Your case'),
+                        private.snippet(new.respondent_name, 60)) || '.';
+
+    if tg_op = 'INSERT' then
+      perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
+        'Your complaint was filed',
+        v_case,
+        '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
+      return new;
+    end if;
+
+    if new.first_meeting_at is not null and new.first_meeting_at is distinct from old.first_meeting_at then
+      v_when := to_char(new.first_meeting_at at time zone 'Asia/Manila', 'Mon FMDD, YYYY "at" FMHH12:MI AM');
+      perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
+        'Mediation hearing scheduled',
+        v_when || ' (Philippine time). ' || v_case,
+        '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
+    end if;
+
+    if new.pangkat_convened_at is not null and new.pangkat_convened_at is distinct from old.pangkat_convened_at then
+      perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
+        'Your case goes to the Pangkat',
+        'A conciliation panel will hear it. ' || v_case,
+        '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
+    end if;
+
+    if new.status is distinct from old.status then
+      perform private.notify(new.complainant_id, auth.uid(), new.barangay_id, 'blotter',
+        case new.status
+          when 'mediation' then 'Your case is in mediation'
+          when 'pangkat' then 'Your case was referred to the Pangkat'
+          when 'settled' then 'Your case was settled'
+          when 'repudiated' then 'The settlement was repudiated'
+          when 'cfa_issued' then 'A Certificate to File Action was issued'
+          when 'referred' then 'Your case was referred to another office'
+          when 'withdrawn' then 'Your case was withdrawn'
+          else 'Your case was updated'
+        end,
+        v_case,
+        '/resident?section=blotter', 'blotter_cases', new.id, 'blotter:' || new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_blotter_case(%): %', tg_op, sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Residents: a new account waiting to be verified, to that barangay's
+-- officials; the decision, to the resident (set_verification_status() or
+-- any other path that changes verification_status).
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  begin
+    if tg_op = 'INSERT' then
+      if new.role = 'resident' and new.verification_status = 'pending' then
+        perform private.notify_role(new.barangay_id, 'official', new.id, 'verification_new',
+          'New resident to verify: ' || private.snippet(new.full_name, 60),
+          private.snippet(new.address, 120),
+          '/official?section=verifications', 'profiles', new.id, null);
+      end if;
+    elsif new.verification_status is distinct from old.verification_status
+          and new.verification_status in ('verified', 'rejected') then
+      perform private.notify(new.id, coalesce(auth.uid(), new.verified_by), new.barangay_id, 'verification',
+        case new.verification_status
+          when 'verified' then 'Your account is verified'
+          else 'Your verification wasn’t approved'
+        end,
+        -- Tanods and officials can be verified too: their text and link
+        -- must not send them to the resident pages.
+        case
+          when new.verification_status = 'rejected'
+            then coalesce('Reason: ' || private.snippet(new.verification_note, 140), 'Open the app to see what to update.')
+          when new.role = 'resident' then 'You can now request barangay clearances and certificates.'
+          else 'You now have full access to BarangayHub.'
+        end,
+        case new.role
+          when 'official' then '/official'
+          when 'tanod' then '/tanod'
+          else '/resident'
+        end,
+        'profiles', new.id, 'verification:' || new.id);
+    end if;
+  exception when others then
+    raise warning 'notify_profile(%): %', tg_op, sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Appointments: the official who booked one hears its reminder when
+-- remind_at arrives (the job below). This does not touch reminder_sent_at,
+-- which the older dashboard code still sets and reads.
+-- ----------------------------------------------------------------------------
+
+create table if not exists private.notified_appointments (
+  appointment_id uuid primary key,
+  notified_at timestamptz not null default now()
+);
+alter table private.notified_appointments enable row level security;
+revoke all on private.notified_appointments from public;
+
+-- Reminders already due count as sent: no backlog on install.
+insert into private.notified_appointments (appointment_id)
+select id from appointments where remind_at <= now()
+on conflict do nothing;
+
+create or replace function private.deliver_due_appointment_reminders()
+returns void
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  r record;
+begin
+  for r in
+    select a.* from appointments a
+    where a.remind_at <= now()
+      and a.starts_at > now()
+      and not exists (select 1 from private.notified_appointments n where n.appointment_id = a.id)
+  loop
+    begin
+      insert into private.notified_appointments (appointment_id) values (r.id) on conflict do nothing;
+      if found then
+        perform private.notify(r.created_by, null, r.barangay_id, 'appointment',
+          'Upcoming appointment: ' || private.snippet(r.title, 60),
+          concat_ws(' with ',
+            to_char(r.starts_at at time zone 'Asia/Manila', 'Mon FMDD "at" FMHH12:MI AM'),
+            private.snippet(r.participant_name, 60)),
+          '/official/calendar/appointments', 'appointments', r.id, null);
+      end if;
+    exception when others then
+      raise warning 'deliver_due_appointment_reminders(%): %', r.id, sqlerrm;
+    end;
+  end loop;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Super admins: a new barangay access application.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.notify_barangay_application()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+begin
+  begin
+    insert into public.notifications
+      (user_id, barangay_id, type, title, body, link, entity_table, entity_id, group_key)
+    select p.id, new.barangay_id, 'application',
+           private.snippet(new.full_name, 60) || ' applied for barangay access',
+           private.snippet(concat_ws(' · ', new.position,
+             (select b.name from barangays b where b.id = new.barangay_id)), 160),
+           '/admin?tab=applications', 'barangay_applications', new.id, 'applications'
+    from profiles p
+    where p.is_super_admin and p.deactivated_at is null;
+  exception when others then
+    raise warning 'notify_barangay_application: %', sqlerrm;
+  end;
+  return new;
+end;
+$$;
+
+revoke all on function private.notify_ticket_message() from public;
+revoke all on function private.notify_ticket() from public;
+revoke all on function private.notify_incident() from public;
+revoke all on function private.deliver_announcement(uuid) from public;
+revoke all on function private.deliver_due_announcements() from public;
+revoke all on function private.notify_announcement() from public;
+revoke all on function private.notify_document_request() from public;
+revoke all on function private.notify_blotter_case() from public;
+revoke all on function private.notify_profile() from public;
+revoke all on function private.deliver_due_appointment_reminders() from public;
+revoke all on function private.notify_barangay_application() from public;
+
+-- Triggers. New names; the existing dispatch_*_push_trigger ones are untouched.
+drop trigger if exists notify_ticket_message_trigger on ticket_messages;
+create trigger notify_ticket_message_trigger
+  after insert on ticket_messages
+  for each row execute function private.notify_ticket_message();
+
+drop trigger if exists notify_ticket_trigger on tickets;
+create trigger notify_ticket_trigger
+  after insert or update of status on tickets
+  for each row execute function private.notify_ticket();
+
+drop trigger if exists notify_incident_trigger on incidents;
+create trigger notify_incident_trigger
+  after insert or update of assigned_to, status on incidents
+  for each row execute function private.notify_incident();
+
+drop trigger if exists notify_announcement_trigger on announcements;
+create trigger notify_announcement_trigger
+  after insert or update of published_at or delete on announcements
+  for each row execute function private.notify_announcement();
+
+drop trigger if exists notify_document_request_trigger on document_requests;
+create trigger notify_document_request_trigger
+  after insert or update of status on document_requests
+  for each row execute function private.notify_document_request();
+
+drop trigger if exists notify_blotter_case_trigger on blotter_cases;
+create trigger notify_blotter_case_trigger
+  after insert or update of status, first_meeting_at, pangkat_convened_at on blotter_cases
+  for each row execute function private.notify_blotter_case();
+
+drop trigger if exists notify_profile_trigger on profiles;
+create trigger notify_profile_trigger
+  after insert or update of verification_status on profiles
+  for each row execute function private.notify_profile();
+
+drop trigger if exists notify_barangay_application_trigger on barangay_applications;
+create trigger notify_barangay_application_trigger
+  after insert on barangay_applications
+  for each row execute function private.notify_barangay_application();
+
+-- ----------------------------------------------------------------------------
+-- Push: ONE trigger, on notifications. It posts the row to /api/push/send,
+-- which sends it to that person's devices if their settings allow it.
+--
+-- Its own endpoint setting, separate from push_endpoint_url: production
+-- push already runs through the older per-table triggers (Section 16) and
+-- must keep working until the merge, so this trigger stays silent until
+-- notifications_push_endpoint_url is set, and can point somewhere else
+-- (the branch's preview) while it is tested. It reuses push_webhook_secret
+-- (production and preview share the same PUSH_WEBHOOK_SECRET) and, for a
+-- protected preview, sends Vercel's deployment-protection bypass header:
+--
+--   insert into private.app_config (key, value) values
+--     ('notifications_push_endpoint_url', 'https://<preview-branch-url>/api/push/send'),
+--     ('push_bypass_secret', '<Protection Bypass for Automation secret>')
+--   on conflict (key) do update set value = excluded.value, updated_at = now();
+--
+-- Nobody is pushed the same event twice:
+--   - while testing, the old triggers push real users from production, and
+--     this one reaches only the preview, whose /api/push/send is limited to
+--     the test barangay (PUSH_ONLY_BARANGAY_IDS, set on Preview only);
+--   - the new route ignores the old triggers' payloads, so from the moment
+--     production runs it, the old triggers push nothing (they are removed
+--     by supabase/cleanup-after-notifications.sql);
+--   - for the three event types both paths know (ticket reply, new incident,
+--     dispatch) the new push reuses the old push's tag, so a device that
+--     got both shows one.
+-- ----------------------------------------------------------------------------
+
+create or replace function private.dispatch_notification_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, private
+as $$
+declare
+  v_url text;
+  v_secret text;
+  v_bypass text;
+  v_headers jsonb;
+begin
+  select value into v_url from private.app_config where key = 'notifications_push_endpoint_url';
+  select value into v_secret from private.app_config where key = 'push_webhook_secret';
+  select value into v_bypass from private.app_config where key = 'push_bypass_secret';
+
+  -- Not switched on yet (or no secret): the notification still saves, and
+  -- nothing is sent.
+  if v_url is null or v_secret is null then
+    return new;
+  end if;
+
+  v_headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', v_secret);
+  if v_bypass is not null then
+    v_headers := v_headers || jsonb_build_object('x-vercel-protection-bypass', v_bypass);
+  end if;
+
+  begin
+    perform net.http_post(
+      url := v_url,
+      headers := v_headers,
+      body := jsonb_build_object('type', tg_op, 'table', tg_table_name, 'record', to_jsonb(new)),
+      timeout_milliseconds := 5000
+    );
+  exception when others then
+    raise warning 'dispatch_notification_push: %', sqlerrm;
+  end;
+
+  return new;
+end;
+$$;
+
+revoke all on function private.dispatch_notification_push() from public;
+
+drop trigger if exists dispatch_notification_push_trigger on public.notifications;
+create trigger dispatch_notification_push_trigger
+  after insert on public.notifications
+  for each row execute function private.dispatch_notification_push();
+
+-- ----------------------------------------------------------------------------
+-- The once-a-minute job: announcements whose undo window has passed, and
+-- appointment reminders that are due. Needs pg_cron (Section 12 uses it
+-- too); without it, announcements are still delivered when the official's
+-- page closes the undo window, but reminders wait for pg_cron.
+-- ----------------------------------------------------------------------------
+
+do $$
+begin
+  create extension if not exists pg_cron;
+  perform cron.unschedule('deliver-due-notifications')
+  where exists (select 1 from cron.job where jobname = 'deliver-due-notifications');
+  perform cron.schedule(
+    'deliver-due-notifications',
+    '* * * * *',
+    $cron$ select private.deliver_due_announcements(); select private.deliver_due_appointment_reminders(); $cron$
+  );
+exception when others then
+  raise notice 'pg_cron not available (%), skipping the notifications job. Enable it in Dashboard -> Database -> Extensions and re-run this section.', sqlerrm;
+end $$;
+
+notify pgrst, 'reload schema';
 commit;
 
 -- ============================================================================
@@ -2315,17 +3138,27 @@ commit;
 --         VAPID_SUBJECT                  mailto:you@yourbarangay.gov.ph
 --         PUSH_WEBHOOK_SECRET            any long random string you invent
 --
---    c) Tell the database where to send. Section 16 already created the
---       trigger; it just needs your URL and secret. In the SQL Editor:
+--    c) Tell the database where to send. Section 18's trigger (one, on
+--       notifications) sends to notifications_push_endpoint_url with the
+--       shared secret. In the SQL Editor:
 --
 --         insert into private.app_config (key, value) values
---           ('push_endpoint_url',   'https://<your-app>.vercel.app/api/push/send'),
---           ('push_webhook_secret', '<the same PUSH_WEBHOOK_SECRET>')
+--           ('notifications_push_endpoint_url', 'https://<your-app>.vercel.app/api/push/send'),
+--           ('push_webhook_secret',             '<the same PUSH_WEBHOOK_SECRET>')
 --         on conflict (key) do update
 --           set value = excluded.value, updated_at = now();
 --
---       Use the production domain, not a preview URL — preview URLs change
---       with every deploy.
+--       Use the production domain. To test on a protected preview first,
+--       point notifications_push_endpoint_url at its stable branch URL
+--       (https://<project>-git-<branch>-<team>.vercel.app, which follows the
+--       latest push to that branch), add a Protection Bypass for Automation
+--       secret as push_bypass_secret, and set PUSH_ONLY_BARANGAY_IDS on that
+--       preview so it can only push to a test barangay's accounts. Remove
+--       push_bypass_secret when push points back at production.
+--
+--       Older installs also have push_endpoint_url, used by the per-table
+--       triggers of Section 16. supabase/cleanup-after-notifications.sql
+--       removes those triggers once the notifications code is live.
 --
 --       (The dashboard can wire the same thing by hand under Integrations →
 --       Webhooks — "Database Webhooks". Do one or the other, not both, or

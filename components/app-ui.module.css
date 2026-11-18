@@ -1,3 +1,5 @@
+/* Breakpoints follow Tailwind's: sm 640 / md 768 / lg 1024 / xl 1280 /
+   2xl 1536 ("max-width: 639px" = below sm, and so on). */
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 17px; border: 1px solid transparent; border-radius: 14px; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.5; text-align: center; transition: background .15s,box-shadow .15s,border-color .15s; cursor: pointer; }
 .button svg { flex-shrink: 0; }
 .button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
@@ -6,8 +8,8 @@
 .secondary { background: var(--brand-soft); color: var(--brand-dark); border-color: var(--brand-border); }
 .danger { background: #b91c1c; color: white; }
 .ghost { background: transparent; color: #514765; border-color: var(--brand-border); }
-.header { position: sticky; top: 0; z-index: 30; background: white; border-bottom: 1px solid var(--brand-border); box-shadow: 0 2px 12px #5b54e80a; }
-.headerInner { display: flex; align-items: center; gap: 12px; max-width: 1320px; margin-inline: auto; padding: 14px 24px; min-height: 76px; }
+.header { position: sticky; top: 0; z-index: 30; padding-top: env(safe-area-inset-top, 0px); background: white; border-bottom: 1px solid var(--brand-border); box-shadow: 0 2px 12px #5b54e80a; }
+.headerInner { display: flex; align-items: center; gap: 12px; max-width: 1320px; margin-inline: auto; padding: 14px max(24px, env(safe-area-inset-right, 0px)) 14px max(24px, env(safe-area-inset-left, 0px)); min-height: 76px; }
 .back { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; border: 1px solid #ede9f6; background: var(--app-surface); color: #62576f; flex-shrink: 0; cursor: pointer; }
 .headerIcon { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 14px; background: var(--brand-soft); color: var(--brand); flex-shrink: 0; }
 .heading { flex: 1; min-width: 0; }
@@ -33,11 +35,15 @@
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .dashboardHeader { min-height: 76px; }
+/* Sticky headers clear the notch / status bar (viewport-fit=cover) and the
+   notch side of a landscape phone. Zero everywhere else. */
+.safeTop { padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+@media (min-width: 640px) { .safeTop { padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); } }
 .dashboardHeader h1 { font-size: 20px; line-height: 1.35; }
 .dashboardHeader button[aria-label="Open sidebar"] { width: 44px; height: 44px; }
 @media (hover: hover) { .primary:not(:disabled):hover { box-shadow: 0 5px 18px #5b54e838; background: var(--brand-dark); } .secondary:not(:disabled):hover, .back:hover { background: var(--brand-border); } }
-@media (max-width: 600px) {
-  .headerInner { padding: 12px 16px; gap: 10px; flex-wrap: wrap; min-height: 72px; }
+@media (max-width: 639px) {
+  .headerInner { padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); gap: 10px; flex-wrap: wrap; min-height: 72px; }
   .headerIcon { display: none; }
   .headerActions.desktopOnly { display: none; }
   .heading h1, .dashboardHeader h1 { font-size: 17px; }

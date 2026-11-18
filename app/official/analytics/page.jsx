@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { useNow } from '@/lib/useNow'
 import { PageHeader, AppButton } from '@/components/AppUI'
@@ -112,7 +114,7 @@ export default function AIAnalytics() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         const { data: prof, error: profError } = await supabase
@@ -132,7 +134,7 @@ export default function AIAnalytics() {
           return
         }
         if (prof?.role !== 'official') {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         setProfile(prof)
@@ -362,9 +364,9 @@ export default function AIAnalytics() {
   // ---- Page loading skeleton ----
   if (pageLoading) {
     return (
-      <div className="min-h-screen relative overflow-clip bg-brand">
+      <div className="min-h-dvh relative overflow-clip bg-brand">
         <AnimatedDots />
-        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => router.back()} />
+        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
@@ -387,7 +389,7 @@ export default function AIAnalytics() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div
@@ -404,7 +406,7 @@ export default function AIAnalytics() {
         title="Analytics Dashboard"
         description={`Insights and trends${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
         icon={BarChart2} maxWidth={1168}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/official?section=analytics')}
         actions={
           <AppButton onClick={generateAnalysis} disabled={!dataLoaded} busy={loading} busyLabel="Analyzing…">
             <RefreshCw size={15} aria-hidden="true" />
@@ -648,10 +650,12 @@ export default function AIAnalytics() {
                 <span className="text-xs text-gray-500 ml-auto">When incidents are reported</span>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Phones: the 24 hours scroll sideways under a fixed day column. */}
+              <p className="sm:hidden text-xs text-gray-500 mb-2">Swipe sideways to see all 24 hours.</p>
+              <div className="overflow-x-auto rail-fade sm:[mask-image:none] sm:[-webkit-mask-image:none]">
                 <div className="min-w-[600px]">
                   <div className="flex items-center gap-1 mb-1">
-                    <div className="w-10 flex-shrink-0"></div>
+                    <div className="w-10 flex-shrink-0 sticky left-0 z-[1] bg-white"></div>
                     {heatmapData.hours.map(h => (
                       <div key={h} className="flex-1 text-[11px] text-gray-500 text-center">
                         {h % 3 === 0 ? `${h}h` : ''}
@@ -660,7 +664,7 @@ export default function AIAnalytics() {
                   </div>
                   {heatmapData.days.map(day => (
                     <div key={day} className="flex items-center gap-1 mb-1">
-                      <div className="w-10 flex-shrink-0 text-xs font-semibold text-gray-500">{day}</div>
+                      <div className="w-10 flex-shrink-0 self-stretch flex items-center sticky left-0 z-[1] bg-white text-xs font-semibold text-gray-500">{day}</div>
                       {heatmapData.hours.map(h => {
                         const value = heatmapData.grid[`${day}-${h}`] || 0
                         return (

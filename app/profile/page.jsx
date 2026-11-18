@@ -3,6 +3,12 @@ import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { PageSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import { PAGE_HEADERS } from '@/lib/pageHeaders'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
 import { User, Phone, MapPin, Camera, Save, Lock, AlertTriangle, FileText, CheckCircle, Bell, Loader2, Edit3, X, Activity, Award, Mail, Eye, EyeOff, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -51,7 +57,9 @@ const roleConfig = {
   super_admin: { label: 'Super Admin', color: '#1f2937', bg: '#f3f4f6', gradient: 'linear-gradient(135deg, #1f2937, #4b5563)' },
 }
 
-export default function ProfilePage() {
+const PROFILE_TABS = ['info', 'activity', 'security']
+
+function ProfilePage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const fileInputRef = useRef(null)
@@ -62,7 +70,8 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState('info')
+  // replace, not push: Back should leave Profile, not walk through its tabs
+  const [activeTab, setActiveTab] = useUrlSection(PROFILE_TABS, 'info', { param: 'tab', history: 'replace' })
 
   const [form, setForm] = useState({
     full_name: '',
@@ -84,7 +93,7 @@ export default function ProfilePage() {
     let cancelled = false
     async function loadData() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
+      if (!user) return router.replace(loginHref())
 
       const { data: prof, error: profError } = await supabase
         .from('profiles')
@@ -101,7 +110,7 @@ export default function ProfilePage() {
         setLoading(false)
         return
       }
-      if (!prof) return router.push('/login')
+      if (!prof) return router.replace(loginHref())
 
       setProfile(prof)
       setEmail(user.email || '')
@@ -331,16 +340,13 @@ export default function ProfilePage() {
 
   const passwordsMatch = passwordForm.new && passwordForm.new === passwordForm.confirm
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  // The open tab's card eases in when you switch tabs, not on page load.
+  const tabEnter = useSectionEntrance(activeTab, !loading) ? 'fade-up' : ''
+
+  if (loading) return <PageSkeleton layout="profile" header={PAGE_HEADERS.profile} />
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -350,9 +356,7 @@ export default function ProfilePage() {
       </div>
 
       <PageHeader
-        title="My Profile"
-        description="Manage your account & activity"
-        icon={User}
+        {...PAGE_HEADERS.profile}
         onBack={() => router.push(getDashboardPath())}
         backLabel="Back to dashboard"
       />
@@ -480,7 +484,7 @@ export default function ProfilePage() {
 
         {/* INFO TAB */}
         {activeTab === 'info' && (
-          <div className="white-card p-6 fade-up">
+          <div className={`white-card p-6 ${tabEnter}`}>
             <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
               <User size={14} style={{ color: 'var(--brand)' }} /> Personal Information
             </h3>
@@ -547,7 +551,7 @@ export default function ProfilePage() {
 
         {/* ACTIVITY TAB */}
         {activeTab === 'activity' && (
-          <div className="space-y-4 fade-up">
+          <div className={`space-y-4 ${tabEnter}`}>
             {/* Activity stats */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {profile?.role === 'resident' && [
@@ -677,7 +681,7 @@ export default function ProfilePage() {
 
         {/* SECURITY TAB */}
         {activeTab === 'security' && (
-          <div className="white-card p-6 fade-up">
+          <div className={`white-card p-6 ${tabEnter}`}>
             <h3 className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2">
               <Lock size={14} style={{ color: 'var(--brand)' }} /> Change Password
             </h3>
@@ -742,5 +746,18 @@ export default function ProfilePage() {
 
       </main>
     </div>
+  )
+}
+
+/**
+ * The tab lives in the URL (?tab=…), read with useSearchParams — see
+ * components/ClientBoundary.jsx. The fallback matches the page's own
+ * loading skeleton, so a refresh shows one skeleton throughout.
+ */
+export default function Profile() {
+  return (
+    <ClientBoundary fallback={<PageSkeleton layout="profile" header={PAGE_HEADERS.profile} />}>
+      <ProfilePage />
+    </ClientBoundary>
   )
 }

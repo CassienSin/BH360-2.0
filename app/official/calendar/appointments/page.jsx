@@ -1,13 +1,17 @@
 'use client'
+import { PageSkeleton } from '@/components/Skeletons'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { CalendarDays, Clock3, Plus, UserRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { createClient } from '@/lib/supabase'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { AppButton, PageHeader, PageState, StatusBadge } from '@/components/AppUI'
 import { useNow } from '@/lib/useNow'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 function formatDateTime(value) {
   if (!value) return 'Not set'
@@ -44,7 +48,7 @@ export default function AppointmentsPage() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.replace('/login')
+          router.replace(loginHref())
           return
         }
         const { data: official, error } = await supabase.from('profiles')
@@ -54,7 +58,7 @@ export default function AppointmentsPage() {
         if (cancelled) return
         if (error || official?.role !== 'official' || !official?.barangay_id) {
           toast.error(error ? 'Could not load your official profile.' : 'Officials only.')
-          router.replace('/login')
+          router.replace(loginHref())
           return
         }
         setProfile(official)
@@ -95,8 +99,8 @@ export default function AppointmentsPage() {
           setAppointments(previous => previous.filter(item => item.id !== payload.old.id))
         }
       })
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
+    return () => { leaveChannel() }
   }, [profile?.barangay_id, supabase])
 
   const visibleAppointments = appointments.filter(appointment => {
@@ -105,13 +109,13 @@ export default function AppointmentsPage() {
   })
 
   if (loading) {
-    return <PageState fullPage kind="loading" title="Loading appointments…" description="Getting your barangay schedule." />
+    return <PageSkeleton cards={4} maxWidth={1024} />
   }
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AppointmentReminderWatcher profile={profile} />
-      <PageHeader title="Appointments" description={`${profile?.barangays?.name || 'Barangay'} · Appointment schedule`} icon={CalendarDays} onBack={() => router.push('/official')} backLabel="Back to dashboard" actions={<AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} />New Appointment</AppButton>} />
+      <PageHeader title="Appointments" description={`${profile?.barangays?.name || 'Barangay'} · Appointment schedule`} icon={CalendarDays} onBack={() => goBack(router, '/official?section=calendar')} backLabel="Back to dashboard" actions={<AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={16} />New Appointment</AppButton>} />
 
       <main className="relative z-10 mx-auto w-full max-w-[1320px] space-y-4 px-4 sm:px-6 py-6">
         <section className="white-card p-4 sm:p-5">

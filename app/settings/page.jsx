@@ -1,14 +1,19 @@
 'use client'
+import { PageSkeleton } from '@/components/Skeletons'
+import { PAGE_HEADERS } from '@/lib/pageHeaders'
 import { PageHeader, AppButton } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock, Settings as SettingsIcon } from 'lucide-react'
+import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { isSupported, getPermission, requestPermission, showNotification } from '@/lib/notifications'
+import { isSupported, getPermission, requestPermission } from '@/lib/notifications'
+import { pushSupport, isSubscribed, subscribeToPush } from '@/lib/push'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -65,6 +70,9 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState('default')
+  // This device is registered for background push (what the test needs).
+  const [pushReady, setPushReady] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   const [prefs, setPrefs] = useState({
@@ -79,7 +87,7 @@ export default function SettingsPage() {
     let cancelled = false
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
+      if (!user) return router.replace(loginHref())
 
       const { data: prof, error } = await supabase.from('profiles')
         .select('*, barangays(name, city)')
@@ -96,6 +104,11 @@ export default function SettingsPage() {
       if (prof.notification_prefs) setPrefs(prof.notification_prefs)
       if (prof.language) setLanguage(prof.language)
       if (isSupported()) setNotificationPermission(getPermission())
+      // Not awaited: it waits for the service worker, which never comes if
+      // registration failed, and the page must not hang on that.
+      if (pushSupport().supported) {
+        isSubscribed().then(subscribed => { if (!cancelled) setPushReady(subscribed) }).catch(() => {})
+      }
       setLoading(false)
     }
     load()
@@ -137,21 +150,35 @@ export default function SettingsPage() {
     const permission = await requestPermission()
     setNotificationPermission(permission)
     if (permission === 'granted') {
+      // Register this device for background push too, so the test button
+      // (and notifications with the app closed) work straight away.
+      const push = pushSupport().supported ? await subscribeToPush() : { ok: false }
+      setPushReady(push.ok)
       toast.success('Notifications enabled!')
-      sendTestNotification()
     } else if (permission === 'denied') {
       toast.error('Notifications blocked. You can enable them in browser settings.')
     }
   }
 
-  // force: true because this page is visible — the lib normally suppresses
-  // notifications while the user is looking at the app, which would make
-  // the test button appear to do nothing.
-  function sendTestNotification() {
-    showNotification('BarangayHub 360', {
-      body: 'Notifications are working! 🎉',
-      force: true,
-    })
+  // A real push, through the push service, to this person's own devices:
+  // it arrives the way every notification does, so it shows whether the
+  // phone delivers them with the app in the background. (A notification
+  // shown from this open page proved nothing about that.)
+  async function sendTestPush() {
+    setTesting(true)
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) toast.error(body.error || 'Could not send a test notification.')
+      else if (body.sent > 0) toast.success(body.sent === 1
+        ? 'Test sent. It should appear in a few seconds, even with the app closed.'
+        : `Test sent to your ${body.sent} devices. It should appear in a few seconds.`)
+      else toast.error(body.reason || 'No device received the test.')
+    } catch {
+      toast.error('Could not reach the server. Check your connection.')
+    } finally {
+      setTesting(false)
+    }
   }
 
   async function downloadMyData() {
@@ -227,16 +254,10 @@ export default function SettingsPage() {
     }, 1500)
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  if (loading) return <PageSkeleton layout="settings" header={{ ...PAGE_HEADERS.settings, actions: true }} />
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -244,10 +265,8 @@ export default function SettingsPage() {
       </div>
 
       <PageHeader
-        title="Settings"
-        description="Customize your experience"
-        icon={SettingsIcon}
-        onBack={() => router.back()}
+        {...PAGE_HEADERS.settings}
+        onBack={() => goBack(router, '/')}
         actions={(
           <AppButton onClick={saveSettings} disabled={!dirty} busy={saving} busyLabel="Saving…">
             <Save size={15} aria-hidden="true" />
@@ -259,7 +278,7 @@ export default function SettingsPage() {
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
 
         {/* Notifications */}
-        <div className="white-card p-5 fade-up">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: 'var(--brand-soft)' }}>
@@ -301,11 +320,11 @@ export default function SettingsPage() {
                     Enable Notifications
                   </button>
                 )}
-                {notificationPermission === 'granted' && (
-                  <button onClick={sendTestNotification}
-                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg"
+                {notificationPermission === 'granted' && pushReady && (
+                  <button onClick={sendTestPush} disabled={testing}
+                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
                     style={{ background: 'white', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                    Send test notification
+                    {testing ? 'Sending…' : 'Send test notification'}
                   </button>
                 )}
               </div>
@@ -341,7 +360,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Language */}
-        <div className="white-card p-5 fade-up-1">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#f0fdf4' }}>
@@ -378,7 +397,7 @@ export default function SettingsPage() {
         </div>
 
         {/* PWA Install */}
-        <div className="white-card p-5 fade-up-2">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#fff7ed' }}>
@@ -397,7 +416,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Privacy & Data */}
-        <div className="white-card p-5 fade-up-3">
+        <div className="white-card p-5">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
               style={{ background: '#eff6ff' }}>
@@ -438,7 +457,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Account Status / Deactivation */}
-        <div className="rounded-3xl p-5 fade-up-3"
+        <div className="rounded-3xl p-5"
           style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"

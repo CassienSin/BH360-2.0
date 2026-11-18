@@ -1,6 +1,13 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { PageSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import NotificationBell from '@/components/NotificationBell'
+import { useNotifications } from '@/lib/useNotifications'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
 import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
@@ -11,6 +18,7 @@ import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
 import LiveClock from '@/components/LiveClock'
 import { SITE_URL } from '@/lib/siteUrl'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -120,12 +128,17 @@ function UserAvatar({ src, name }) {
   return <img loading="lazy" decoding="async" src={src} alt="" onError={() => setFailedSrc(src)} className="w-full h-full object-cover" />
 }
 
-export default function AdminPanel() {
+const ADMIN_TABS = ['applications', 'incidents', 'codes', 'barangays', 'users']
+
+function AdminPanel() {
   const router = useRouter()
   // Memoize so we don't construct a new client on every render.
   const supabase = useMemo(() => createClient(), [])
 
   const [profile, setProfile] = useState(null)
+  // New barangay applications, written by the database for super admins
+  // (supabase/setup.sql Section 18).
+  const notificationCenter = useNotifications(profile?.id)
   const [applications, setApplications] = useState([])
   const [barangayResults, setBarangayResults] = useState([])
   const [barangaySearch, setBarangaySearch] = useState('')
@@ -149,7 +162,7 @@ export default function AdminPanel() {
   const [loadingIncidentAnalytics, setLoadingIncidentAnalytics] = useState(false)
   const [incidentAnalyticsError, setIncidentAnalyticsError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('applications')
+  const [activeTab, setActiveTab] = useUrlSection(ADMIN_TABS, 'applications', { param: 'tab' })
   const [statusFilter, setStatusFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [reviewing, setReviewing] = useState(null)
@@ -274,7 +287,7 @@ export default function AdminPanel() {
     let cancelled = false
     async function init() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) return router.push('/login')
+      if (authError || !user) return router.replace(loginHref())
 
       const { data: prof, error: profError } = await supabase
         .from('profiles').select('*').eq('id', user.id).single()
@@ -284,7 +297,7 @@ export default function AdminPanel() {
       // (and ideally a middleware/server-component check on this route).
       if (profError || !prof?.is_super_admin) {
         toast.error('Access denied. Super admin only.')
-        return router.push('/login')
+        return router.replace(loginHref())
       }
       if (cancelled) return
 
@@ -330,9 +343,9 @@ export default function AdminPanel() {
           setIncidents(prev => prev.filter(i => i.id !== payload.old.id))
         }
       })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { leaveChannel() }
   }, [supabase, profile?.is_super_admin])
 
   async function refreshData() {
@@ -638,16 +651,13 @@ export default function AdminPanel() {
     [users]
   )
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  // The open tab eases in when you switch tabs, not on page load.
+  const tabEnter = useSectionEntrance(activeTab, !loading) ? 'fade-up' : ''
+
+  if (loading) return <PageSkeleton cards={3} maxWidth={1168} tabs={5} />
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -701,6 +711,8 @@ export default function AdminPanel() {
 
           <LiveClock />
 
+          <NotificationBell center={notificationCenter} sizeClass="w-11 h-11" />
+
           {/* Refresh button */}
           <button onClick={refreshData} disabled={refreshing} aria-label="Refresh data"
             className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
@@ -744,9 +756,9 @@ export default function AdminPanel() {
 
         {/* Stats Overview — a swipeable row on phones so the tabs stay
             near the top; a grid from small tablets up. */}
-        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none]
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none] rail-fade
           [&>*]:shrink-0 [&>*]:w-[150px] [&>*]:snap-start
-          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto"
+          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto sm:[mask-image:none] sm:[-webkit-mask-image:none]"
           aria-label="Platform totals">
           <div className="white-card p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -817,8 +829,8 @@ export default function AdminPanel() {
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        {/* Tabs — scroll sideways when they don't fit (phones, 200% zoom). */}
+        <div className="flex gap-2 overflow-x-auto pb-1 rail-fade lg:[mask-image:none] lg:[-webkit-mask-image:none]">
           {[
             { value: 'applications', label: 'Applications', icon: Inbox, count: pendingCount },
             { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical, countLabel: 'critical open' },
@@ -849,7 +861,7 @@ export default function AdminPanel() {
 
         {/* APPLICATIONS TAB */}
         {activeTab === 'applications' && (
-          <div className="w-full min-w-0 space-y-3 fade-up">
+          <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
             {/* Filters */}
             <div className="white-card w-full min-w-0 overflow-hidden p-4">
               <div className="flex flex-col sm:flex-row gap-3">
@@ -1029,7 +1041,7 @@ export default function AdminPanel() {
             that spans them, so it leads with the cross-barangay numbers
             (which barangays are affected, and who is falling behind). */}
         {activeTab === 'incidents' && (
-          <div className="w-full min-w-0 space-y-3 fade-up">
+          <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
 
             <div className="white-card flex w-full min-w-0 flex-wrap gap-2 p-2" role="tablist" aria-label="Incident views">
               <button role="tab" aria-selected={incidentView === 'list'} onClick={() => setIncidentView('list')}
@@ -1325,7 +1337,7 @@ export default function AdminPanel() {
                       <p className="mb-4 mt-1 text-xs text-gray-500">Every barangay with registered users or reports, ranked by total reports</p>
                       {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-500">No incident reports yet.</p> : (
                         <div className="max-h-[480px] overflow-auto">
-                          <table className="w-full min-w-[600px] text-left text-xs">
+                          <table className="stack-table w-full md:min-w-[600px] text-left text-xs">
                             <thead className="sticky top-0 bg-white text-gray-500">
                               <tr>
                                 <th className="py-2 pr-3 font-semibold">Barangay</th>
@@ -1339,10 +1351,10 @@ export default function AdminPanel() {
                               {incidentAnalytics.barangays.map(barangay => (
                                 <tr key={barangay.id} className="border-t border-gray-100">
                                   <td className="py-3 pr-3 font-semibold text-gray-700">{barangay.name}</td>
-                                  <td className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
-                                  <td className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
-                                  <td className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
-                                  <td className="py-3 text-right text-red-600">{barangay.critical}</td>
+                                  <td data-span="full" className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
+                                  <td data-label="Reports" className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
+                                  <td data-label="Open" className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
+                                  <td data-label="Critical open" className="py-3 text-right text-red-600">{barangay.critical}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1361,7 +1373,7 @@ export default function AdminPanel() {
 
         {/* INVITE CODES TAB */}
         {activeTab === 'codes' && (
-          <div className="space-y-4 fade-up">
+          <div className={`space-y-4 ${tabEnter}`}>
             <div className="white-card p-5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
@@ -1444,12 +1456,12 @@ export default function AdminPanel() {
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0 ml-auto">
                       <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
                         + Official
                       </button>
                       <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
+                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
                         style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
                         + Tanod
                       </button>
@@ -1498,7 +1510,7 @@ export default function AdminPanel() {
                     </div>
                     {!code.used && (
                       <button onClick={() => copyToClipboard(code.code)}
-                        className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
+                        className="w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
                         <Copy size={12} style={{ color: 'var(--brand)' }} />
                       </button>
                     )}
@@ -1511,7 +1523,7 @@ export default function AdminPanel() {
 
         {/* BARANGAYS TAB */}
         {activeTab === 'barangays' && (
-          <div className="white-card p-5 fade-up">
+          <div className={`white-card p-5 ${tabEnter}`}>
             <h3 className="font-bold text-gray-800 mb-4">Active Barangays ({totalBarangaysWithUsers})</h3>
             <div className="space-y-2">
               {Array.from(new Set(users.map(u => u.barangay_id))).filter(Boolean).map(bId => {
@@ -1542,7 +1554,7 @@ export default function AdminPanel() {
 
         {/* USERS TAB */}
         {activeTab === 'users' && (
-          <div className="space-y-4 fade-up">
+          <div className={`space-y-4 ${tabEnter}`}>
 
             {/* Stats by role */}
             <div className="grid grid-cols-3 gap-3">
@@ -1679,5 +1691,18 @@ export default function AdminPanel() {
         variant="logout"
       />
     </div>
+  )
+}
+
+/**
+ * The tab lives in the URL (?tab=…), read with useSearchParams — see
+ * components/ClientBoundary.jsx. The fallback matches the page's own
+ * loading skeleton, so a refresh shows one skeleton throughout.
+ */
+export default function AdminPage() {
+  return (
+    <ClientBoundary fallback={<PageSkeleton cards={3} maxWidth={1168} tabs={5} />}>
+      <AdminPanel />
+    </ClientBoundary>
   )
 }

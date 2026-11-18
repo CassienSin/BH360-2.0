@@ -1,11 +1,15 @@
 'use client'
+import { IncidentDetailSkeleton } from '@/components/Skeletons'
 import desktop from '@/components/desktop-pages.module.css'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
+import { settleEntrances } from '@/components/SectionContent'
 import { useRouter, useParams } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
-  MapPin, Clock, Shield, Scale, Star, Loader2, X, FileText,
+  MapPin, Clock, Shield, Scale, Star, X, FileText,
   Check, AlertTriangle, Phone, ShieldOff, Send,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -16,6 +20,7 @@ import { PageHeader } from '@/components/AppUI'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { EmergencyContacts } from '@/components/ResponderAvailability'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
@@ -178,6 +183,7 @@ export default function ResidentIncidentDetail() {
   const [barangayId, setBarangayId] = useState(null)
   const [barangayPhone, setBarangayPhone] = useState(null)
   const [loading, setLoading] = useState(true)
+  const mainRef = useRef(null)
   const [denied, setDenied] = useState(false)
   const [lightbox, setLightbox] = useState(null)
   const [rating, setRating] = useState(0)
@@ -193,7 +199,7 @@ export default function ResidentIncidentDetail() {
     async function load() {
       const { data: { user }, error: authError } = await supabase.auth.getUser()
       if (cancelled) return
-      if (authError || !user) { router.replace('/login'); return }
+      if (authError || !user) { router.replace(loginHref()); return }
 
       // See the note in app/resident/report/page.jsx: if the embedded
       // barangays(phone) column is missing, the whole select fails and
@@ -239,8 +245,8 @@ export default function ResidentIncidentDetail() {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'incidents', filter: `id=eq.${params.id}` },
         payload => setIncident(prev => ({ ...prev, ...payload.new })))
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    const leaveCh = subscribeWhenSignedIn(supabase, ch)
+    return () => { leaveCh() }
   }, [params.id, supabase])
 
   const timeline = useMemo(() => buildTimeline(incident, responder), [incident, responder])
@@ -262,17 +268,15 @@ export default function ResidentIncidentDetail() {
     toast.success('Thank you for the feedback!')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-brand flex items-center justify-center">
-        <Loader2 size={30} className="animate-spin text-white" />
-      </div>
-    )
-  }
+  // The report replaces its skeleton in place: finish the timeline's own
+  // entrance before the first paint (items added later still animate).
+  useLayoutEffect(() => { if (!loading) settleEntrances(mainRef.current) }, [loading])
+
+  if (loading) return <IncidentDetailSkeleton variant="resident" />
 
   if (denied) {
     return (
-      <div className="min-h-screen bg-brand flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-brand flex items-center justify-center p-6">
         <div className="white-card p-8 text-center max-w-sm">
           <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
           <h1 className="text-lg font-bold text-gray-800">Report not found</h1>
@@ -292,7 +296,7 @@ export default function ResidentIncidentDetail() {
   const { Icon: PanelIcon } = panel
 
   return (
-    <div className="min-h-screen bg-brand">
+    <div className="min-h-dvh bg-brand">
       <style>{`
         .rid-line::before {
           content: ''; position: absolute; left: 15px; top: 30px; bottom: -14px;
@@ -312,10 +316,10 @@ export default function ResidentIncidentDetail() {
         description={`Reported ${timeAgo(incident.created_at)}`}
         iconElement={<CategoryIcon category={incident.category} size={21} />}
         iconStyle={{ background: `${cat.color}18`, color: cat.color }}
-        onBack={() => router.back()}
+        onBack={() => goBack(router, '/resident?section=incidents')}
       />
 
-      <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
+      <main ref={mainRef} className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
 
         {/* The answer they came for, first thing on the page */}
         <div className={`rounded-2xl px-4 py-4 flex items-start gap-3 ${desktop.wide}`}
@@ -376,7 +380,7 @@ export default function ResidentIncidentDetail() {
 
             {Number.isFinite(incident.latitude) && (
               <div className="mt-3">
-                <MiniMap lat={incident.latitude} lng={incident.longitude} height={170} />
+                <MiniMap lat={incident.latitude} lng={incident.longitude} height="clamp(180px, 32dvh, 340px)" />
               </div>
             )}
           </div>
@@ -520,7 +524,7 @@ export default function ResidentIncidentDetail() {
             <X size={18} />
           </button>
           <img src={lightbox.src} alt={lightbox.alt} onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '85vh', borderRadius: 16, objectFit: 'contain' }} />
+            style={{ maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16, objectFit: 'contain' }} />
         </div>
       )}
     </div>

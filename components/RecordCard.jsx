@@ -46,7 +46,11 @@ export function RecordGroup({ label, count, children }) {
         </span>
         <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
       </div>
-      {children}
+      {/* One column, two once the list is 64rem+ wide (container query):
+          extra columns on a wide monitor instead of stretched cards. */}
+      <div className="@container">
+        <div className="grid gap-3 items-start @5xl:grid-cols-2">{children}</div>
+      </div>
     </>
   )
 }

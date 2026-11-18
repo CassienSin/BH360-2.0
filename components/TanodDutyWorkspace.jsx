@@ -5,6 +5,7 @@ import { CalendarDays, ClipboardList, RefreshCw, Plus, Download, Clock3, Users, 
 import { createClient } from '@/lib/supabase'
 import { dateBounds, dutySessions, filterDutySessions, formatDutyTime, durationLabel, manilaDate, manilaInput, readDutyRows, scheduleError, shiftDate, validateShift } from '@/lib/tanodDuty.mjs'
 import styles from './tanod-duty.module.css'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 function emptyForm(day) {
   return { id: null, tanod_id: '', start: `${day}T08:00`, end: `${day}T16:00`, area: '', notes: '' }
@@ -56,10 +57,10 @@ export default function TanodDutyWorkspace({ profile, mode }) {
     load()
     const channel = supabase.channel(`tanod-duty-${mode}-${profile.barangay_id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: schedule ? 'tanod_duty_schedules' : 'duty_logs', filter: `barangay_id=eq.${profile.barangay_id}` }, refresh)
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
     window.addEventListener('focus', refresh)
     const timer = setInterval(refresh, 60000)
-    return () => { alive = false; clearTimeout(debounce); clearInterval(timer); window.removeEventListener('focus', refresh); supabase.removeChannel(channel) }
+    return () => { alive = false; clearTimeout(debounce); clearInterval(timer); window.removeEventListener('focus', refresh); leaveChannel() }
   }, [supabase, profile.barangay_id, mode, schedule, reload])
 
   const people = new Map(data.people.map(p => [p.id, p]))

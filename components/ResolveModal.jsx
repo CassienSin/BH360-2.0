@@ -141,11 +141,11 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 sheet-overlay"
       style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
       onClick={() => { if (!submitting) onClose() }}>
 
-      <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1 max-h-[90vh] flex flex-col"
+      <div className="sheet-panel max-w-md overflow-hidden fade-up-1 flex flex-col"
         style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
         role="dialog"
         aria-modal="true"

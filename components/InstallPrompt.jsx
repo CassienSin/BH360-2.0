@@ -142,7 +142,7 @@ export default function InstallPrompt() {
   return (
     <>
       {/* Compact Banner */}
-      <div className="fixed bottom-4 left-4 right-4 sm:bottom-6 sm:left-auto sm:right-6 sm:w-80 z-50 fade-up">
+      <div className="fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] sm:bottom-6 sm:left-auto sm:right-6 sm:w-80 z-50 fade-up">
         <div className="rounded-2xl overflow-hidden"
           style={{
             background: 'linear-gradient(135deg, var(--brand), var(--brand-light))',
@@ -178,11 +178,11 @@ export default function InstallPrompt() {
 
       {/* Full Install Modal */}
       {showFull && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-[60] sheet-overlay"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}
           onClick={() => setShowFull(false)}>
 
-          <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1 max-h-[90vh] flex flex-col"
+          <div className="sheet-panel max-w-md overflow-hidden fade-up-1 flex flex-col"
             role="dialog" aria-modal="true" aria-labelledby="install-modal-title"
             style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
             onClick={e => e.stopPropagation()}>

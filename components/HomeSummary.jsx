@@ -2,6 +2,7 @@
 import { Fragment } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { TONE_RAIL } from '@/lib/recordState'
+import { CountUp } from '@/lib/useCountUp'
 
 /**
  * The top of the resident home screen.
@@ -84,7 +85,7 @@ const TILE_GRID = {
   3: 'grid-cols-2 lg:grid-cols-3',
   4: 'grid-cols-2 lg:grid-cols-4',
   5: 'grid-cols-2 lg:grid-cols-5',
-  6: 'grid-cols-2 lg:grid-cols-3',
+  6: 'grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6',
 }
 
 /* `key` is React's, not a prop — spreading it into a component warns. */
@@ -126,7 +127,7 @@ export function ActivityTile({ icon, count, label, caption, tone = 'waiting', qu
       </span>
       <span className="block text-[26px] font-extrabold leading-none mt-2.5 tabular-nums"
         style={{ color: quiet ? '#9ca3af' : rail }}>
-        {count}
+        <CountUp value={count} />
       </span>
       <span className="block text-[12.5px] font-semibold text-gray-700 mt-1">{label}</span>
       {caption && (

@@ -12,4 +12,12 @@
 .actions { display: flex; gap: 10px; padding: 0 28px 28px; }
 .actions > button { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .progress { margin: -12px 24px 24px; text-align: center; color: #70677d; font-size: 12px; line-height: 1.6; }
-@media (max-width: 420px) { .overlay { padding: 16px; } .panel { max-height: calc(100dvh - 32px); } .content { padding: 30px 20px 22px; } .actions { flex-direction: column-reverse; padding: 0 20px 22px; } }
+/* Phones (below Tailwind's sm, 640px): a bottom sheet, like the other
+   dialogs (globals.css .sheet-panel); stacked full-width actions. */
+@media (max-width: 639px) {
+  .overlay { align-items: flex-end; padding: 0; }
+  .panel { max-width: none; border-radius: 24px 24px 0 0; max-height: calc(100dvh - max(16px, env(safe-area-inset-top, 0px))); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .content { padding: 30px 20px 22px; }
+  .actions { flex-direction: column-reverse; padding: 0 20px 22px; }
+  .actions > button { min-height: 44px; }
+}

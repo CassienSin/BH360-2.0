@@ -25,6 +25,7 @@ const STATIC_FILES = [
   '/icon-maskable-512.png',
   '/apple-touch-icon.png',
   '/favicon-32.png',
+  '/badge-96.png',
 ]
 
 // Install event - cache static files
@@ -152,7 +153,10 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192.png',
-    badge: '/favicon-32.png',
+    // Android draws the badge from its alpha channel alone, so it has to be
+    // a white shape on transparency: the full-colour favicon came out as a
+    // blank square. The large colour image is the icon above.
+    badge: '/badge-96.png',
     // tag collapses repeats of the same event — a critical incident pushed
     // to a tanod who also has the page open should not stack up twice.
     tag: payload.tag,
@@ -163,8 +167,56 @@ self.addEventListener('push', (event) => {
     data: { url: payload.url || '/', ...payload.data },
   }
 
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil((async () => {
+    // A reply on a ticket whose conversation is open and on screen is
+    // already in front of the person (that page also marks it read), so a
+    // system notification would only repeat it. Browsers allow skipping
+    // the notification while a page of the site is visible.
+    if (payload.url) {
+      const target = new URL(payload.url, self.location.origin)
+      if (/\/ticket\//.test(target.pathname)) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        const places = await Promise.all(windows.filter(c => c.visibilityState === 'visible').map(whereIs))
+        if (places.some(p => p && p.visible && p.path === target.pathname)) return
+      }
+    }
+    await self.registration.showNotification(title, options)
+  })())
 })
+
+// Where a window is right now. Client.url is the address the page was
+// loaded at, and an in-app navigation (Next's router.push, which only
+// changes the history entry) does not update it: a ticket opened by a tap
+// on the resident home still read "/resident", so its replies were shown
+// as notifications over the open conversation. So the page itself is asked
+// (app/layout.tsx answers).
+//
+// Only an answer counts. A page that does not answer in time (paused in the
+// background, still loading, or running code from before this) resolves to
+// null, and the notification is shown: Client.url and Client.visibilityState
+// are not to be trusted for that page, and a notification over an open
+// conversation is a small annoyance where a missed one is not.
+function whereIs(client) {
+  return new Promise((resolve) => {
+    let channel = null
+    const done = (place) => {
+      clearTimeout(timer)
+      if (channel) channel.port1.close()
+      resolve(place)
+    }
+    const timer = setTimeout(() => done(null), 500)
+    try {
+      channel = new MessageChannel()
+      channel.port1.onmessage = (event) => {
+        const answer = event.data
+        done(answer && typeof answer.path === 'string' ? answer : null)
+      }
+      client.postMessage({ type: 'BH360_WHERE' }, [channel.port2])
+    } catch {
+      done(null)
+    }
+  })
+}
 
 // Tapping a notification.
 //
@@ -175,26 +227,42 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const target = (event.notification.data && event.notification.data.url) || '/'
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Prefer focusing a tab that is already open — opening a second copy
-      // of the dashboard is a worse answer than bringing the first forward.
-      for (const client of clientList) {
-        const sameOrigin = client.url.startsWith(self.location.origin)
-        if (sameOrigin && 'focus' in client) {
-          if ('navigate' in client && new URL(client.url).pathname !== target) {
-            return client.navigate(target).then((c) => c && c.focus())
-          }
-          return client.focus()
-        }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(target)
-      return undefined
-    })
-  )
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href
+  event.waitUntil(openFromNotification(target))
 })
+
+// Open a notification's page, in a window that is already open if there is
+// one: a second copy of the dashboard is a worse answer than the first.
+//
+// Chrome lets a worker bring a window to the front (focus, openWindow) only
+// for a few seconds after the tap, and only once. This used to load the page
+// first and focus it after: on a phone with the app in the background the
+// load took longer than that, focus was refused, and the tap seemed to do
+// nothing while the page changed out of sight. So the window comes forward
+// first and its page changes after.
+async function openFromNotification(target) {
+  const windows = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+    .filter(c => c.url.startsWith(self.location.origin))
+  // The one on screen, else the one used last (listed first).
+  const client = windows.find(c => c.visibilityState === 'visible') || windows.find(c => c.focused) || windows[0]
+  if (!client) return self.clients.openWindow ? self.clients.openWindow(target) : undefined
+
+  let front = client
+  try {
+    front = (await client.focus()) || client
+  } catch {
+    // Not allowed to come forward; still change its page.
+  }
+  try {
+    await front.navigate(target)
+    return
+  } catch {
+    // navigate() refuses a window this worker does not control (one
+    // opened before it took over); that page loads the link itself
+    // (app/layout.tsx).
+  }
+  front.postMessage({ type: 'BH360_OPEN', url: target })
+}
 
 // A subscription can be rotated by the push service without the user doing
 // anything. Without this the endpoint we stored goes dead silently and the

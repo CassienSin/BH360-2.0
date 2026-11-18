@@ -1,3 +1,5 @@
+/* Breakpoints follow Tailwind's: sm 640 / md 768 / lg 1024 / xl 1280 /
+   2xl 1536 ("max-width: 639px" = below sm, and so on). */
 .root { min-width: 0; color: #25213b; }
 .root button, .root input, .root select, .root textarea { font: inherit; }
 .root button { cursor: pointer; }
@@ -68,9 +70,9 @@
 .form label span { color: #dc2626; }
 .form textarea { resize: vertical; min-height: 86px; }
 .hint { margin: -4px 0 0; color: #8a8198; font-size: 12px; line-height: 1.7; }
-@media (max-width: 1150px) { .shifts { grid-template-columns: minmax(0,1fr); } .scheduleLayout { grid-template-columns: minmax(0,1fr) 300px; gap: 12px; } }
-@media (max-width: 900px) { .scheduleLayout { grid-template-columns: minmax(0,1fr); } .shifts { grid-template-columns: repeat(2,minmax(0,1fr)); } .stats { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-@media (max-width: 600px) {
+@media (max-width: 1279px) { .shifts { grid-template-columns: minmax(0,1fr); } .scheduleLayout { grid-template-columns: minmax(0,1fr) 300px; gap: 12px; } }
+@media (max-width: 1023px) { .scheduleLayout { grid-template-columns: minmax(0,1fr); } .shifts { grid-template-columns: repeat(2,minmax(0,1fr)); } .stats { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 639px) {
   .tabs { width: 100%; gap: 3px; padding: 5px; }
   .tabs button { flex: 1; flex-direction: column; padding: 10px 5px; font-size: 12px; gap: 6px; }
   .banner { flex-wrap: wrap; padding: 14px; }

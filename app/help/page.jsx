@@ -3,6 +3,13 @@ import { PageHeader } from '@/components/AppUI'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
+import { PageSkeleton } from '@/components/Skeletons'
+import ClientBoundary from '@/components/ClientBoundary'
+import { PAGE_HEADERS } from '@/lib/pageHeaders'
+import { useSectionEntrance } from '@/lib/useSectionEntrance'
+import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
 import { HelpCircle, MessageSquare, BookOpen, Phone, ChevronDown, Send, Sparkles, Search, AlertTriangle, Loader2, CheckCircle, X } from 'lucide-react'
 import Image from 'next/image'
@@ -103,11 +110,16 @@ const HOTLINES = [
   { name: 'DOH Health Hotline', number: '1555', icon: '🏥', desc: 'Health emergencies and concerns', color: '#16a34a', bg: '#f0fdf4' },
 ]
 
-export default function HelpPage() {
+const HELP_TABS = ['faq', 'guides', 'contact', 'emergency']
+
+function HelpPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState(null)
-  const [activeTab, setActiveTab] = useState('faq')
+  // replace, not push: Back should leave Help, not walk through its tabs
+  const [activeTab, setActiveTab] = useUrlSection(HELP_TABS, 'faq', { param: 'tab', history: 'replace' })
+  // The open tab's content eases in when you switch tabs, not on page load.
+  const tabEnter = useSectionEntrance(activeTab, true) ? 'fade-up' : ''
   const [expandedFaq, setExpandedFaq] = useState(null) // keyed by question text, not index
   const [searchQuery, setSearchQuery] = useState('')
   const [contactForm, setContactForm] = useState({ subject: '', category: 'general', message: '' })
@@ -120,7 +132,7 @@ export default function HelpPage() {
       const { data: { user }, error } = await supabase.auth.getUser()
       if (cancelled) return
       if (error || !user) {
-        router.push('/login')
+        router.replace(loginHref())
         return
       }
       const { data: prof, error: profError } = await supabase
@@ -196,7 +208,7 @@ export default function HelpPage() {
   ]
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -204,16 +216,14 @@ export default function HelpPage() {
       </div>
 
       <PageHeader
-        title="Help & Support"
-        description={"We're here to help, 24/7"}
-        icon={HelpCircle}
-        onBack={() => router.back()}
+        {...PAGE_HEADERS.help}
+        onBack={() => goBack(router, '/')}
       />
 
       <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.helpPage}`}>
 
         {/* Hero card */}
-        <div className={`glass-card p-5 flex items-center gap-3 fade-up ${desktop.wide}`}>
+        <div className={`glass-card p-5 flex items-center gap-3 ${desktop.wide}`}>
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
             style={{ background: 'rgba(255,255,255,0.2)' }}>
             <Sparkles size={20} className="text-yellow-300" />
@@ -225,7 +235,7 @@ export default function HelpPage() {
         </div>
 
         {/* Tabs */}
-        <div className={`white-card p-2 fade-up-1 ${desktop.helpTabs}`}>
+        <div className={`white-card p-2 ${desktop.helpTabs}`}>
           <div className="grid grid-cols-4 gap-1" role="tablist" aria-label="Help sections">
             {tabs.map(tab => {
               const Icon = tab.icon
@@ -248,7 +258,7 @@ export default function HelpPage() {
 
         {/* FAQ Tab */}
         {activeTab === 'faq' && (
-          <div className="space-y-3 fade-up-2">
+          <div className={`space-y-3 ${tabEnter}`}>
             <div className="white-card p-4">
               <div className="relative">
                 <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
@@ -313,7 +323,7 @@ export default function HelpPage() {
 
         {/* Guides Tab */}
         {activeTab === 'guides' && (
-          <div className={`space-y-3 fade-up-2 ${desktop.helpGrid}`}>
+          <div className={`space-y-3 ${tabEnter} ${desktop.helpGrid}`}>
             <div className="p-3 rounded-2xl flex items-start gap-2.5"
               style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
               <BookOpen size={14} style={{ color: 'var(--brand)' }} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
@@ -346,7 +356,7 @@ export default function HelpPage() {
 
         {/* Contact Tab */}
         {activeTab === 'contact' && (
-          <div className="fade-up-2">
+          <div className={tabEnter || undefined}>
             {sentAt ? (
               /* Success panel replaces the form — clearer than a toast that
                  vanishes, and prevents accidental duplicate sends */
@@ -437,7 +447,7 @@ export default function HelpPage() {
 
         {/* Emergency Tab */}
         {activeTab === 'emergency' && (
-          <div className={`space-y-3 fade-up-2 ${desktop.helpGrid}`}>
+          <div className={`space-y-3 ${tabEnter} ${desktop.helpGrid}`}>
             <div className="rounded-3xl p-5"
               style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
               <div className="flex items-center gap-3 mb-3">
@@ -488,5 +498,17 @@ export default function HelpPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+/**
+ * The tab lives in the URL (?tab=…), read with useSearchParams — see
+ * components/ClientBoundary.jsx. The fallback mirrors this page's layout.
+ */
+export default function Help() {
+  return (
+    <ClientBoundary fallback={<PageSkeleton layout="help" header={PAGE_HEADERS.help} />}>
+      <HelpPage />
+    </ClientBoundary>
   )
 }

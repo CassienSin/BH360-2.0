@@ -1,9 +1,12 @@
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 import IncidentMapScreen from '@/components/IncidentMapScreen'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 /**
  * Official incident map: loads the barangay's incidents and on-duty tanod
@@ -110,7 +113,7 @@ export default function MapView() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
 
@@ -131,7 +134,7 @@ export default function MapView() {
           return
         }
         if (prof?.role !== 'official' || !prof?.barangay_id) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         setBarangayId(prof.barangay_id)
@@ -233,26 +236,26 @@ export default function MapView() {
             }))
           }
         })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          // Reconnected after a drop → anything that happened during the gap
-          // never arrived. Refetch so the map catches up.
-          if (hadDropRef.current) {
-            hadDropRef.current = false
-            refreshAll(barangayId)
-          }
-          setLive(true)
-        } else {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            hadDropRef.current = true
-          }
-          setLive(false)
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel, (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Reconnected after a drop → anything that happened during the gap
+        // never arrived. Refetch so the map catches up.
+        if (hadDropRef.current) {
+          hadDropRef.current = false
+          refreshAll(barangayId)
         }
-      })
+        setLive(true)
+      } else {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          hadDropRef.current = true
+        }
+        setLive(false)
+      }
+    })
 
     return () => {
       setLive(false)
-      supabase.removeChannel(channel)
+      leaveChannel()
     }
   }, [barangayId, supabase, refreshAll])
 
@@ -308,7 +311,7 @@ export default function MapView() {
       tanodTrails={tanodTrails}
       onDispatch={handleDispatch}
       onOpenIncident={(inc) => router.push(`/official/incident/${inc.id}`)}
-      onBack={() => router.push('/official')}
+      onBack={() => goBack(router, '/official?section=map')}
     />
   )
 }

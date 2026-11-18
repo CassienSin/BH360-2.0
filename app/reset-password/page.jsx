@@ -158,7 +158,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand relative overflow-hidden px-6 py-12">
+    <div className="min-h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-6 py-12">
 
       <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
         <ArrowLeft size={15} aria-hidden="true" /> Home

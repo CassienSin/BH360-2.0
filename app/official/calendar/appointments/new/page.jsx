@@ -1,9 +1,12 @@
     'use client'
-import { PageHeader, AppButton, PageState } from '@/components/AppUI'
+import { PageSkeleton } from '@/components/Skeletons'
+import { PageHeader, AppButton } from '@/components/AppUI'
 import { useBrowserValue } from '@/lib/useHydrated'
 
     import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
     import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
     import { AlarmClock, Bell, CalendarDays, Check, Clock3, Plus, UserRound } from 'lucide-react'
     import toast from 'react-hot-toast'
     import { createClient } from '@/lib/supabase'
@@ -67,7 +70,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
         try {
             const { data: { user }, error: authError } = await supabase.auth.getUser()
             if (authError || !user) {
-            router.push('/login')
+            router.replace(loginHref())
             return
             }
             const { data: prof, error } = await supabase.from('profiles')
@@ -77,7 +80,7 @@ import { useBrowserValue } from '@/lib/useHydrated'
             if (cancelled) return
             if (error || prof?.role !== 'official' || !prof?.barangay_id) {
             toast.error(error ? 'Could not load your official profile.' : 'Officials only.')
-            router.push('/login')
+            router.replace(loginHref())
             return
             }
             setProfile(prof)
@@ -116,8 +119,8 @@ import { useBrowserValue } from '@/lib/useHydrated'
             setAppointments(previous => previous.filter(item => item.id !== payload.old.id))
             }
         })
-        .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const leaveChannel = subscribeWhenSignedIn(supabase, channel)
+        return () => { leaveChannel() }
     }, [profile?.barangay_id, supabase])
 
     const checkReminders = useCallback(async () => {
@@ -217,11 +220,11 @@ import { useBrowserValue } from '@/lib/useHydrated'
     }
 
     if (loading) {
-        return <PageState fullPage kind="loading" title="Loading appointments…" description="Preparing your barangay schedule." />
+        return <PageSkeleton cards={2} />
     }
 
     return (
-        <div className="min-h-screen relative overflow-clip bg-brand">
+        <div className="min-h-dvh relative overflow-clip bg-brand">
         <PageHeader title="New Appointment" description={`${profile?.barangays?.name || 'Barangay'} · Schedule and reminders`} icon={CalendarDays} onBack={() => router.push('/official/calendar/appointments')} backLabel="Back to appointments" actions={<AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}>Appointments list</AppButton>} />
 
         <main className="relative z-10 mx-auto grid w-full max-w-[1320px] gap-4 px-4 py-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">

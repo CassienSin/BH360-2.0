@@ -7,6 +7,7 @@ import { loadDutySummary, personalShifts, shiftPhase, todaysShifts } from '@/lib
 import { formatDutyTime, manilaDate, scheduleError } from '@/lib/tanodDuty.mjs'
 import { activityState } from '@/lib/tanodOverview.mjs'
 import styles from './duty-summary.module.css'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const PHASE = { current: 'Scheduled now', upcoming: 'Upcoming', elapsed: 'Time elapsed' }
 const shortTime = value => new Date(value).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' })
@@ -57,11 +58,11 @@ export default function DutyScheduleSummary({ profile, onManage }) {
     const channel = client.channel(`duty-summary-${role}-${barangayId}-${id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tanod_duty_schedules', filter }, refresh)
     if (official) channel.on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `barangay_id=eq.${barangayId}` }, refresh)
-    channel.subscribe()
+    const leaveChannel = subscribeWhenSignedIn(client, channel)
     const timer = setInterval(refresh, 60000)
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
-    return () => { cancelled = true; clearTimeout(debounce); clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); client.removeChannel(channel) }
+    return () => { cancelled = true; clearTimeout(debounce); clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); leaveChannel() }
   }, [client, id, barangayId, role, official, identity, reload])
 
   if (!id || !barangayId || !['official', 'tanod'].includes(role)) return null

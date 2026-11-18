@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
 import styles from './calendar.module.css'
 import { PageHeader, AppButton } from '@/components/AppUI'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: '#087f8c' }, incidents: { label: 'Incidents', singular: 'Incident', color: '#d97706' }, announcements: { label: 'Announcements', singular: 'Announcement', color: '#6554dc' } }
 const PRIORITIES = { Low: '#15803d', Medium: '#2563eb', High: '#c2410c', Critical: '#dc2626' }
@@ -38,11 +41,11 @@ export default function CalendarView() {
         const { data: { user }, error } = await supabase.auth.getUser()
         if (cancelled) return
         if (error) throw error
-        if (!user) { router.replace('/login'); return }
+        if (!user) { router.replace(loginHref()); return }
         const { data: official, error: profileError } = await supabase.from('profiles').select('id, role, barangay_id, barangays(name)').eq('id', user.id).single()
         if (cancelled) return
         if (profileError) throw profileError
-        if (official?.role !== 'official' || !official?.barangay_id) { router.replace('/login'); return }
+        if (official?.role !== 'official' || !official?.barangay_id) { router.replace(loginHref()); return }
         setProfile(official)
       } catch {
         if (!cancelled) setAuthError('Could not load your calendar access. Refresh this page to try again.')
@@ -69,10 +72,10 @@ export default function CalendarView() {
     reload()
     const channel = supabase.channel(`calendar-${profile.barangay_id}`)
     for (const table of Object.keys(TYPES)) channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `barangay_id=eq.${profile.barangay_id}` }, scheduleReload)
-    channel.subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
     function onFocus() { setToday(dateKey(new Date())); scheduleReload() }
     window.addEventListener('focus', onFocus)
-    return () => { cancelled = true; clearTimeout(debounce); window.removeEventListener('focus', onFocus); supabase.removeChannel(channel) }
+    return () => { cancelled = true; clearTimeout(debounce); window.removeEventListener('focus', onFocus); leaveChannel() }
   }, [supabase, profile?.barangay_id, month, refresh])
 
   const data = snapshot.month === month ? snapshot.data : EMPTY
@@ -102,7 +105,7 @@ export default function CalendarView() {
       title="Barangay calendar"
       description={`${profile?.barangays?.name || 'Schedule and activity'} · Philippine time`}
       icon={CalendarDays}
-      onBack={() => router.push('/official')}
+      onBack={() => goBack(router, '/official?section=calendar')}
       backLabel="Back to dashboard"
       actions={<>
         <AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={15} aria-hidden="true" />Appointments</AppButton>

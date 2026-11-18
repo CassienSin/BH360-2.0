@@ -164,7 +164,7 @@ export default function RequestAccess() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen relative overflow-clip bg-brand flex items-center justify-center p-4">
+      <div className="min-h-dvh relative overflow-clip bg-brand flex items-center justify-center p-4">
         <AnimatedDots />
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
@@ -201,7 +201,7 @@ export default function RequestAccess() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-clip bg-brand">
+    <div className="min-h-dvh relative overflow-clip bg-brand">
       <AnimatedDots />
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"

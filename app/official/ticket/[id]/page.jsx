@@ -1,11 +1,15 @@
 'use client'
+import { TicketDetailSkeleton } from '@/components/Skeletons'
 import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { loginHref } from '@/lib/loginRedirect'
+import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { ArrowLeft, Send, X, User, Clock, CheckCircle, AlertCircle, Sparkles, FileQuestion, FileText, AlertCircle as AlertIcon, Star, MapPin, Phone, Loader2, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const CATEGORY_CONFIG = {
   inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
@@ -51,6 +55,19 @@ export default function OfficialTicketChat() {
 
   const [ticket, setTicket] = useState(null)
   const [messages, setMessages] = useState([])
+
+  // While this conversation is open its notifications are read: the replies
+  // are right here. Runs on open and again as each new message arrives (the
+  // service worker also skips the push while this page is on screen).
+  useEffect(() => {
+    if (!id) return
+    supabase.from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('entity_table', 'tickets')
+      .eq('entity_id', id)
+      .is('read_at', null)
+      .then(({ error }) => { if (error) console.error('Could not mark ticket notifications read:', error) })
+  }, [id, messages.length, supabase])
   const [newMessage, setNewMessage] = useState('')
   const [user, setUser] = useState(null)
   const [sending, setSending] = useState(false)
@@ -69,7 +86,7 @@ export default function OfficialTicketChat() {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          router.push('/login')
+          router.replace(loginHref())
           return
         }
         if (cancelled) return
@@ -131,11 +148,11 @@ export default function OfficialTicketChat() {
           // Keep in sync if another official closes/reopens/claims this ticket
           setTicket(prev => (prev ? { ...prev, ...payload.new } : prev))
         })
-      .subscribe()
+    const leaveChannel = subscribeWhenSignedIn(supabase, channel)
 
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      leaveChannel()
     }
   }, [id, supabase, router])
 
@@ -209,27 +226,18 @@ export default function OfficialTicketChat() {
   const CategoryIcon = cat?.icon
 
   // ---- Loading state ----
-  if (pageLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden">
-        <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 relative z-10">
-          <Loader2 size={24} className="animate-spin text-white" />
-          <p className="text-white text-sm font-semibold">Loading ticket...</p>
-        </div>
-      </div>
-    )
-  }
+  if (pageLoading) return <TicketDetailSkeleton />
 
   // ---- Not found state ----
   if (notFound) {
     return (
-      <div className="h-screen flex items-center justify-center bg-brand relative overflow-hidden px-4">
+      <div className="h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-4">
         <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
           <AlertCircle size={28} className="text-white opacity-90" />
           <p className="text-white text-sm font-bold">Ticket not found</p>
           <p className="text-purple-200 text-xs">It may have been deleted, or you may not have access to it.</p>
           <button
-            onClick={() => router.back()}
+            onClick={() => goBack(router, '/official?section=tickets')}
             className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
             style={{ background: 'white', color: 'var(--brand)' }}
           >
@@ -241,7 +249,7 @@ export default function OfficialTicketChat() {
   }
 
   return (
-    <div className="h-screen flex flex-col relative overflow-hidden bg-brand">
+    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
 
       {/* Background effects */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
@@ -261,11 +269,11 @@ export default function OfficialTicketChat() {
 
       {/* Header */}
       <header
-        className={`bg-white relative z-20 px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
+        className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
         style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
       >
         <button
-          onClick={() => router.back()}
+          onClick={() => goBack(router, '/official?section=tickets')}
           aria-label="Go back"
           className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
         >
@@ -460,10 +468,10 @@ export default function OfficialTicketChat() {
         </div>
 
         {ticket?.status !== 'closed' ? (
-          <div className="mt-3 sticky bottom-0 space-y-2">
+          <div className="mt-3 sticky bottom-0 space-y-2 pb-[env(safe-area-inset-bottom,0px)]">
             {/* Quick replies — one tap for the phrases officials type all day */}
             {newMessage === '' && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              <div className="flex gap-1.5 overflow-x-auto pb-1 rail-fade" style={{ scrollbarWidth: 'none' }}>
                 {QUICK_REPLIES.map((reply, i) => (
                   <button
                     key={i}

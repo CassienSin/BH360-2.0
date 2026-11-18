@@ -1,3 +1,5 @@
+/* Breakpoints follow Tailwind's: sm 640 / md 768 / lg 1024 / xl 1280 /
+   2xl 1536 ("max-width: 639px" = below sm, and so on). */
 .overview { display: flex; flex-direction: column; gap: 16px; min-width: 0; color: #25213b; }
 .overview button, .overview input { font: inherit; }
 .overview button { cursor: pointer; }
@@ -86,10 +88,10 @@
 .empty h4 { color: #62556f; font-weight: 750; font-size: 14px; margin: 0 0 7px; }
 .empty button { background: var(--brand-soft); color: var(--brand); font-weight: 700; border: 1px solid var(--brand-border); border-radius: 11px; padding: 9px 12px; margin-top: 12px; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
-@media (max-width: 1200px) { .workspace { grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; } .stat { padding: 12px; gap: 8px; } .statIcon { width: 32px; height: 32px; } .table td, .table th { padding-inline: 8px; } .person { gap: 8px; } }
-@media (max-width: 1050px) { .statIcon { display: none; } .table th { font-size: 11px; } .table td:first-child, .table th:first-child { padding-left: 12px; } .person .avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; } }
-@media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .statIcon { display: grid; } .assignmentList { max-height: none; } .detailsHeading { padding: 18px; } }
-@media (max-width: 600px) {
+@media (max-width: 1279px) { .workspace { grid-template-columns: minmax(0, 1fr) 280px; gap: 12px; } .stat { padding: 12px; gap: 8px; } .statIcon { width: 32px; height: 32px; } .table td, .table th { padding-inline: 8px; } .person { gap: 8px; } }
+@media (max-width: 1279px) { .statIcon { display: none; } .table th { font-size: 11px; } .table td:first-child, .table th:first-child { padding-left: 12px; } .person .avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 12px; } }
+@media (max-width: 1023px) { .workspace { grid-template-columns: minmax(0, 1fr); } .statIcon { display: grid; } .assignmentList { max-height: none; } .detailsHeading { padding: 18px; } }
+@media (max-width: 639px) {
   .banner { flex-wrap: wrap; padding: 14px; gap: 10px; }
   .bannerIcon { display: none; }
   .banner h2 { font-size: 16px; }

@@ -75,7 +75,7 @@ export default function OfflineBanner() {
 
   return (
     <div role="status" aria-live="polite"
-      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-24px)] max-w-md
+      className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-24px)] max-w-md
         rounded-2xl px-4 py-2.5 flex items-center gap-3"
       style={{ background: tone.bg, border: `1px solid ${tone.border}`, boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}>
       {!online

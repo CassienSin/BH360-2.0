@@ -21,7 +21,7 @@
 - **⭐ Service Ratings** — rate resolved incidents and leave feedback for the responding tanod
 
 ### Notifications
-- **🔔 Background push** — critical incidents reach officials and tanods **with BarangayHub closed**, via Web Push: a subscription per device, delivered by the browser's own push service to `public/sw.js`, triggered by a database trigger on incident insert rather than by any open page
+- **🔔 Background push** — critical incidents reach officials and tanods **with BarangayHub closed**, via Web Push: a subscription per device, delivered by the browser's own push service to `public/sw.js`, sent by a database trigger on each new notification (setup.sql Section 18) rather than by any open page
   - Works in a normal tab on Android Chrome and desktop Chrome / Edge / Firefox
   - **iOS Safari needs the app added to the Home Screen first** (16.4+) — the app detects that case and says so, rather than reporting "unsupported"
   - Critical alerts stay until tapped and vibrate distinctly; everything else expires
@@ -103,10 +103,16 @@ ANTHROPIC_API_KEY=your-anthropic-key
 
 # Web Push — background notifications. Generate the pair once with
 #   npx web-push generate-vapid-keys
+# and use the same pair everywhere that shares the database (production,
+# previews, local). A new pair silently breaks every existing subscription.
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=your-vapid-public-key
 VAPID_PRIVATE_KEY=your-vapid-private-key
 VAPID_SUBJECT=mailto:you@yourbarangay.gov.ph
 PUSH_WEBHOOK_SECRET=any-long-random-string
+# Preview deployments only: the barangay ids (comma-separated) a preview may
+# push to while it shares production's database. A preview without it pushes
+# to nobody. Never set it on Production.
+# PUSH_ONLY_BARANGAY_IDS=
 
 # Public address used in links sent outside the app (invite emails).
 # Optional — defaults to https://bh-360.vercel.app

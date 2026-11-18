@@ -12,12 +12,15 @@
 .clearSearch:hover { background: var(--brand-soft); }
 .navRow { position: relative; display: flex; align-items: center; gap: 2px; }
 .navButton { flex: 1; min-width: 0; min-height: 44px; }
-.navButton > span { min-width: 0; overflow-wrap: break-word; hyphens: auto; }
+/* Wrap between words only: break-word split "Blotter / Lupon" mid-word
+   ("Blott er / Lupo n") when its badges squeezed it. */
+.navButton > span { min-width: 0; overflow-wrap: normal; }
 .pinButton { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 40px; border-radius: 10px; color: #81738f; }
 .pinButton:hover, .pinButton[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-dark); }
 .sidebar:not(:global(.open)) nav { padding-inline: 8px; }
 .sidebar button[aria-label="Sign out"] { width: 36px; height: 36px; }
-@media (max-width: 767px) {
+/* Phone layout: narrow, or a phone held sideways (lib/layout.js). */
+@media (max-width: 767px), (max-height: 499px) {
   .iconButton, .pinButton, .sidebar button[aria-label="Sign out"] { width: 44px; height: 44px; }
   .sidebar button:focus-visible { outline-offset: -2px; }
 }

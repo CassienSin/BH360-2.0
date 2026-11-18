@@ -1,4 +1,5 @@
 'use client'
+import { CountUp } from '@/lib/useCountUp'
 import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useOnline } from '@/lib/useOnline'
@@ -9,8 +10,9 @@ import { createPortal } from 'react-dom'
 import styles from './dashboard-sidebar.module.css'
 import { lockBodyScroll } from '@/lib/modalScrollLock'
 import { useHydrated } from '@/lib/useHydrated'
+import { PHONE_LAYOUT, isPhoneLayout } from '@/lib/layout'
 
-const mobileQuery = '(max-width: 767px)'
+const mobileQuery = PHONE_LAYOUT
 function subscribeMobile(onChange) {
   const media = window.matchMedia(mobileQuery)
   media.addEventListener('change', onChange)
@@ -61,6 +63,15 @@ export default function DashboardSidebar({
   const hydrated = useHydrated()
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  // The active bar grows in when the active section changes, not when the
+  // sidebar first appears (a refresh shouldn't animate it).
+  const [shownSection, setShownSection] = useState(activeSection)
+  const [indicatorMoved, setIndicatorMoved] = useState(false)
+  if (activeSection !== shownSection) {
+    setShownSection(activeSection)
+    setIndicatorMoved(true)
+  }
+  const indicatorClass = indicatorMoved ? 'nav-indicator ' : ''
   // Remember which photo url failed, so a new photo gets a fresh try.
   const [failedAvatar, setFailedAvatar] = useState(null)
   const avatarFailed = failedAvatar != null && failedAvatar === profile?.avatar_url
@@ -136,7 +147,7 @@ export default function DashboardSidebar({
   function navClick(key) {
     setSearch('')
     setActiveSection(key)
-    if (window.innerWidth < 768) setSidebarOpen(false)
+    if (isPhoneLayout()) setSidebarOpen(false)
   }
 
   function togglePin(key, e) {
@@ -220,7 +231,7 @@ export default function DashboardSidebar({
                   aria-label={`${stat.label}: ${stat.value}${stat.key ? ` — go to ${stat.label}` : ''}`}
                   className="text-left p-2 rounded-xl transition-all hover:scale-105 disabled:hover:scale-100"
                   style={{ background: 'white', border: `1px solid ${stat.color}20` }}>
-                  <p className="text-lg font-black leading-none" style={{ color: stat.color }}>{stat.value}</p>
+                  <p className="text-lg font-black leading-none tabular-nums" style={{ color: stat.color }}><CountUp value={stat.value} /></p>
                   <p className="text-xs text-gray-500 mt-1 truncate">{stat.label}</p>
                 </button>
               ))}
@@ -274,7 +285,7 @@ export default function DashboardSidebar({
                   background: 'linear-gradient(135deg, rgba(91,84,232,0.12), rgba(124,117,240,0.06))',
                 } : {}}>
                 {activeSection === key && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full"
+                  <div className={`${indicatorClass}absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full`}
                     style={{ background: 'linear-gradient(180deg, var(--brand), var(--brand-light))', boxShadow: '0 0 12px rgba(91,84,232,0.5)' }} />
                 )}
                 <Icon size={15} style={{ color: activeSection === key ? 'var(--brand)' : '#9ca3af', flexShrink: 0 }} aria-hidden="true" />
@@ -332,7 +343,7 @@ export default function DashboardSidebar({
 
                       {/* Active indicator bar */}
                       {isActive && (
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full"
+                        <div className={`${indicatorClass}absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full`}
                           style={{
                             background: 'linear-gradient(180deg, var(--brand), var(--brand-light))',
                             boxShadow: '0 0 16px rgba(91,84,232,0.6)',
