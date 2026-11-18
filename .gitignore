@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Crafted redesign reference screens (reference only, not shipped)
+/docs/design/crafted/screens/
