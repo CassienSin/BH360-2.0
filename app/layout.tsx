@@ -150,13 +150,22 @@ export default function RootLayout({
                 window.location.reload()
               })
 
-              // Before skipping a push for "this conversation is already on
-              // screen", the worker asks where the page is now (whereIs in
-              // sw.js): the address it has for a window stays the one the
-              // page was loaded at, however far the app has navigated since.
               navigator.serviceWorker.addEventListener('message', function (event) {
-                if (!event.data || event.data.type !== 'BH360_WHERE' || !event.ports || !event.ports[0]) return
-                event.ports[0].postMessage({ path: location.pathname, visible: document.visibilityState === 'visible' })
+                var data = event.data
+                if (!data) return
+                // Before skipping a push for "this conversation is already
+                // on screen", the worker asks where the page is now (whereIs
+                // in sw.js): the address it has for a window stays the one
+                // the page was loaded at, however far the app has navigated.
+                if (data.type === 'BH360_WHERE' && event.ports && event.ports[0]) {
+                  event.ports[0].postMessage({ path: location.pathname, visible: document.visibilityState === 'visible' })
+                }
+                // A tapped notification, for a window the worker cannot
+                // navigate itself (openFromNotification in sw.js).
+                if (data.type === 'BH360_OPEN' && typeof data.url === 'string') {
+                  var url = new URL(data.url, location.href)
+                  if (url.origin === location.origin) location.assign(url.href)
+                }
               })
               navigator.serviceWorker.startMessages()
 

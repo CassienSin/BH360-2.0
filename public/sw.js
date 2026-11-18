@@ -195,18 +195,22 @@ self.addEventListener('push', (event) => {
 function whereIs(client) {
   const fallback = { path: new URL(client.url).pathname, visible: client.visibilityState === 'visible' }
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(fallback), 500)
+    let channel = null
+    const done = (place) => {
+      clearTimeout(timer)
+      if (channel) channel.port1.close()
+      resolve(place)
+    }
+    const timer = setTimeout(() => done(fallback), 500)
     try {
-      const channel = new MessageChannel()
+      channel = new MessageChannel()
       channel.port1.onmessage = (event) => {
-        clearTimeout(timer)
         const answer = event.data
-        resolve(answer && typeof answer.path === 'string' ? answer : fallback)
+        done(answer && typeof answer.path === 'string' ? answer : fallback)
       }
       client.postMessage({ type: 'BH360_WHERE' }, [channel.port2])
     } catch {
-      clearTimeout(timer)
-      resolve(fallback)
+      done(fallback)
     }
   })
 }
@@ -220,26 +224,42 @@ function whereIs(client) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const target = (event.notification.data && event.notification.data.url) || '/'
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // Prefer focusing a tab that is already open — opening a second copy
-      // of the dashboard is a worse answer than bringing the first forward.
-      for (const client of clientList) {
-        const sameOrigin = client.url.startsWith(self.location.origin)
-        if (sameOrigin && 'focus' in client) {
-          if ('navigate' in client && new URL(client.url).pathname !== target) {
-            return client.navigate(target).then((c) => c && c.focus())
-          }
-          return client.focus()
-        }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(target)
-      return undefined
-    })
-  )
+  const target = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href
+  event.waitUntil(openFromNotification(target))
 })
+
+// Open a notification's page, in a window that is already open if there is
+// one: a second copy of the dashboard is a worse answer than the first.
+//
+// Chrome lets a worker bring a window to the front (focus, openWindow) only
+// for a few seconds after the tap, and only once. This used to load the page
+// first and focus it after: on a phone with the app in the background the
+// load took longer than that, focus was refused, and the tap seemed to do
+// nothing while the page changed out of sight. So the window comes forward
+// first and its page changes after.
+async function openFromNotification(target) {
+  const windows = (await self.clients.matchAll({ type: 'window', includeUncontrolled: true }))
+    .filter(c => c.url.startsWith(self.location.origin))
+  // The one on screen, else the one used last (listed first).
+  const client = windows.find(c => c.visibilityState === 'visible') || windows.find(c => c.focused) || windows[0]
+  if (!client) return self.clients.openWindow ? self.clients.openWindow(target) : undefined
+
+  let front = client
+  try {
+    front = (await client.focus()) || client
+  } catch {
+    // Not allowed to come forward; still change its page.
+  }
+  try {
+    await front.navigate(target)
+    return
+  } catch {
+    // navigate() refuses a window this worker does not control (one
+    // opened before it took over); that page loads the link itself
+    // (app/layout.tsx).
+  }
+  front.postMessage({ type: 'BH360_OPEN', url: target })
+}
 
 // A subscription can be rotated by the push service without the user doing
 // anything. Without this the endpoint we stored goes dead silently and the
