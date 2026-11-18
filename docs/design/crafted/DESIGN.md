@@ -149,7 +149,7 @@ Where the band appears:
 - **Empty and help text:** 12–13px muted. Don't use illustrations except Tarsi, later.
 
 ## 6. Icons
-- Use `BhIcons.jsx` (copied in this folder) for every product icon: nav, categories, roles and empty states.
+- Use `components/icons/BhIcons.jsx` (moved there from this folder) for every product icon: nav, categories, roles and empty states.
   - Outline by default; `active` gives the solid version with a knock-out (the `--bh-icon-knockout` colour).
   - Category icons: fire, medical, violence, flood, drugs, theft, animals, garbage, traffic, infrastructure, vandalism, noise, other.
 - Lucide stays only for small generic UI glyphs (search, chevrons, close, plus, phone, camera, send), at 1.9 stroke.

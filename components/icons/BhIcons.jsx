@@ -1,4 +1,3 @@
-'use client'
 /**
  * BH360's own icon set: the identity icons (navigation, incident
  * categories, roles). Generic UI glyphs (X, Check, arrows, etc.) stay on lucide-react.
@@ -16,6 +15,10 @@
  * swapping an import is usually all a call site needs.
  *
  * Drawn on a 24×24 grid with a 1.75 stroke. Generated from one source; edit there, not here.
+ *
+ * No hooks and no browser APIs, so it is not a client module: server
+ * components (loading skeletons) can render these directly, and
+ * CATEGORY_BH_ICONS stays a plain object everywhere.
  */
 
 // [kind, onBody, d]  kind: 0 body · 1 line · 2 dot
@@ -232,6 +235,8 @@ export function BhIcon({
 function make(name, displayName) {
   const Icon = props => <BhIcon name={name} {...props} />
   Icon.displayName = displayName
+  // Marks a BH360 icon, so shared components know it takes `active`.
+  Icon.bh = true
   return Icon
 }
 
