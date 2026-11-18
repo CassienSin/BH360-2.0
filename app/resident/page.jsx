@@ -10,11 +10,14 @@ import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Home, MessageCircle, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
+import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
+import DashboardFrame from '@/components/crafted/DashboardFrame'
+import TabBar from '@/components/crafted/TabBar'
+import { AiIcon, AnnouncementsIcon, BlotterIcon, DocumentsIcon, HomeIcon, IncidentsIcon, TicketsIcon } from '@/components/icons/BhIcons'
 import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
@@ -744,50 +747,41 @@ function ResidentDashboard() {
   // one skeleton throughout, then the content in its place.
   if (loading) {
     return (
-      <DashboardShellSkeleton path="/resident" kind={RESIDENT_SKELETONS[activeSection]}
+      <DashboardShellSkeleton path="/resident" kind={RESIDENT_SKELETONS[activeSection]} section={activeSection}
         sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
     )
   }
 
   return (
-    <div className="min-h-dvh flex relative overflow-hidden">
-
-      {/* The page-level overlay is gone — the improved DashboardSidebar
-          renders its own mobile backdrop, so this one doubled it up. */}
-
-      <DashboardSidebar
+    <>
+      <DashboardFrame mainRef={mainRef} sidebarOpen={sidebarOpen}
+        tabBar={<TabBar role="resident" activeSection={activeSection} onSelect={setActiveSection} />}
+        sidebar={<DashboardSidebar
         profile={profile}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         roleLabel="Resident"
-        stats={[
-          { label: 'Announcements', value: announcements.length, color: '#5B54E8', key: 'announcements' },
-          { label: 'My Incidents', value: incidents.length, color: '#f97316', key: 'incidents' },
-          { label: 'My Tickets', value: tickets.length, color: '#3b82f6', key: 'tickets' },
-          { label: 'My Documents', value: documentRequests.length, color: '#16a34a', key: 'documents' },
-        ]}
         navItems={[
           { section: 'MAIN', items: [
-            { key: 'home', label: 'Home', icon: Home },
-            { key: 'announcements', label: 'Announcements', icon: Bell, count: unreadAnnouncementCount, hasNew: unreadAnnouncementCount > 0 },
+            { key: 'home', label: 'Home', icon: HomeIcon },
+            { key: 'announcements', label: 'Announcements', icon: AnnouncementsIcon, count: unreadAnnouncementCount, hasNew: unreadAnnouncementCount > 0 },
           ]},
           { section: 'MY ACTIVITY', items: [
-            { key: 'incidents', label: 'My Incidents', icon: AlertTriangle, count: incidents.filter(i => i.status === 'pending').length },
-            { key: 'tickets', label: 'My Tickets', icon: FileText, count: tickets.filter(t => t.status === 'open').length },
-            { key: 'documents', label: 'My Documents', icon: FileCheck2, count: openDocumentCount },
-            { key: 'blotter', label: 'My Blotter Cases', icon: Gavel, count: blotterCases.filter(caseIsOpen).length },
+            { key: 'incidents', label: 'My Incidents', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length },
+            { key: 'tickets', label: 'My Tickets', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length },
+            { key: 'documents', label: 'My Documents', icon: DocumentsIcon, count: openDocumentCount },
+            { key: 'blotter', label: 'My Blotter Cases', icon: BlotterIcon, count: blotterCases.filter(caseIsOpen).length },
           ]},
           { section: 'SUPPORT', items: [
-            { key: 'ai', label: 'AI Assistant', icon: MessageCircle, badge: 'AI' },
+            { key: 'ai', label: 'AI Assistant', icon: AiIcon, badge: 'AI' },
           ]},
         ]}
-      />
-
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
-        <DashboardHeader
+      />}
+        header={<DashboardHeader
           profile={profile}
+          columnClass={dashboardColumn('/resident', RESIDENT_SKELETONS[activeSection])}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
@@ -799,9 +793,8 @@ function ResidentDashboard() {
             if (type === 'tickets') router.push(`/resident/ticket/${item.id}`)
             if (type === 'announcements') setActiveSection('announcements')
           }}
-        />
+        />}>
 
-        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
           <div className="mx-auto w-full max-w-[100rem]">
           {/* In the same column as the section below it. */}
           <div className={`${dashboardColumn('/resident', RESIDENT_SKELETONS[activeSection])} mx-auto`}>
@@ -1267,15 +1260,14 @@ function ResidentDashboard() {
 
           </SectionContent>
           </div>
-        </main>
-      </div>
+      </DashboardFrame>
       <RatingModal
         open={!!ratingModal}
         onClose={() => setRatingModal(null)}
         onSubmit={handleRating}
         incident={ratingModal}
       />
-    </div>
+    </>
   )
 }
 

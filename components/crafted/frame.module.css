@@ -1,0 +1,49 @@
+.frame {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--page);
+}
+
+.column {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  transition: margin-left .3s ease;
+}
+
+/* The scroll container. Isolated so the band (z-index 0) and the content
+   above it (z-index 1) stack inside it, over the page colour. No reserved
+   scrollbar gutter: it left a white strip beside the band, and the app's
+   scrollbars are 6px. */
+.main {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Phone padding 16, desktop 28 (DESIGN.md §2 spacing). */
+.content {
+  position: relative;
+  z-index: 1;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.main[data-tabbar] .content { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+@media (min-width: 768px) and (min-height: 500px) {
+  .content { padding: 0 28px 32px; }
+  .main[data-tabbar] .content { padding-bottom: 32px; }
+}
+@media (max-height: 499px) {
+  .main[data-tabbar] .content { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .column { transition: none; }
+}

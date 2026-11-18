@@ -11,10 +11,12 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
+import { AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
+import DashboardFrame from '@/components/crafted/DashboardFrame'
+import { AnalyticsIcon, AnnouncementsIcon, BlotterIcon, CalendarIcon, DashboardIcon, DocumentsIcon, IncidentsIcon, MapIcon, TanodsIcon, TicketsIcon, UsersIcon, VerificationsIcon } from '@/components/icons/BhIcons'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TanodRoster from '@/components/TanodRoster'
 import TanodManagement from '@/components/TanodManagement'
@@ -951,51 +953,45 @@ function OfficialDashboard() {
   // one skeleton throughout, then the content in its place.
   if (loading) {
     return (
-      <DashboardShellSkeleton path="/official" kind={OFFICIAL_SKELETONS[activeSection]}
+      <DashboardShellSkeleton path="/official" kind={OFFICIAL_SKELETONS[activeSection]} section={activeSection}
         sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
     )
   }
 
   return (
-    <div className="min-h-dvh flex relative overflow-hidden">
-      <DashboardSidebar
+    <>
+      <DashboardFrame mainRef={mainRef} sidebarOpen={sidebarOpen}
+        sidebar={<DashboardSidebar
         profile={profile}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         roleLabel="Barangay Official"
-        stats={[
-          { label: 'Pending', value: incidents.filter(i => i.status === 'pending').length, color: '#f97316', key: 'incidents' },
-          { label: 'Open Tickets', value: tickets.filter(t => t.status === 'open').length, color: '#3b82f6', key: 'tickets' },
-          { label: 'On Duty', value: `${tanods.filter(t => t.on_duty).length}/${tanods.length}`, color: '#22c55e', key: 'tanods' },
-          { label: 'Total', value: incidents.length, color: '#5B54E8', key: 'incidents' },
-        ]}
         navItems={[
           { section: 'MAIN', items: [
-            { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-            { key: 'incidents', label: 'Incidents', icon: AlertTriangle, count: incidents.filter(i => i.status === 'pending').length, hasNew: incidents.filter(i => i.status === 'pending').length > 0 },
-            { key: 'announcements', label: 'Announcements', icon: Bell },
+            { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
+            { key: 'incidents', label: 'Incidents', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length, hasNew: incidents.filter(i => i.status === 'pending').length > 0 },
+            { key: 'announcements', label: 'Announcements', icon: AnnouncementsIcon },
           ]},
           { section: 'MANAGEMENT', items: [
-            { key: 'tickets', label: 'Ticket Management', icon: FileText, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
-            { key: 'documents', label: 'Document Requests', icon: FileCheck2, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
-            { key: 'verifications', label: 'Verifications', icon: BadgeCheck, count: pendingVerifications, hasNew: pendingVerifications > 0 },
-            { key: 'blotter', label: 'Blotter / Lupon', icon: Gavel, count: blotterCounts.open, badge: blotterCounts.breach > 0 ? 'OVERDUE' : undefined },
-            { key: 'tanods', label: 'Tanod Management', icon: Shield },
-            { key: 'users', label: 'User Management', icon: Users },
+            { key: 'tickets', label: 'Ticket Management', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
+            { key: 'documents', label: 'Document Requests', icon: DocumentsIcon, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
+            { key: 'verifications', label: 'Verifications', icon: VerificationsIcon, count: pendingVerifications, hasNew: pendingVerifications > 0 },
+            { key: 'blotter', label: 'Blotter / Lupon', icon: BlotterIcon, count: blotterCounts.open, badge: blotterCounts.breach > 0 ? 'OVERDUE' : undefined },
+            { key: 'tanods', label: 'Tanod Management', icon: TanodsIcon },
+            { key: 'users', label: 'User Management', icon: UsersIcon },
           ]},
           { section: 'INSIGHTS', items: [
-            { key: 'map', label: 'Incident Map', icon: Map },
-            { key: 'calendar', label: 'Calendar', icon: Calendar },
-            { key: 'analytics', label: 'AI Analytics', icon: BarChart2, badge: 'AI' },
+            { key: 'map', label: 'Incident Map', icon: MapIcon },
+            { key: 'calendar', label: 'Calendar', icon: CalendarIcon },
+            { key: 'analytics', label: 'AI Analytics', icon: AnalyticsIcon, badge: 'AI' },
           ]},
         ]}
-      />
-
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
-        <DashboardHeader
+      />}
+        header={<DashboardHeader
           profile={profile}
+          columnClass={'max-w-[100rem]'}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
@@ -1011,9 +1007,8 @@ function OfficialDashboard() {
             if (type === 'tickets') router.push(`/official/ticket/${item.id}`)
             if (type === 'announcements') setActiveSection('announcements')
           }}
-        />
+        />}>
 
-        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
           <div className="mx-auto w-full max-w-[100rem]">
            <NotificationBanner />
            <AppointmentReminderWatcher profile={profile} />
@@ -1641,8 +1636,7 @@ function OfficialDashboard() {
           )}
           </SectionContent>
           </div>
-        </main>
-      </div>
+      </DashboardFrame>
 
       {/* Confirm Dialog */}
       <ConfirmDialog
@@ -1659,7 +1653,7 @@ function OfficialDashboard() {
         onAcknowledge={acknowledgeCritical}
         onView={(inc) => router.push(`/official/incident/${inc.id}`)}   
       />
-    </div>
+    </>
   )
 }
 

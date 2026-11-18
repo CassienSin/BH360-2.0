@@ -1,0 +1,72 @@
+/* Phone tab bar (kit.py tabbar()). Fixed to the bottom of the screen in
+   the phone layout; hidden on desktop, where the sidebar navigates. */
+
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  display: flex;
+  align-items: flex-start;
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 768px) and (min-height: 500px) {
+  .bar { display: none; }
+}
+
+.tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  border-radius: 10px;
+  color: var(--text-muted);
+  --bh-icon-knockout: var(--surface);
+}
+.tab:focus-visible, .report:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -2px; }
+.label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; }
+.active { color: var(--brand-strong); }
+.active .label { font-weight: 800; }
+
+/* The raised red Report button: a 54px circle with a 4px white ring. */
+.report {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  margin: -22px 4px 0;
+  border-radius: 14px;
+  text-decoration: none;
+}
+.reportCircle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  border: 4px solid var(--surface);
+  box-shadow: 0 6px 14px -6px rgba(217, 45, 75, 0.7);
+  --bh-icon-knockout: var(--danger);
+}
+.reportLabel { font-size: 11px; font-weight: 800; color: var(--danger); }
+
+/* A phone held sideways is short: a slimmer bar. */
+@media (max-height: 499px) {
+  .bar { padding-top: 2px; padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)); }
+  .tab { padding: 3px 0; }
+  .report { margin-top: -14px; }
+  .reportCircle { width: 46px; height: 46px; }
+}
+
+/* Drawn in place (style guide). */
+.bar.preview { position: relative; display: flex; z-index: auto; padding-bottom: 10px; }

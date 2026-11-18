@@ -10,11 +10,14 @@ import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { MapPin, CheckCircle, Clock, AlertTriangle, Home, Phone, Navigation, TrendingUp, Award, Zap, FileText, Star } from 'lucide-react'
+import { MapPin, CheckCircle, Clock, AlertTriangle, Phone, Navigation, Award, Zap, FileText, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 import dynamic from 'next/dynamic'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
+import DashboardFrame from '@/components/crafted/DashboardFrame'
+import TabBar from '@/components/crafted/TabBar'
+import { HomeIcon, IncidentsIcon, PerformanceIcon } from '@/components/icons/BhIcons'
 import ResolveModal from '@/components/ResolveModal'
 import DutyToggle from '@/components/DutyToggle'
 import DutyScheduleSummary from '@/components/DutyScheduleSummary'
@@ -590,10 +593,10 @@ function TanodDashboard() {
 
   const navItems = [
     { section: 'MAIN', items: [
-      { key: 'home', label: 'Home', icon: Home },
-      { key: 'active', label: 'Active Assignments', icon: AlertTriangle, count: assignedIncidents.length, hasNew: assignedIncidents.length > 0 },
+      { key: 'home', label: 'Home', icon: HomeIcon },
+      { key: 'active', label: 'Active Assignments', icon: IncidentsIcon, count: assignedIncidents.length, hasNew: assignedIncidents.length > 0 },
       { key: 'resolved', label: 'Resolved', icon: CheckCircle },
-      { key: 'stats', label: 'My Performance', icon: TrendingUp, badge: 'NEW' },
+      { key: 'stats', label: 'My Performance', icon: PerformanceIcon, badge: 'NEW' },
     ]},
   ]
 
@@ -606,35 +609,27 @@ function TanodDashboard() {
   // one skeleton throughout, then the content in its place.
   if (loading) {
     return (
-      <DashboardShellSkeleton path="/tanod" kind={TANOD_SKELETONS[activeSection]}
+      <DashboardShellSkeleton path="/tanod" kind={TANOD_SKELETONS[activeSection]} section={activeSection}
         sidebarOpen={sidebarOpen} banner={<NotificationBanner />} />
     )
   }
 
   return (
-    <div className="min-h-dvh flex relative overflow-hidden">
-
-
-
-      <DashboardSidebar
+    <>
+      <DashboardFrame mainRef={mainRef} sidebarOpen={sidebarOpen}
+        tabBar={<TabBar role="tanod" activeSection={activeSection} onSelect={setActiveSection} />}
+        sidebar={<DashboardSidebar
         profile={profile}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         activeSection={activeSection}
         setActiveSection={setActiveSection}
         roleLabel="Tanod"
-        stats={[
-          { label: 'Active', value: assignedIncidents.length, color: '#f97316', key: 'active' },
-          { label: 'Resolved', value: resolvedIncidents.length, color: '#22c55e', key: 'resolved' },
-          { label: 'This Month', value: stats.resolvedThisMonth, color: '#5B54E8', key: 'stats' },
-          { label: 'Success', value: `${stats.resolutionRate}%`, color: '#3b82f6', key: 'stats' },
-        ]}
         navItems={navItems}
-      />
-
-      <div className={`flex-1 flex flex-col min-w-0 relative z-10 transition-all duration-300 h-dvh overflow-hidden ${sidebarOpen ? 'desk:ml-64' : 'desk:ml-16'}`}>
-        <DashboardHeader
+      />}
+        header={<DashboardHeader
           profile={profile}
+          columnClass={activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={SECTION_TITLES[activeSection]}
@@ -642,9 +637,8 @@ function TanodDashboard() {
           notificationCenter={notificationCenter}
           searchData={{ incidents, tickets: [], announcements: [] }}
           onSearchResultClick={() => setActiveSection('active')}
-        />
+        />}>
 
-        <main ref={mainRef} className="flex-1 pad-safe overflow-y-auto [scrollbar-gutter:stable]">
           <div className="mx-auto w-full max-w-[100rem]">
           <NotificationBanner />
 
@@ -1161,8 +1155,7 @@ function TanodDashboard() {
 
           </SectionContent>
           </div>
-        </main>
-      </div>
+      </DashboardFrame>
 
       <CriticalAlert
         audience="tanod"
@@ -1180,7 +1173,7 @@ function TanodDashboard() {
         incident={resolveModal}
         userId={profile?.id}
       />
-    </div>
+    </>
   )
 }
 

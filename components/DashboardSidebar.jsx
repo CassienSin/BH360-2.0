@@ -1,10 +1,10 @@
 'use client'
-import { CountUp } from '@/lib/useCountUp'
 import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useOnline } from '@/lib/useOnline'
 import Image from 'next/image'
-import { LogOut, Search, ChevronLeft, Pin, PinOff, Activity, X } from 'lucide-react'
+import Link from 'next/link'
+import { LogOut, Search, ChevronLeft, ChevronRight, Pin, PinOff, X, User, Settings, HelpCircle } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
 import { createPortal } from 'react-dom'
 import styles from './dashboard-sidebar.module.css'
@@ -40,10 +40,53 @@ function readPins(pinKey) {
   }
 }
 
-const roleColors = {
-  'Resident': { gradient: 'linear-gradient(135deg, #5B54E8, #7C75F0)', color: '#5B54E8' },
-  'Barangay Official': { gradient: 'linear-gradient(135deg, #f97316, #ea580c)', color: '#f97316' },
-  'Tanod': { gradient: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#22c55e' },
+// The signed-in user's avatar colour, by role (kit.py sidebar()).
+const ROLE_COLORS = {
+  'Resident': 'var(--brand-strong)',
+  'Barangay Official': '#F97316',
+  'Tanod': 'var(--ok)',
+}
+
+// "Juan Dela Cruz" → "JD"
+function initialsOf(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return '?'
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase()
+}
+
+/**
+ * One nav entry. Icons are BH360 icons (components/icons/BhIcons): outline
+ * normally, solid when active. The count sits on the right, red only when
+ * the item is overdue (badge: 'OVERDUE').
+ */
+function NavItem({ item, active, open, onClick }) {
+  const { label, icon: Icon, count, hasNew, badge } = item
+  const overdue = badge === 'OVERDUE'
+  return (
+    <button
+      onClick={onClick}
+      title={!open ? `${label}${count > 0 ? ` (${count})` : ''}` : undefined}
+      aria-current={active ? 'page' : undefined}
+      aria-label={!open ? `${label}${count > 0 ? `, ${count}` : ''}${overdue ? ', overdue' : ''}` : undefined}
+      className={`${styles.navButton} ${active ? styles.active : ''}`}>
+      <span className={styles.navIcon}>
+        {/* BH360 icons take `active` (solid); a lucide fallback doesn't. */}
+        {Icon.bh ? <Icon size={18} active={active} /> : <Icon size={18} strokeWidth={1.9} aria-hidden="true" />}
+        {!open && (count > 0 || hasNew) && <span className={`${styles.railDot} ${overdue ? styles.railDotDanger : ''}`} aria-hidden="true" />}
+      </span>
+      {open && (
+        <>
+          <span className={styles.navLabel}>{label}</span>
+          {badge && !overdue && <span className={styles.navBadge}>{badge}</span>}
+          {count > 0 ? (
+            <span className={`${styles.count} ${overdue ? styles.countDanger : ''}`}>
+              {count}{overdue && <span className="sr-only">, overdue</span>}
+            </span>
+          ) : hasNew ? <span className={styles.newDot} aria-label="New" /> : null}
+        </>
+      )}
+    </button>
+  )
 }
 
 export default function DashboardSidebar({
@@ -54,7 +97,6 @@ export default function DashboardSidebar({
   setActiveSection,
   navItems,
   roleLabel = 'User',
-  stats = [], // [{ label, value, color, key (optional - to navigate) }]
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [search, setSearch] = useState('')
@@ -63,23 +105,13 @@ export default function DashboardSidebar({
   const hydrated = useHydrated()
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  // The active bar grows in when the active section changes, not when the
-  // sidebar first appears (a refresh shouldn't animate it).
-  const [shownSection, setShownSection] = useState(activeSection)
-  const [indicatorMoved, setIndicatorMoved] = useState(false)
-  if (activeSection !== shownSection) {
-    setShownSection(activeSection)
-    setIndicatorMoved(true)
-  }
-  const indicatorClass = indicatorMoved ? 'nav-indicator ' : ''
   // Remember which photo url failed, so a new photo gets a fresh try.
   const [failedAvatar, setFailedAvatar] = useState(null)
   const avatarFailed = failedAvatar != null && failedAvatar === profile?.avatar_url
   const sidebarRef = useRef(null)
   const searchRef = useRef(null)
   const isMobile = useSyncExternalStore(subscribeMobile, getMobile, getServerMobile)
-  // The footer status dot used to be hardcoded green — it now reflects
-  // the real connection state so "online" actually means online.
+  // The footer status dot reflects the real connection state.
   const online = useOnline()
 
   // Pins are stored per-user so accounts on a shared device don't
@@ -106,7 +138,7 @@ export default function DashboardSidebar({
       if (document.querySelector('[role="alertdialog"]')) return
       if (e.key === 'Escape') { e.preventDefault(); setSearch(''); setSidebarOpen(false) }
       if (e.key !== 'Tab') return
-      const controls = [...(sidebarRef.current?.querySelectorAll('button:not(:disabled), input, [tabindex="0"]') || [])]
+      const controls = [...(sidebarRef.current?.querySelectorAll('button:not(:disabled), input, a[href], [tabindex="0"]') || [])]
         .filter(element => element.tabIndex >= 0 && !element.hidden)
       const first = controls[0], last = controls[controls.length - 1]
       const outside = !sidebarRef.current?.contains(document.activeElement)
@@ -162,8 +194,8 @@ export default function DashboardSidebar({
     storageSet(pinKey, JSON.stringify(next))
   }
 
-  // Filter nav items by search
-  const q = search.trim().toLowerCase()
+  // Filter nav items by search ("Find a page" lives in the phone drawer only)
+  const q = isMobile ? search.trim().toLowerCase() : ''
   const filteredNavItems = navItems.map(section => ({
     ...section,
     items: section.items.filter(item => !q || item.label.toLowerCase().includes(q)),
@@ -174,77 +206,48 @@ export default function DashboardSidebar({
     .map(key => navItems.flatMap(s => s.items).find(item => item.key === key))
     .filter(Boolean)
 
-  const rc = roleColors[roleLabel] || roleColors.Resident
+  const avatarColor = ROLE_COLORS[roleLabel] || 'var(--brand-strong)'
+  const open = sidebarOpen
 
   return (
     <>
-    <aside ref={sidebarRef} id="dashboard-navigation" className={`sidebar ${styles.sidebar} flex-shrink-0 flex flex-col bg-white ${sidebarOpen ? 'w-64 open' : 'w-16'}`}
-      role={isMobile && sidebarOpen ? 'dialog' : undefined}
-      aria-modal={isMobile && sidebarOpen ? true : undefined}
-      inert={isMobile && !sidebarOpen ? true : undefined}
-      aria-label="Dashboard navigation"
-      style={{ boxShadow: '4px 0 24px rgba(91,84,232,0.1)', height: '100dvh', overflow: 'hidden' }}>
+    <aside ref={sidebarRef} id="dashboard-navigation" className={`sidebar ${styles.sidebar} ${open ? `open ${styles.isOpen}` : styles.isClosed}`}
+      role={isMobile && open ? 'dialog' : undefined}
+      aria-modal={isMobile && open ? true : undefined}
+      inert={isMobile && !open ? true : undefined}
+      aria-label="Dashboard navigation">
 
-      {/* Logo / Brand — when collapsed, tapping the logo expands the sidebar */}
-      <div className={`flex items-center gap-3 px-4 py-4 ${!sidebarOpen && 'justify-center'}`}
-        style={{ borderBottom: '1px solid var(--brand-soft)' }}>
+      {/* Logo and barangay. Collapsed: the logo expands the sidebar. */}
+      <div className={styles.brand}>
         <button
-          onClick={() => !sidebarOpen && setSidebarOpen(true)}
-          className={`w-9 h-9 relative flex-shrink-0 ${!sidebarOpen ? 'cursor-pointer transition-transform hover:scale-110' : 'cursor-default'}`}
-          aria-label={sidebarOpen ? 'BH360' : 'Expand sidebar'}
-          aria-expanded={sidebarOpen}
-          title={!sidebarOpen ? 'Expand sidebar' : undefined}
-          tabIndex={sidebarOpen ? -1 : 0}>
-          <Image src="/logo.png" alt="BH360" fill sizes="36px" loading="eager" className="object-contain" />
+          onClick={() => !open && setSidebarOpen(true)}
+          className={styles.logo}
+          aria-label={open ? 'BarangayHub 360' : 'Expand sidebar'}
+          aria-expanded={open}
+          title={!open ? 'Expand sidebar' : undefined}
+          tabIndex={open ? -1 : 0}>
+          <Image src="/logo.png" alt="" fill sizes="32px" loading="eager" className="object-contain" />
         </button>
-        {sidebarOpen && (
+        {open && (
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-sm text-gray-800">BH360</p>
-            <p className="text-xs text-gray-500 truncate">{profile?.barangays?.name || 'Portal'}</p>
+            <p className={styles.appName}>BarangayHub 360</p>
+            <p className={styles.place}>{profile?.barangays?.name || 'Portal'}</p>
           </div>
         )}
-        {sidebarOpen && (
+        {open && (
           <button type="button" data-close-navigation onClick={() => { setSearch(''); setSidebarOpen(false) }} aria-label={isMobile ? 'Close navigation' : 'Collapse sidebar'} aria-expanded={true} aria-controls="dashboard-navigation"
             className={styles.iconButton}>
-            {isMobile ? <X size={18} /> : <ChevronLeft size={18} />}
+            {isMobile ? <X size={18} strokeWidth={1.9} /> : <ChevronLeft size={18} strokeWidth={1.9} />}
           </button>
         )}
       </div>
 
       <div className={styles.scrollArea}>
-      {/* Stats Card */}
-      {sidebarOpen && stats.length > 0 && (
-        <div className="px-3 py-3 border-b border-gray-100">
-          <div className="rounded-2xl p-3"
-            style={{ background: 'linear-gradient(135deg, var(--app-surface), var(--brand-soft))', border: '1px solid var(--brand-border)' }}>
-            <div className="flex items-center gap-1.5 mb-2">
-              <Activity size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
-              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
-                Quick Stats
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {stats.slice(0, 4).map((stat) => (
-                <button key={stat.label}
-                  onClick={() => stat.key && navClick(stat.key)}
-                  disabled={!stat.key}
-                  aria-label={`${stat.label}: ${stat.value}${stat.key ? ` — go to ${stat.label}` : ''}`}
-                  className="text-left p-2 rounded-xl transition-all hover:scale-105 disabled:hover:scale-100"
-                  style={{ background: 'white', border: `1px solid ${stat.color}20` }}>
-                  <p className="text-lg font-black leading-none tabular-nums" style={{ color: stat.color }}><CountUp value={stat.value} /></p>
-                  <p className="text-xs text-gray-500 mt-1 truncate">{stat.label}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Search */}
-      {sidebarOpen && (
-        <div className="px-3 py-3 border-b border-gray-100">
+      {/* Find a page: phone drawer only. */}
+      {open && isMobile && (
+        <div className={styles.searchRow}>
           <div className="relative">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
+            <Search size={16} strokeWidth={1.9} className={styles.searchIcon} aria-hidden="true" />
             <input
               ref={searchRef}
               value={search}
@@ -260,206 +263,105 @@ export default function DashboardSidebar({
               }}
               placeholder="Find a page…"
               aria-label="Filter navigation items"
-              className={`w-full pl-8 pr-10 py-2 text-xs rounded-xl outline-none transition-all ${styles.search}`}
-              style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
-              onFocus={e => e.target.style.borderColor = '#5B54E8'}
-              onBlur={e => e.target.style.borderColor = '#f0effe'}
+              className={styles.search}
             />
             {search && <button type="button" onClick={() => { setSearch(''); searchRef.current?.focus() }} aria-label="Clear navigation filter" className={styles.clearSearch}><X size={16} /></button>}
           </div>
         </div>
       )}
 
-      {/* Pinned section */}
-      {sidebarOpen && pinnedItems.length > 0 && !q && (
-        <div className="px-3 py-2 border-b border-gray-100">
-          <p className="text-xs font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-500 flex items-center gap-1">
-            <Pin size={9} aria-hidden="true" /> Pinned
-          </p>
-          <div className="space-y-0.5">
-            {pinnedItems.map(({ key, label, icon: Icon, count, hasNew }) => (
-              <button key={`pinned-${key}`} onClick={() => navClick(key)}
-                aria-current={activeSection === key ? 'page' : undefined}
-                className={`group relative w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all ${activeSection === key ? 'active-nav' : 'hover:bg-gray-50'}`}
-                style={activeSection === key ? {
-                  background: 'linear-gradient(135deg, rgba(91,84,232,0.12), rgba(124,117,240,0.06))',
-                } : {}}>
-                {activeSection === key && (
-                  <div className={`${indicatorClass}absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r-full`}
-                    style={{ background: 'linear-gradient(180deg, var(--brand), var(--brand-light))', boxShadow: '0 0 12px rgba(91,84,232,0.5)' }} />
-                )}
-                <Icon size={15} style={{ color: activeSection === key ? 'var(--brand)' : '#9ca3af', flexShrink: 0 }} aria-hidden="true" />
-                <span className="text-xs flex-1 text-left"
-                  style={{ color: activeSection === key ? 'var(--brand)' : '#6b7280', fontWeight: activeSection === key ? 700 : 500 }}>
-                  {label}
-                </span>
-                {hasNew && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />}
-                {count > 0 && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-md font-bold"
-                    style={{
-                      background: activeSection === key ? 'var(--brand)' : '#ede9fe',
-                      color: activeSection === key ? 'white' : 'var(--brand)',
-                    }}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+      {/* Pinned */}
+      {open && pinnedItems.length > 0 && !q && (
+        <div className={styles.group}>
+          <p className={styles.groupLabel}>Pinned</p>
+          {pinnedItems.map(item => (
+            <div key={`pinned-${item.key}`} className={styles.navRow}>
+              <NavItem item={item} active={activeSection === item.key} open onClick={() => navClick(item.key)} />
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Main Navigation */}
-      <nav className="px-3 py-3 space-y-4" aria-label="Main">
+      {/* Main navigation */}
+      <nav aria-label="Main" className={styles.nav}>
         {filteredNavItems.map(({ section, items }) => (
-          <div key={section}>
-            {sidebarOpen && (
-              <p className="text-xs font-bold uppercase tracking-wider px-3 mb-1.5 text-gray-500 flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
-                {section}
-              </p>
-            )}
-            <div className="space-y-0.5">
-              {items.map(({ key, label, icon: Icon, count, hasNew, badge }) => {
-                const isActive = activeSection === key
-                const isPinned = pinned.includes(key)
-
-                return (
-                  <div key={key} className={styles.navRow}>
-                    {/* The pin control is a SIBLING button now, not a
-                        role="button" span nested inside the nav button —
-                        nested interactive controls are invalid for screen
-                        readers and confused focus order. */}
+          <div key={section} className={styles.group}>
+            {open ? <p className={styles.groupLabel}>{section}</p> : <span className={styles.railRule} aria-hidden="true" />}
+            {items.map(item => {
+              const isPinned = pinned.includes(item.key)
+              return (
+                <div key={item.key} className={styles.navRow}>
+                  <NavItem item={item} active={activeSection === item.key} open={open} onClick={() => navClick(item.key)} />
+                  {/* A separate pin control (not nested in the nav button),
+                      so it works on touch and keyboards. */}
+                  {open && (
                     <button
-                      onClick={() => navClick(key)}
-                      title={!sidebarOpen ? `${label}${count > 0 ? ` (${count})` : ''}` : undefined}
-                      aria-current={isActive ? 'page' : undefined}
-                      aria-label={!sidebarOpen ? label : undefined}
-                      className={`${styles.navButton} group relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${!sidebarOpen && 'justify-center'} ${isActive ? '' : 'hover:bg-gray-50'}`}
-                      style={isActive ? {
-                        background: 'linear-gradient(135deg, rgba(91,84,232,0.12), rgba(124,117,240,0.06))',
-                        boxShadow: '0 2px 8px rgba(91,84,232,0.08)',
-                      } : {}}>
-
-                      {/* Active indicator bar */}
-                      {isActive && (
-                        <div className={`${indicatorClass}absolute left-0 top-1/2 -translate-y-1/2 w-1 h-7 rounded-r-full`}
-                          style={{
-                            background: 'linear-gradient(180deg, var(--brand), var(--brand-light))',
-                            boxShadow: '0 0 16px rgba(91,84,232,0.6)',
-                          }} />
-                      )}
-
-                      <div className="relative flex-shrink-0">
-                        <Icon size={17} style={{ color: isActive ? 'var(--brand)' : '#6b7280' }} aria-hidden="true" />
-                        {hasNew && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-                        )}
-                      </div>
-
-                      {sidebarOpen && (
-                        <>
-                          <span className="text-sm flex-1 text-left"
-                            style={{ color: isActive ? 'var(--brand)' : '#6b7280', fontWeight: isActive ? 700 : 500 }}>
-                            {label}
-                          </span>
-
-                          {badge && (
-                            <span className="text-[11px] leading-4 px-1 py-0.5 rounded-md font-bold flex-shrink-0"
-                              style={{ background: '#fef3c7', color: '#92400e' }}>
-                              {badge}
-                            </span>
-                          )}
-
-                          {count > 0 && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-md font-bold min-w-[18px] text-center flex-shrink-0"
-                              style={{
-                                background: isActive ? 'var(--brand)' : '#ede9fe',
-                                color: isActive ? 'white' : 'var(--brand)',
-                              }}>
-                              {count}
-                            </span>
-                          )}
-                        </>
-                      )}
+                      onClick={(e) => togglePin(item.key, e)}
+                      aria-label={isPinned ? `Unpin ${item.label}` : `Pin ${item.label} to top`}
+                      aria-pressed={isPinned}
+                      title={isPinned ? 'Unpin' : 'Pin to top'}
+                      className={styles.pinButton}>
+                      {isPinned ? <PinOff size={14} /> : <Pin size={14} />}
                     </button>
-
-                    {/* A separate, visible pin control works on touch and keyboards. */}
-                    {sidebarOpen && (
-                      <button
-                        onClick={(e) => togglePin(key, e)}
-                        aria-label={isPinned ? `Unpin ${label}` : `Pin ${label} to top`}
-                        aria-pressed={isPinned}
-                        title={isPinned ? 'Unpin' : 'Pin to top'}
-                        className={styles.pinButton}>
-                        {isPinned ? (
-                          <PinOff size={14} />
-                        ) : (
-                          <Pin size={14} />
-                        )}
-                      </button>
-                    )}
-
-
-                  </div>
-                )
-              })}
-            </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         ))}
 
-        {sidebarOpen && search && filteredNavItems.length === 0 && (
+        {open && search && filteredNavItems.length === 0 && (
           <div className="px-3 py-6 text-center">
-            <p className="text-xs text-gray-500" role="status">No pages match “{search}”. Try a different name.</p>
-            <button onClick={() => setSearch('')}
-              className="mt-2 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
+            <p className="text-[13px] text-muted-foreground" role="status">No pages match “{search}”.</p>
+            <button onClick={() => setSearch('')} className="mt-2 text-[13px] font-bold text-brand-strong">
               Clear search
             </button>
           </div>
         )}
       </nav>
+
+      {/* Phone drawer: the account pages (the desktop band has an account menu). */}
+      {open && isMobile && (
+        <div className={styles.group}>
+          <p className={styles.groupLabel}>Account</p>
+          <Link href="/profile" className={styles.navButton}><span className={styles.navIcon}><User size={18} strokeWidth={1.9} /></span><span className={styles.navLabel}>My profile</span></Link>
+          <Link href="/settings" className={styles.navButton}><span className={styles.navIcon}><Settings size={18} strokeWidth={1.9} /></span><span className={styles.navLabel}>Settings</span></Link>
+          <Link href="/help" className={styles.navButton}><span className={styles.navIcon}><HelpCircle size={18} strokeWidth={1.9} /></span><span className={styles.navLabel}>Help</span></Link>
+        </div>
+      )}
       </div>
 
-      {/* User Profile Footer */}
-      <div className={`px-3 py-3 ${!sidebarOpen && 'flex justify-center'}`}
-        style={{ borderTop: '1px solid var(--brand-soft)', background: 'linear-gradient(180deg, white, var(--app-surface))' }}>
-        {sidebarOpen ? (
-          <div className="rounded-2xl p-2.5"
-            style={{ background: 'white', border: '1px solid var(--brand-soft)' }}>
-            <div className="flex items-center gap-2.5">
-              <div className="relative flex-shrink-0">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                  style={{ background: rc.gradient, boxShadow: `0 4px 12px ${rc.color}40` }}>
-                  {profile?.avatar_url && !avatarFailed ? (
-                    <img src={profile.avatar_url} alt="" className="w-full h-full object-cover"
-                      onError={() => setFailedAvatar(profile?.avatar_url)} />
-                  ) : (
-                    profile?.full_name?.[0]?.toUpperCase()
-                  )}
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
-                  style={{ background: online ? '#22c55e' : '#9ca3af' }}
-                  title={online ? 'Online' : 'Offline — changes may not sync'} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-gray-800 truncate">{profile?.full_name}</p>
-                <p className="text-xs truncate" style={{ color: rc.color, fontWeight: 600 }}>
-                  {roleLabel}{!online && ' · Offline'}
-                </p>
-              </div>
-              <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors flex-shrink-0 disabled:opacity-50"
-                title="Sign out">
-                <LogOut size={12} />
-              </button>
+      {/* The signed-in user and sign out */}
+      <div className={styles.footer}>
+        {open ? (
+          <div className={styles.user}>
+            <span className={styles.avatar} style={{ background: avatarColor }}>
+              {profile?.avatar_url && !avatarFailed ? (
+                <img src={profile.avatar_url} alt="" className="w-full h-full object-cover"
+                  onError={() => setFailedAvatar(profile?.avatar_url)} />
+              ) : initialsOf(profile?.full_name)}
+              <span className={styles.online} style={{ background: online ? 'var(--ok)' : 'var(--text-muted)' }}
+                title={online ? 'Online' : 'Offline — changes may not sync'} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className={styles.userName}>{profile?.full_name}</p>
+              <p className={styles.userRole}>{roleLabel}{!online && ' · Offline'}</p>
             </div>
+            <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
+              className={styles.signOut} title="Sign out">
+              <LogOut size={16} strokeWidth={1.9} />
+            </button>
           </div>
         ) : (
-          <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
-            title="Sign out">
-            <LogOut size={14} />
-          </button>
+          <div className={styles.railFooter}>
+            <button onClick={() => setSidebarOpen(true)} aria-label="Expand sidebar" title="Expand sidebar" className={styles.signOut}>
+              <ChevronRight size={16} strokeWidth={1.9} />
+            </button>
+            <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out" disabled={signingOut}
+              className={styles.signOut} title="Sign out">
+              <LogOut size={16} strokeWidth={1.9} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -479,9 +381,9 @@ export default function DashboardSidebar({
         document.body
       )}
 
-      {sidebarOpen && (
+      {open && (
         <div
-          className="fixed inset-0 bg-black/30 z-30 md:hidden"
+          className={styles.scrim}
           onClick={() => { setSearch(''); setSidebarOpen(false) }}
           aria-hidden="true"
         />

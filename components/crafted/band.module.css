@@ -1,0 +1,96 @@
+/* The header band — values from docs/design/crafted/source/kit.py band(). */
+
+.band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Phones: 84px fade (DESIGN.md §3). */
+  --band-extend: 28px;
+  --band-fade: 84px;
+}
+@media (min-width: 768px) and (min-height: 500px) {
+  .band { --band-extend: 24px; --band-fade: 120px; }
+}
+
+/* Covers the parent, stays purple `extend` px further, then eases into the
+   page through color-mix stops at 82% / 55% / 26% / 8%. Stops are measured
+   from the bottom, so the band can be content-sized (height: 100% + …). */
+.extend {
+  height: calc(100% + var(--band-extend) + var(--band-fade));
+  background: linear-gradient(180deg,
+    var(--band-from) 0,
+    var(--band-to) calc(100% - var(--band-fade)),
+    color-mix(in srgb, var(--band-to) 82%, var(--page)) calc(100% - var(--band-fade) * 0.82),
+    color-mix(in srgb, var(--band-to) 55%, var(--page)) calc(100% - var(--band-fade) * 0.58),
+    color-mix(in srgb, var(--band-to) 26%, var(--page)) calc(100% - var(--band-fade) * 0.32),
+    color-mix(in srgb, var(--band-to) 8%, var(--page)) calc(100% - var(--band-fade) * 0.12),
+    var(--page) 100%);
+}
+.fill {
+  bottom: 0;
+  --band-fade: 0px;
+  background: linear-gradient(180deg, var(--band-from) 0%, var(--band-to) 100%);
+}
+
+/* The weave and dots fade out with the band. */
+.weave, .dots {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - var(--band-fade)), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - var(--band-fade)), transparent 100%);
+}
+
+/* Banig weave: white 2px lines every 14px at ±45°, in a 56px tile, at 11%
+   (7% in dark). Each direction drifts one tile over 40s. Moved with
+   transform rather than background-position so the GPU composites it
+   instead of repainting the band every frame. */
+.weave { opacity: var(--band-weave-opacity); overflow: hidden; }
+.weaveA, .weaveB {
+  position: absolute;
+  inset: -56px;
+  background-size: 56px 56px;
+  will-change: transform;
+}
+.weaveA {
+  background-image: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.9) 0 2px, transparent 2px 14px);
+  animation: weaveA 40s linear infinite;
+}
+.weaveB {
+  background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.9) 0 2px, transparent 2px 14px);
+  animation: weaveB 40s linear infinite;
+}
+@keyframes weaveA { to { transform: translate3d(56px, 56px, 0); } }
+@keyframes weaveB { to { transform: translate3d(-56px, 56px, 0); } }
+
+/* A soft shade at the bottom of the solid part. */
+.shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: calc(100% - var(--band-fade));
+  background: linear-gradient(180deg, transparent 0%, var(--band-shade) 100%);
+}
+.fill .shade { height: 100%; background: linear-gradient(180deg, transparent 40%, var(--band-shade) 100%); }
+
+/* Dots: 2–4px, 70% white, drifting up 12px and back over 6s. */
+.dot {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  opacity: 0.25;
+  animation: drift 6s ease-in-out infinite;
+}
+@keyframes drift {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 0.8; transform: translateY(-12px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weaveA, .weaveB, .dot { animation: none; }
+  .dot { opacity: 0.5; }
+}

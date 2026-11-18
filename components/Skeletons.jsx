@@ -17,11 +17,15 @@
  * them each time (restarting the shimmer).
  */
 import Image from 'next/image'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Bell, Menu, Search } from 'lucide-react'
 import { NotificationBannerView } from '@/components/NotificationBanner'
 import { DASHBOARD_SKELETONS, dashboardKinds, dashboardColumn } from '@/lib/dashboardSkeletons'
 import ui from '@/components/app-ui.module.css'
 import desktop from '@/components/desktop-pages.module.css'
+import header from '@/components/dashboard-header.module.css'
+import Band from '@/components/crafted/Band'
+import DashboardFrame from '@/components/crafted/DashboardFrame'
+import TabBar from '@/components/crafted/TabBar'
 
 /** One shimmering block. tone="brand" for use on the purple background. */
 export function Skeleton({ className = '', style, tone }) {
@@ -43,7 +47,7 @@ function RecordCardSkeleton() {
   return (
     <div className="white-card p-4 sm:p-5">
       <div className="flex items-start gap-3">
-        <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
+        <Skeleton className="w-10 h-10 rounded-[10px] flex-shrink-0" />
         <div className="flex-1 space-y-2.5 pt-0.5">
           <Skeleton className="h-4 w-1/2" />
           <div className="flex gap-2">
@@ -58,9 +62,9 @@ function RecordCardSkeleton() {
   )
 }
 
-/** A white-on-purple section label ("NEEDS THE BARANGAY"). */
+/** A section label above a card ("NEEDS THE BARANGAY"). */
 function LabelSkeleton({ className = 'w-36' }) {
-  return <Skeleton tone="brand" className={`h-3 mb-3 rounded-md ${className}`} />
+  return <Skeleton className={`h-3 mb-3 rounded-md ${className}`} />
 }
 
 /** Mirrors components/HomeSummary.jsx: greeting card, tile grid, an action. */
@@ -72,7 +76,7 @@ function OverviewSkeleton({ tiles = 4 }) {
         <Skeleton className="h-6 w-60 max-w-full" />
         <Skeleton className="h-3.5 w-full max-w-[62ch] mt-3.5" />
         <Skeleton className="h-3.5 w-3/5 mt-2" />
-        <Skeleton className="h-[62px] w-full rounded-2xl mt-4" />
+        <Skeleton className="h-[62px] w-full rounded-[10px] mt-4" />
       </div>
       <div>
         <LabelSkeleton />
@@ -90,7 +94,7 @@ function OverviewSkeleton({ tiles = 4 }) {
       <div>
         <LabelSkeleton className="w-28" />
         <div className="white-card p-4 flex items-center gap-3.5">
-          <Skeleton className="w-11 h-11 rounded-2xl flex-shrink-0" />
+          <Skeleton className="w-11 h-11 rounded-[10px] flex-shrink-0" />
           <div className="flex-1 space-y-2">
             <Skeleton className="h-4 w-48 max-w-full" />
             <Skeleton className="h-3 w-72 max-w-full" />
@@ -107,7 +111,7 @@ function RecordListSkeleton({ rows = 4 }) {
   return (
     <div className="space-y-3">
       <div className="white-card p-3 space-y-2.5">
-        <Skeleton className="h-11 w-full rounded-2xl" />
+        <Skeleton className="h-11 w-full rounded-[10px]" />
         <div className="flex gap-2 overflow-hidden">
           {[14, 20, 20, 20].map((w, i) => <Skeleton key={i} className="h-8 rounded-full flex-shrink-0" style={{ width: `${w * 4}px` }} />)}
         </div>
@@ -116,7 +120,7 @@ function RecordListSkeleton({ rows = 4 }) {
           <Skeleton className="h-8 w-24 rounded-xl" />
         </div>
       </div>
-      <Skeleton tone="brand" className="h-3 w-24 rounded-md !mt-4" />
+      <Skeleton className="h-3 w-24 rounded-md !mt-4" />
       {/* Same container grid as RecordGroup / IncidentsSection. */}
       <div className="@container">
         <div className="grid gap-3 @5xl:grid-cols-2">
@@ -135,12 +139,12 @@ function ResidentRecordListSkeleton({ rows = 3 }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between mb-2">
-        <Skeleton tone="brand" className="h-3 w-16 rounded-md my-0.5" />
-        <div className="h-10 w-40 rounded-2xl bg-white/90" />
+        <Skeleton className="h-3 w-16 rounded-md my-0.5" />
+        <div className="h-10 w-40 rounded-[10px] bg-surface border border-line" />
       </div>
       <div className="flex items-center gap-2.5 mt-2 mb-0.5 px-0.5">
-        <Skeleton tone="brand" className="h-3 w-24 rounded-md my-0.5" />
-        <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
+        <Skeleton className="h-3 w-24 rounded-md my-0.5" />
+        <span className="flex-1 h-px bg-line" aria-hidden="true" />
       </div>
       <div className="@container">
         <div className="grid gap-3 @5xl:grid-cols-2">
@@ -156,7 +160,7 @@ function AnnouncementsSkeleton({ rows = 2 }) {
   return (
     <div className="space-y-3">
       <div className="white-card p-4 flex items-center gap-3">
-        <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
+        <Skeleton className="w-10 h-10 rounded-[10px] flex-shrink-0" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-3 w-60 max-w-full" />
@@ -165,7 +169,7 @@ function AnnouncementsSkeleton({ rows = 2 }) {
       {[...Array(rows)].map((_, i) => (
         <div key={i} className="white-card p-5 space-y-3">
           <div className="flex items-center gap-3">
-            <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
+            <Skeleton className="w-10 h-10 rounded-[10px] flex-shrink-0" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-4 w-1/3" />
               <Skeleton className="h-3 w-24" />
@@ -184,27 +188,27 @@ function AnnouncementsSkeleton({ rows = 2 }) {
 function TableSkeleton() {
   const header = (
     <div className="flex items-center gap-3 mb-4">
-      <Skeleton className="w-11 h-11 rounded-2xl flex-shrink-0" />
+      <Skeleton className="w-11 h-11 rounded-[10px] flex-shrink-0" />
       <div className="flex-1 space-y-2">
         <Skeleton className="h-4 w-36" />
         <Skeleton className="h-3 w-56 max-w-full" />
       </div>
     </div>
   )
-  const rows = (n) => [...Array(n)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-2xl" />)
+  const rows = (n) => [...Array(n)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-[10px]" />)
   return (
     <div className="space-y-6">
       <div className="white-card p-5">
         {header}
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <Skeleton className="h-10 rounded-2xl" />
-          <Skeleton className="h-10 rounded-2xl" />
+          <Skeleton className="h-10 rounded-[10px]" />
+          <Skeleton className="h-10 rounded-[10px]" />
         </div>
         <div className="space-y-2">{rows(4)}</div>
       </div>
       <div className="white-card p-5">
         {header}
-        <Skeleton className="h-11 w-full rounded-2xl mb-3" />
+        <Skeleton className="h-11 w-full rounded-[10px] mb-3" />
         <div className="space-y-2">{rows(3)}</div>
       </div>
     </div>
@@ -245,10 +249,10 @@ function AnalyticsSkeleton() {
 function LauncherSkeleton() {
   return (
     <div className="white-card p-8 flex flex-col items-center">
-      <Skeleton className="w-16 h-16 rounded-3xl mb-4" />
+      <Skeleton className="w-16 h-16 rounded-[14px] mb-4" />
       <Skeleton className="h-6 w-48 mb-2" />
       <Skeleton className="h-3.5 w-72 max-w-full mb-6" />
-      <Skeleton className="h-11 w-44 rounded-2xl" />
+      <Skeleton className="h-11 w-44 rounded-[10px]" />
     </div>
   )
 }
@@ -260,11 +264,11 @@ function ChatSkeleton() {
     <div className="flex flex-col gap-3">
       {bubbles.map(([side, w], i) => (
         <div key={i} className={`flex items-end gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
-          {side === 'left' && <Skeleton tone="brand" className="w-8 h-8 rounded-full flex-shrink-0" />}
-          <Skeleton tone="brand" className={`h-14 ${w} rounded-2xl`} />
+          {side === 'left' && <Skeleton className="w-8 h-8 rounded-full flex-shrink-0" />}
+          <Skeleton className={`h-14 ${w} rounded-[10px]`} />
         </div>
       ))}
-      <Skeleton tone="brand" className="h-12 w-full rounded-2xl mt-4" />
+      <Skeleton className="h-12 w-full rounded-[10px] mt-4" />
     </div>
   )
 }
@@ -292,13 +296,12 @@ export function SectionSkeleton({ kind = 'records', path }) {
 function DutySkeleton({ column }) {
   return (
     <div className={`${column} mx-auto mb-4`}>
-      <div className="w-full sm:w-[456px] h-20 sm:h-16 rounded-2xl bg-white/90 flex items-center gap-3 px-[18px]">
-        <Skeleton className="w-9 h-9 rounded-xl flex-shrink-0" />
+      <div className="white-card w-full h-[72px] flex items-center gap-3 px-[18px]">
         <div className="flex-1 space-y-2">
           <Skeleton className="h-3.5 w-20" />
           <Skeleton className="h-3 w-52 max-w-full" />
         </div>
-        <Skeleton className="w-11 h-6 rounded-full flex-shrink-0" />
+        <Skeleton className="w-11 h-[26px] rounded-full flex-shrink-0" />
       </div>
     </div>
   )
@@ -308,90 +311,90 @@ function DutySkeleton({ column }) {
    Dashboard frame
    ---------------------------------------------------------------------- */
 
+// Nav items per group, as each dashboard's sidebar draws them.
+const NAV_GROUPS = { '/official': [3, 6, 3], '/resident': [2, 4, 1], '/tanod': [4] }
+const TAB_ROLE = { '/resident': 'resident', '/tanod': 'tanod' }
+
 /** Mirrors components/DashboardSidebar.jsx, open and collapsed. Which one
  *  shows is CSS (see .dash-shell in globals.css). */
-function SidebarSkeleton() {
+function SidebarSkeleton({ groups }) {
+  const items = groups.reduce((a, b) => a + b, 0)
   return (
-    <aside className="dash-shell-aside hidden desk:flex fixed top-0 left-0 h-dvh flex-col bg-white overflow-hidden z-30"
-      style={{ boxShadow: '4px 0 24px rgba(91,84,232,0.1)' }} aria-hidden="true">
-      {/* Open (w-64) */}
+    <aside className="dash-shell-aside hidden desk:flex fixed top-0 left-0 h-dvh flex-col bg-surface overflow-hidden z-30 border-r border-line" aria-hidden="true">
+      {/* Open (232px) */}
       <div className="dash-shell-sb-open flex-col h-full">
-        <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-          <div className="w-9 h-9 relative flex-shrink-0">
-            <Image src="/logo.png" alt="" fill sizes="36px" loading="eager" className="object-contain" />
+        <div className="flex items-center gap-2.5 pl-[18px] pr-3 pt-4 pb-2">
+          <div className="w-8 h-8 relative flex-shrink-0">
+            <Image src="/logo.png" alt="" fill sizes="32px" loading="eager" className="object-contain" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-sm text-gray-800">BH360</p>
-            <Skeleton className="h-2.5 w-28 mt-1.5" />
-          </div>
-          <Skeleton className="w-8 h-8 rounded-xl" />
-        </div>
-        <div className="px-3 py-3 border-b border-gray-100">
-          <div className="rounded-2xl p-3 h-[171px]" style={{ background: 'linear-gradient(135deg, var(--brand-soft), white)', border: '1px solid var(--brand-border)' }}>
-            <Skeleton className="h-3 w-20 mb-3" />
-            <div className="grid grid-cols-2 gap-2">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-14 rounded-xl bg-white" />)}
-            </div>
+            <p className="text-sm font-extrabold text-ink whitespace-nowrap">BarangayHub 360</p>
+            <Skeleton className="h-2.5 w-24 mt-1.5" />
           </div>
         </div>
-        <div className="px-3 h-[69px] flex items-center border-b border-gray-100">
-          <Skeleton className="h-[37px] w-full rounded-xl" />
-        </div>
-        <div className="px-3 py-3 space-y-4 flex-1 overflow-hidden">
-          {[2, 4, 3].map((n, s) => (
-            <div key={s}>
-              <Skeleton className="h-2.5 w-16 ml-3 mb-3" />
-              <div className="space-y-0.5">
-                {[...Array(n)].map((_, i) => (
-                  <div key={i} className="h-[46px] px-3 flex items-center gap-3">
-                    <Skeleton className="w-4 h-4 rounded-md flex-shrink-0" />
-                    <Skeleton className="h-3 flex-1 max-w-[120px]" />
-                  </div>
-                ))}
-              </div>
+        <div className="flex-1 overflow-hidden px-3">
+          {groups.map((n, g) => (
+            <div key={g} className="mt-1.5">
+              <Skeleton className="h-2.5 w-14 mx-2.5 mt-3.5 mb-2.5" />
+              {[...Array(n)].map((_, i) => (
+                <div key={i} className="h-9 px-2.5 flex items-center gap-[11px]">
+                  <Skeleton className="w-[18px] h-[18px] rounded-[5px] flex-shrink-0" />
+                  <Skeleton className="h-3 flex-1 max-w-[110px]" />
+                </div>
+              ))}
             </div>
           ))}
         </div>
-        <div className="px-3 py-3">
-          <Skeleton className="h-[59px] w-full rounded-2xl" />
-        </div>
-      </div>
-      {/* Collapsed (w-16) */}
-      <div className="dash-shell-sb-closed flex-col items-center h-full">
-        <div className="h-[69px] w-full flex items-center justify-center" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-          <div className="w-9 h-9 relative">
-            <Image src="/logo.png" alt="" fill sizes="36px" loading="eager" className="object-contain" />
+        <div className="px-3 pt-2.5 pb-3.5 border-t border-line flex items-center gap-2.5 pl-[18px]">
+          <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-2.5 w-16" />
           </div>
         </div>
-        <div className="flex-1 py-4 space-y-2.5 overflow-hidden">
-          {[...Array(9)].map((_, i) => <Skeleton key={i} className="w-9 h-9 rounded-xl" />)}
+      </div>
+      {/* Collapsed (64px) */}
+      <div className="dash-shell-sb-closed flex-col items-center h-full">
+        <div className="pt-4 pb-2">
+          <div className="w-8 h-8 relative">
+            <Image src="/logo.png" alt="" fill sizes="32px" loading="eager" className="object-contain" />
+          </div>
         </div>
-        <div className="py-3">
-          <Skeleton className="w-9 h-9 rounded-full" />
+        <div className="flex-1 pt-3 space-y-2 overflow-hidden">
+          {[...Array(items)].map((_, i) => <Skeleton key={i} className="w-10 h-10 rounded-lg" />)}
+        </div>
+        <div className="py-3.5 border-t border-line w-full flex justify-center">
+          <Skeleton className="w-[34px] h-[34px] rounded-lg" />
         </div>
       </div>
     </aside>
   )
 }
 
-/** Mirrors components/DashboardHeader.jsx (76px). */
-function DashboardHeaderSkeleton() {
+/** Mirrors components/DashboardHeader.jsx on its band: the same classes, so
+ *  the heights match; placeholder bars where text depends on data. */
+function DashboardHeaderSkeleton({ column = '' }) {
   return (
-    <div className={`bg-white min-h-[76px] px-4 sm:px-6 py-3 flex items-center justify-between gap-4 ${ui.dashboardHeader || ''} ${ui.safeTop}`} aria-hidden="true">
-      <div className="flex items-center gap-3 min-w-0">
-        <Skeleton className="w-11 h-11 rounded-xl desk:hidden flex-shrink-0" />
-        <div className="space-y-2 min-w-0">
-          <Skeleton className="h-5 w-36" />
-          <Skeleton className="h-3 w-52 max-w-full" />
+    <header className={header.header} aria-hidden="true">
+      <Band seed={2} />
+      <div className={`${header.inner} ${column}`}>
+        <div className={header.topbar}>
+          <span className={`${header.onband} ${header.phoneOnly}`}><Menu size={18} strokeWidth={1.9} /></span>
+          <div className={`${header.phoneTitle} flex`}><Skeleton tone="brand" className="h-4 w-32" /></div>
+          <div className={header.context}><Skeleton tone="brand" className="h-3 w-64 max-w-full" /></div>
+          <span className={header.searchPill}><Search size={16} strokeWidth={1.9} /><span className={header.searchText}>Search reports, people…</span></span>
+          <span className={`${header.onband} ${header.phoneOnly}`}><Search size={18} strokeWidth={1.9} /></span>
+          <span className={header.onband}><Bell size={16} /></span>
+          <span className={`${header.deskOnly} w-[38px] h-[38px] rounded-[10px] bg-[var(--onband)]`} />
+        </div>
+        <div className={header.heading}>
+          <div className="min-w-0 flex-1">
+            <Skeleton tone="brand" className="h-[30px] w-64 max-w-full rounded-lg" />
+            <Skeleton tone="brand" className="h-3.5 w-80 max-w-full mt-2.5" />
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        <Skeleton className="hidden lg:block h-10 lg:w-72 xl:w-[450px] rounded-xl" />
-        <Skeleton className="hidden sm:block h-9 w-24 rounded-xl" />
-        <Skeleton className="w-9 h-9 rounded-xl" />
-        <Skeleton className="w-9 h-9 rounded-full" />
-      </div>
-    </div>
+    </header>
   )
 }
 
@@ -407,51 +410,53 @@ function BootBanner() {
 }
 
 /**
- * The whole dashboard frame — sidebar, header, banner, section — while a
- * dashboard loads. Drawn in two places that must look identical:
+ * The whole dashboard frame — sidebar, band header, banner, section, tab
+ * bar — while a dashboard loads. Drawn in two places that must look
+ * identical:
  *
  * - The page's Suspense fallback (the static HTML, before JavaScript):
- *   leave `kind`, `sidebarOpen` and `banner` out. It renders every section
- *   variant and the predicted banner; CSS shows the ones the boot script in
- *   lib/dashboardSkeletons.js chose for this URL and this browser.
+ *   leave `kind`, `section`, `sidebarOpen` and `banner` out. It renders
+ *   every section variant and the predicted banner; CSS shows the ones the
+ *   boot script in lib/dashboardSkeletons.js chose for this URL and browser.
  * - The page itself while its data loads: pass the section's `kind`, the
- *   real `sidebarOpen`, and `banner={<NotificationBanner />}`.
+ *   `section` (lights its tab), the real `sidebarOpen`, and
+ *   `banner={<NotificationBanner />}`.
  *
- * The ambient background is not part of it: the page draws that once,
- * outside the boundary (DashboardBackdrop), so it never restarts.
+ * Both use components/crafted/DashboardFrame, like the loaded page.
  */
-export function DashboardShellSkeleton({ path, kind, sidebarOpen, banner }) {
-  const { lead } = DASHBOARD_SKELETONS[path]
+export function DashboardShellSkeleton({ path, kind, section, sidebarOpen, banner }) {
+  const { lead, fallback, kinds: kindMap } = DASHBOARD_SKELETONS[path]
   const kinds = kind ? [kind] : dashboardKinds(path)
+  const role = TAB_ROLE[path]
+  const headerColumn = path === '/official' ? 'max-w-[100rem]' : dashboardColumn(path, kind || kindMap[fallback]) || 'max-w-2xl'
   return (
-    <div className="dash-shell min-h-dvh flex relative"
-      data-sidebar={sidebarOpen === undefined ? undefined : sidebarOpen ? 'open' : 'closed'}
-      role="status" aria-label="Loading" aria-busy="true">
-      <SidebarSkeleton />
-      <div className="dash-shell-column flex-1 flex flex-col min-w-0 relative z-10 h-dvh overflow-hidden">
-        <DashboardHeaderSkeleton />
-        <div className="flex-1 pad-safe overflow-hidden [scrollbar-gutter:stable]">
-          <div className="mx-auto w-full max-w-[100rem]">
-          {kinds.map((k, i) => (
-            <div key={k} className={kind ? undefined : 'dash-shell-variant'}
-              data-kind={kind ? undefined : k} data-default={!kind && i === 0 ? '' : undefined}>
-              {/* The banner sits in the section's column, as on the page. */}
-              <div className={`${path === '/resident' ? dashboardColumn(path, k) : ''} mx-auto`}>
-                {banner === undefined ? <BootBanner /> : banner}
-              </div>
-              {lead === 'duty' && <DutySkeleton column={dashboardColumn(path, k) || 'max-w-2xl'} />}
-              <div className={`${dashboardColumn(path, k)} mx-auto`}>
-                <SectionSkeleton kind={k} path={path} />
-              </div>
+    <>
+      <DashboardFrame
+        sidebarOpen={sidebarOpen}
+        role="status" aria-label="Loading" aria-busy="true"
+        sidebar={<SidebarSkeleton groups={NAV_GROUPS[path] || [3, 3]} />}
+        header={<DashboardHeaderSkeleton column={headerColumn} />}
+        tabBar={role ? <TabBar role={role} activeSection={section} /> : null}>
+        <div className="mx-auto w-full max-w-[100rem]">
+        {kinds.map((k, i) => (
+          <div key={k} className={kind ? undefined : 'dash-shell-variant'}
+            data-kind={kind ? undefined : k} data-default={!kind && i === 0 ? '' : undefined}>
+            {/* The banner sits in the section's column, as on the page. */}
+            <div className={`${path === '/resident' ? dashboardColumn(path, k) : ''} mx-auto`}>
+              {banner === undefined ? <BootBanner /> : banner}
             </div>
-          ))}
+            {lead === 'duty' && <DutySkeleton column={dashboardColumn(path, k) || 'max-w-2xl'} />}
+            <div className={`${dashboardColumn(path, k)} mx-auto`}>
+              <SectionSkeleton kind={k} path={path} />
+            </div>
           </div>
+        ))}
         </div>
-      </div>
+      </DashboardFrame>
       {/* End of the static skeleton: the boot script holds the first paint
           until the browser has parsed this far (lib/dashboardSkeletons.js). */}
       {!kind && <div id="dash-shell-end" hidden />}
-    </div>
+    </>
   )
 }
 
@@ -466,8 +471,9 @@ export function DashboardShellSkeleton({ path, kind, sidebarOpen, banner }) {
 function PageHeaderSkeleton({ title, description, icon: Icon, actions = false }) {
   return (
     <header className={ui.header} aria-hidden="true">
+      <Band mode="fill" dots={8} seed={3} />
       <div className={ui.headerInner}>
-        <span className={ui.back}><ArrowLeft size={19} /></span>
+        <span className={ui.back}><ArrowLeft size={18} strokeWidth={1.9} /></span>
         {title ? (
           <>
             {Icon && <span className={ui.headerIcon}><Icon size={21} /></span>}
@@ -475,13 +481,13 @@ function PageHeaderSkeleton({ title, description, icon: Icon, actions = false })
           </>
         ) : (
           <div className={`${ui.heading} space-y-2`}>
-            <Skeleton className="h-4 w-44" />
-            <Skeleton className="h-3 w-60 max-w-full" />
+            <Skeleton tone="brand" className="h-4 w-44" />
+            <Skeleton tone="brand" className="h-3 w-60 max-w-full" />
           </div>
         )}
         {/* A header button (Settings' Save): wraps to its own row on phones,
             like the real one. */}
-        {actions && <div className={ui.headerActions}><Skeleton className="h-11 w-full sm:w-36 rounded-xl" /></div>}
+        {actions && <div className={ui.headerActions}><Skeleton tone="brand" className="h-11 w-full sm:w-36 rounded-xl" /></div>}
       </div>
     </header>
   )
@@ -503,7 +509,7 @@ function CardLines({ title = 'w-1/3', lines = 2, className = '' }) {
   return (
     <div className={`white-card p-5 space-y-3 ${className}`}>
       <div className="flex items-center gap-3 mb-1">
-        <Skeleton className="w-11 h-11 rounded-2xl flex-shrink-0" />
+        <Skeleton className="w-11 h-11 rounded-[10px] flex-shrink-0" />
         <div className="flex-1 space-y-2">
           <Skeleton className={`h-4 ${title}`} />
           <Skeleton className="h-3 w-1/2" />
@@ -521,7 +527,7 @@ function ProfileBody() {
       <div className={`white-card overflow-hidden ${desktop.profileCard}`}>
         <Skeleton className="h-24 w-full rounded-none" />
         <div className="px-6 pb-6 -mt-12 relative">
-          <div className="w-20 h-20 rounded-3xl bg-white p-1"><Skeleton className="w-full h-full rounded-[20px]" /></div>
+          <div className="w-20 h-20 rounded-[14px] bg-white p-1"><Skeleton className="w-full h-full rounded-[20px]" /></div>
           <Skeleton className="h-6 w-48 mt-4" />
           <Skeleton className="h-5 w-28 mt-2 rounded-full" />
           <Skeleton className="h-3 w-full mt-4" />
@@ -529,7 +535,7 @@ function ProfileBody() {
         </div>
       </div>
       <div className={`flex gap-2 pb-1 ${desktop.profileTabs}`}>
-        {[78, 102, 105].map((w, i) => <Skeleton key={i} tone="brand" className="h-9 rounded-2xl" style={{ width: w }} />)}
+        {[78, 102, 105].map((w, i) => <Skeleton key={i} tone="brand" className="h-9 rounded-[10px]" style={{ width: w }} />)}
       </div>
       <CardLines title="w-40" lines={4} />
     </main>
@@ -541,7 +547,7 @@ function HelpBody() {
   return (
     <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.helpPage}`}>
       <div className={`glass-card p-5 flex items-center gap-3 ${desktop.wide}`}>
-        <Skeleton tone="brand" className="w-12 h-12 rounded-2xl flex-shrink-0" />
+        <Skeleton tone="brand" className="w-12 h-12 rounded-[10px] flex-shrink-0" />
         <div className="flex-1 space-y-2">
           <Skeleton tone="brand" className="h-4 w-44" />
           <Skeleton tone="brand" className="h-3 w-64 max-w-full" />
@@ -553,7 +559,7 @@ function HelpBody() {
         </div>
       </div>
       <div className="space-y-3">
-        <div className="white-card p-4 h-[76px] flex items-center"><Skeleton className="h-11 w-full rounded-2xl" /></div>
+        <div className="white-card p-4 h-[76px] flex items-center"><Skeleton className="h-11 w-full rounded-[10px]" /></div>
         <div className={`space-y-2 ${desktop.faqGrid}`}>
           {[...Array(4)].map((_, i) => (
             <div key={i} className="white-card px-4 h-[52px] flex items-center"><Skeleton className="h-3.5 w-3/4" /></div>
@@ -593,7 +599,7 @@ export function PageSkeleton({ header = {}, layout, cards = 3, maxWidth = 768, t
     <div className="mx-auto p-4 sm:p-6 space-y-4" style={{ maxWidth }}>
       {tabs > 0 && (
         <div className="flex gap-2">
-          {[...Array(tabs)].map((_, i) => <Skeleton key={i} tone="brand" className="h-9 w-24 rounded-2xl" />)}
+          {[...Array(tabs)].map((_, i) => <Skeleton key={i} tone="brand" className="h-9 w-24 rounded-[10px]" />)}
         </div>
       )}
       {[...Array(cards)].map((_, i) => <CardLines key={i} lines={i === 0 ? 5 : 2} />)}
@@ -607,17 +613,18 @@ export function PageSkeleton({ header = {}, layout, cards = 3, maxWidth = 768, t
 function DetailHeaderSkeleton({ pills = true, maxWidth }) {
   return (
     <header className={ui.header} aria-hidden="true">
+      <Band mode="fill" dots={8} seed={3} />
       <div className={ui.headerInner} style={maxWidth ? { maxWidth } : undefined}>
-        <span className={ui.back}><ArrowLeft size={19} /></span>
-        <span className={ui.headerIcon}><Skeleton className="w-5 h-5 rounded-md" /></span>
+        <span className={ui.back}><ArrowLeft size={18} strokeWidth={1.9} /></span>
+        <span className={ui.headerIcon}><Skeleton tone="brand" className="w-5 h-5 rounded-md" /></span>
         <div className={`${ui.heading} space-y-2`}>
-          <Skeleton className="h-5 w-48 max-w-full" />
-          <Skeleton className="h-3 w-40 max-w-full" />
+          <Skeleton tone="brand" className="h-5 w-48 max-w-full" />
+          <Skeleton tone="brand" className="h-3 w-40 max-w-full" />
         </div>
         {pills && (
           <div className={`${ui.headerActions} ${ui.desktopOnly}`}>
-            <Skeleton className="h-[26px] w-20 rounded-[9px]" />
-            <Skeleton className="h-[26px] w-20 rounded-[9px]" />
+            <Skeleton tone="brand" className="h-[26px] w-20 rounded-[9px]" />
+            <Skeleton tone="brand" className="h-[26px] w-20 rounded-[9px]" />
           </div>
         )}
       </div>
@@ -636,7 +643,7 @@ function ReportCardSkeleton() {
         <Skeleton className="h-11 w-32 rounded-xl" />
         <Skeleton className="h-11 w-44 rounded-xl" />
       </div>
-      <Skeleton className="h-11 w-full rounded-2xl" />
+      <Skeleton className="h-11 w-full rounded-[10px]" />
     </div>
   )
 }
@@ -647,8 +654,8 @@ function LocationCardSkeleton() {
     <div className="white-card p-5 space-y-3">
       <Skeleton className="h-3 w-20" />
       <Skeleton className="h-3.5 w-40" />
-      <Skeleton className="w-full rounded-2xl" style={{ height: 'clamp(180px, 32dvh, 340px)' }} />
-      <Skeleton className="h-11 w-full rounded-2xl" />
+      <Skeleton className="w-full rounded-[10px]" style={{ height: 'clamp(180px, 32dvh, 340px)' }} />
+      <Skeleton className="h-11 w-full rounded-[10px]" />
     </div>
   )
 }
@@ -675,8 +682,8 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
       <div className="min-h-dvh relative overflow-clip bg-brand" role="status" aria-label="Loading" aria-busy="true">
         <DetailHeaderSkeleton pills={false} />
         <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
-          <div className={`rounded-2xl px-4 py-4 flex items-start gap-3 bg-white/85 ${desktop.wide}`}>
-            <Skeleton className="w-10 h-10 rounded-2xl flex-shrink-0" />
+          <div className={`rounded-[10px] px-4 py-4 flex items-start gap-3 bg-white/85 ${desktop.wide}`}>
+            <Skeleton className="w-10 h-10 rounded-[10px] flex-shrink-0" />
             <div className="flex-1 space-y-2 pt-0.5">
               <Skeleton className="h-3.5 w-48" />
               <Skeleton className="h-3 w-full" />
@@ -729,7 +736,7 @@ export function TicketDetailSkeleton() {
     <div className="h-dvh flex flex-col relative overflow-hidden bg-brand" role="status" aria-label="Loading" aria-busy="true">
       <div className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 ${desktop.header}`}
         style={{ borderBottom: '1px solid var(--brand-soft)' }} aria-hidden="true">
-        <span className={ui.back}><ArrowLeft size={19} /></span>
+        <span className={ui.back}><ArrowLeft size={18} strokeWidth={1.9} /></span>
         <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
         <div className="flex-1 min-w-0 space-y-2">
           <Skeleton className="h-4 w-40 max-w-full" />
@@ -743,13 +750,13 @@ export function TicketDetailSkeleton() {
           {bubbles.map(([side, w], i) => (
             <div key={i} className={`flex items-end gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
               {side === 'left' && <Skeleton tone="brand" className="w-7 h-7 rounded-full flex-shrink-0" />}
-              <div className={`${w} h-16 rounded-2xl ${side === 'left' ? 'bg-white/90 p-3 space-y-2' : 'skeleton-shimmer skeleton-on-brand'}`}>
+              <div className={`${w} h-16 rounded-[10px] ${side === 'left' ? 'bg-white/90 p-3 space-y-2' : 'skeleton-shimmer skeleton-on-brand'}`}>
                 {side === 'left' && <><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-4/5" /></>}
               </div>
             </div>
           ))}
         </div>
-        <Skeleton tone="brand" className="h-12 w-full rounded-2xl mt-3 flex-shrink-0" />
+        <Skeleton tone="brand" className="h-12 w-full rounded-[10px] mt-3 flex-shrink-0" />
       </main>
       <div id="page-shell-end" hidden />
     </div>

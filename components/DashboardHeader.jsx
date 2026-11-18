@@ -2,65 +2,85 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Menu, Bell, Search, User, Settings, LogOut, ChevronDown, AlertTriangle, FileText, X, ArrowRight, HelpCircle, Sparkles } from 'lucide-react'
+import { Menu, Search, User, Settings, LogOut, X, ArrowRight, HelpCircle } from 'lucide-react'
 import ConfirmDialog from './ConfirmDialog'
-import ui from './app-ui.module.css'
 import NotificationBell from '@/components/NotificationBell'
 import LiveClock from '@/components/LiveClock'
+import Band from '@/components/crafted/Band'
+import { IncidentsIcon, TicketsIcon, AnnouncementsIcon } from '@/components/icons/BhIcons'
 import { useBrowserValue } from '@/lib/useHydrated'
+import styles from './dashboard-header.module.css'
 
-// Avatar with graceful fallback to the initial when the image URL is
+// Avatar with graceful fallback to the initials when the image URL is
 // missing or fails to load (deleted storage file, broken link).
 function HeaderAvatar({ src, name, className, style }) {
   // Remember WHICH url failed: a new url gets a fresh try with no reset effect.
   const [failedSrc, setFailedSrc] = useState(null)
   const failed = failedSrc != null && failedSrc === src
+  const initials = (name || '').trim().split(/\s+/).filter(Boolean).map((w, i, a) => (i === 0 || i === a.length - 1 ? w[0] : '')).join('').toUpperCase()
   return (
-    <div className={className} style={style}>
+    <span className={className} style={style}>
       {src && !failed ? (
         <img src={src} alt="" className="w-full h-full object-cover"
           onError={() => setFailedSrc(src)} />
       ) : (
-        name?.[0]?.toUpperCase()
+        initials || '?'
       )}
-    </div>
+    </span>
   )
 }
 
 const roleConfig = {
-  resident: { label: 'Resident', color: '#5B54E8', bg: '#f0effe' },
-  official: { label: 'Barangay Official', color: '#f97316', bg: '#fff7ed' },
-  tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4' },
+  resident: { label: 'Resident', color: 'var(--brand-strong)' },
+  official: { label: 'Barangay Official', color: '#F97316' },
+  tanod: { label: 'Tanod', color: 'var(--ok)' },
 }
 
 // One search result. A component (not a helper called during render), so
 // its click handler is plainly an event handler.
-function ResultRow({ idx, highlighted, onHighlight, icon, iconStyle, title, subtitle, onClick }) {
+function ResultRow({ idx, highlighted, onHighlight, icon, title, subtitle, onClick }) {
   const isHighlighted = idx === highlighted
   return (
     <button data-idx={idx} id={`search-result-${idx}`} role="option" aria-selected={isHighlighted}
       onClick={onClick}
       onMouseEnter={() => onHighlight(idx)}
-      className="w-full px-5 py-3 flex items-center gap-3 transition-colors text-left"
-      style={{ background: isHighlighted ? '#faf5ff' : 'transparent' }}>
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={iconStyle}>
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-800 truncate">{title}</p>
-        <p className="text-xs text-gray-500 truncate">{subtitle}</p>
-      </div>
-      <ArrowRight size={12} className={isHighlighted ? 'text-purple-400' : 'text-gray-300'} aria-hidden="true" />
+      className={`${styles.result} ${isHighlighted ? styles.resultActive : ''}`}>
+      <span className={styles.resultIcon} aria-hidden="true">{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-bold text-ink truncate">{title}</span>
+        <span className="block text-xs text-muted-foreground truncate">{subtitle}</span>
+      </span>
+      <ArrowRight size={14} className={isHighlighted ? 'text-brand-strong' : 'text-muted-foreground'} aria-hidden="true" />
     </button>
   )
 }
 
+/**
+ * The top of a dashboard's main column, drawn on the purple band
+ * (DESIGN.md §3–4). It lives inside the scrolling <main>, so the first
+ * card below it overlaps the band.
+ *
+ * Desktop: the context line (barangay, city · time), search, the bell and
+ *          the account menu; then the eyebrow, the title, a subtitle and
+ *          the section's actions.
+ * Phone:   a menu button (opens the drawer), the title, search and the bell.
+ *
+ * `children` go under the title on both layouts (a greeting, a segmented
+ * control on the band…). `columnClass` keeps the header in the same column
+ * as a centred section (resident, tanod).
+ */
 export default function DashboardHeader({
   profile,
   sidebarOpen,
   setSidebarOpen,
   sectionTitle,
   sectionDesc,
+  eyebrow,
+  actions,
+  children,
+  columnClass = '',
+  bandExtend,
+  bandFade,
   notificationCenter,
   searchData = { incidents: [], tickets: [], announcements: [] },
   onSearchResultClick,
@@ -74,7 +94,7 @@ export default function DashboardHeader({
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  // Show ⌘K on Macs instead of Ctrl+K (Ctrl+K on the server and first paint)
+  // Show ⌘K on Macs instead of Ctrl K (Ctrl K on the server and first paint)
   const isMac = useBrowserValue(() => /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), false)
 
   const searchRef = useRef(null)
@@ -220,231 +240,150 @@ export default function DashboardHeader({
 
 
   const rc = roleConfig[profile?.role] || roleConfig.resident
+  const place = profile?.barangays
+    ? [profile.barangays.name, profile.barangays.city].filter(Boolean).join(', ')
+    : sectionDesc
 
   return (
     <>
-      <header className={`bg-white sticky top-0 z-20 px-4 sm:px-6 py-3 flex items-center justify-between gap-2 sm:gap-4 ${ui.dashboardHeader} ${ui.safeTop}`}
-        style={{
-          boxShadow: '0 2px 12px rgba(91,84,232,0.06)',
-          borderBottom: '1px solid var(--brand-soft)',
-        }}>
+      <header className={styles.header}>
+        <Band seed={2} extend={bandExtend} fade={bandFade} />
+        <div className={`${styles.inner} ${columnClass}`}>
+          <div className={styles.topbar}>
+            {/* Phone: the drawer holds the other sections, profile, settings,
+                help and sign out. */}
+            <button type="button" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar"
+              aria-expanded={false} aria-controls="dashboard-navigation" className={`${styles.onband} ${styles.phoneOnly}`}>
+              <Menu size={18} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+            <h1 className={styles.phoneTitle}>{sectionTitle}</h1>
 
-        {/* LEFT SIDE — Menu + Title */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          {!sidebarOpen && (
-            <>
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Open sidebar" aria-expanded={false} aria-controls="dashboard-navigation"
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
-                <Menu size={18} />
+            <p className={styles.context}>
+              {place}
+              <span className={styles.clock}><span aria-hidden="true"> · </span><LiveClock variant="inline" /></span>
+            </p>
+
+            <button type="button" onClick={openSearch} aria-label="Open search" className={styles.searchPill}>
+              <Search size={16} strokeWidth={1.9} aria-hidden="true" />
+              <span className={styles.searchText}>Search reports, people…</span>
+              <kbd className={styles.kbd}>{isMac ? '⌘K' : 'Ctrl K'}</kbd>
+            </button>
+            <button type="button" onClick={openSearch} aria-label="Open search" className={`${styles.onband} ${styles.phoneOnly}`}>
+              <Search size={18} strokeWidth={1.9} aria-hidden="true" />
+            </button>
+
+            {/* Notifications: rows the database writes for this person
+                (lib/useNotifications, supabase/setup.sql Section 18). The
+                bell itself is unchanged; only its slot is styled. */}
+            <div className={styles.bellSlot}>
+              <NotificationBell center={notificationCenter} sizeClass="w-10 h-10" />
+            </div>
+
+            {/* Account menu (desktop; on phones the drawer has these). */}
+            <div className={`relative ${styles.deskOnly}`} ref={userMenuRef}>
+              <button onClick={() => setUserMenuOpen(!userMenuOpen)}
+                aria-label="Account menu" aria-expanded={userMenuOpen} aria-haspopup="menu"
+                className={styles.accountButton}>
+                <HeaderAvatar src={profile?.avatar_url} name={profile?.full_name} className={styles.avatar}
+                  style={{ background: rc.color }} />
               </button>
-              <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} aria-hidden="true" />
-            </>
-          )}
 
-          <div className="min-w-0 flex items-center gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                {/* Phones: up to two lines rather than "User Manag…" */}
-                <h1 className="text-base sm:text-lg leading-tight sm:leading-normal font-bold text-gray-800 line-clamp-2 sm:line-clamp-1 break-words" style={{ letterSpacing: '-0.5px' }}>
-                  {sectionTitle}
-                </h1>
-                <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                  style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" aria-hidden="true" />
-                  <span className="text-xs font-bold text-emerald-700">LIVE</span>
+              {userMenuOpen && (
+                <div role="menu" aria-label="Account" className={styles.menu}>
+                  <div className={styles.menuHead}>
+                    <HeaderAvatar src={profile?.avatar_url} name={profile?.full_name} className={styles.avatarLg}
+                      style={{ background: rc.color }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-ink truncate">{profile?.full_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{rc.label}{profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}</p>
+                    </div>
+                  </div>
+                  <div className={styles.menuGroup}>
+                    <button role="menuitem" onClick={() => { router.push('/profile'); setUserMenuOpen(false) }} className={styles.menuItem}>
+                      <User size={16} strokeWidth={1.9} aria-hidden="true" /> My profile
+                    </button>
+                    <button role="menuitem" onClick={() => { router.push('/settings'); setUserMenuOpen(false) }} className={styles.menuItem}>
+                      <Settings size={16} strokeWidth={1.9} aria-hidden="true" /> Settings
+                    </button>
+                    <button role="menuitem" onClick={() => { router.push('/help'); setUserMenuOpen(false) }} className={styles.menuItem}>
+                      <HelpCircle size={16} strokeWidth={1.9} aria-hidden="true" /> Help
+                    </button>
+                  </div>
+                  <div className={styles.menuGroup}>
+                    <button role="menuitem" onClick={handleLogout} disabled={signingOut} className={styles.menuItem}>
+                      <LogOut size={16} strokeWidth={1.9} aria-hidden="true" /> Sign out
+                    </button>
+                  </div>
                 </div>
-              </div>
-              {profile?.barangays ? (
-                <div className="hidden sm:flex items-center gap-1.5 mt-0.5">
-                  <p className="text-xs text-gray-500 truncate">
-                    <span className="font-semibold text-gray-700">{profile.barangays.name}</span>
-                    <span className="text-gray-300 mx-1">·</span>
-                    <span>{profile.barangays.city}</span>
-                  </p>
-                </div>
-              ) : (
-                <p className="hidden sm:block text-xs text-gray-500 truncate mt-0.5">{sectionDesc}</p>
               )}
             </div>
           </div>
-        </div>
 
-        {/* CENTER — Search bar */}
-        <button onClick={openSearch} aria-label="Open search"
-          className="hidden md:flex items-center gap-3 px-4 py-2 rounded-2xl flex-1 max-w-md transition-all hover:bg-gray-50"
-          style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-          <Search size={15} className="text-gray-500 flex-shrink-0" aria-hidden="true" />
-          <span className="text-sm text-gray-500 flex-1 text-left">Search anything...</span>
-          <kbd className="px-2 py-0.5 rounded-md text-xs font-bold flex items-center gap-0.5"
-            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-            {isMac ? '⌘K' : 'Ctrl+K'}
-          </kbd>
-        </button>
-
-        {/* RIGHT SIDE — Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-
-          <LiveClock />
-
-          {/* Mobile search */}
-          <button onClick={openSearch} aria-label="Open search"
-            className="md:hidden w-11 h-11 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
-            <Search size={16} />
-          </button>
-
-          {/* Notifications: rows the database writes for this person
-              (lib/useNotifications, supabase/setup.sql Section 18). */}
-          <NotificationBell center={notificationCenter} />
-
-          {/* User menu */}
-          <div className="relative" ref={userMenuRef}>
-            <button onClick={() => setUserMenuOpen(!userMenuOpen)}
-              aria-label="Account menu" aria-expanded={userMenuOpen} aria-haspopup="menu"
-              className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors">
-              <HeaderAvatar
-                src={profile?.avatar_url}
-                name={profile?.full_name}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 2px 8px rgba(91,84,232,0.3)' }}
-              />
-              <ChevronDown size={12} className={`text-gray-500 hidden sm:block transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
-            </button>
-
-            {userMenuOpen && (
-              <div role="menu" aria-label="Account"
-                className="fixed sm:absolute right-3 sm:right-0 top-[64px] sm:top-auto sm:mt-2 w-[calc(100vw-1.5rem)] sm:w-64 rounded-2xl overflow-hidden fade-up z-50"
-                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
-
-                {/* User info */}
-                <div className="px-4 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(135deg, var(--app-surface), white)' }}>
-                  <div className="flex items-center gap-3">
-                    <HeaderAvatar
-                      src={profile?.avatar_url}
-                      name={profile?.full_name}
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0 overflow-hidden"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-800 truncate">{profile?.full_name}</p>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold inline-block mt-0.5"
-                        style={{ background: rc.bg, color: rc.color }}>
-                        {rc.label}
-                      </span>
-                    </div>
-                  </div>
-                  {profile?.barangays && (
-                    <div className="flex items-center gap-1.5 mt-3 px-2 py-1.5 rounded-lg text-xs"
-                      style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
-                      <span aria-hidden="true">📍</span>
-                      <span className="font-semibold truncate">{profile.barangays.name}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Menu items */}
-                <div className="py-2">
-                  <button role="menuitem" onClick={() => { router.push('/profile'); setUserMenuOpen(false) }}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <User size={14} className="text-gray-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-700">My Profile</span>
-                  </button>
-                  <button role="menuitem" onClick={() => { router.push('/settings'); setUserMenuOpen(false) }}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <Settings size={14} className="text-gray-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-700">Settings</span>
-                  </button>
-                  <button role="menuitem" onClick={() => { router.push('/help'); setUserMenuOpen(false) }}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left">
-                    <HelpCircle size={14} className="text-gray-500" aria-hidden="true" />
-                    <span className="text-sm text-gray-700">Help & Support</span>
-                  </button>
-                </div>
-
-                <div className="py-2 border-t border-gray-100">
-                  <button role="menuitem" onClick={handleLogout} disabled={signingOut}
-                    className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-red-50 transition-colors text-left group disabled:opacity-50">
-                    <LogOut size={14} className="text-red-400 group-hover:text-red-500" aria-hidden="true" />
-                    <span className="text-sm font-semibold text-red-500">Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className={styles.heading}>
+            <div className="min-w-0 flex-1">
+              {eyebrow && <p className={styles.eyebrow}>{eyebrow}</p>}
+              <h1 className={styles.deskTitle}>{sectionTitle}</h1>
+              {sectionDesc && profile?.barangays && <p className={styles.sub}>{sectionDesc}</p>}
+            </div>
+            {actions && <div className={styles.actions}>{actions}</div>}
           </div>
+
+          {children}
         </div>
       </header>
 
-      {/* SEARCH MODAL */}
+      {/* SEARCH */}
       {searchOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4"
-          style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)' }}>
-          <div ref={searchRef} role="dialog" aria-modal="true" aria-label="Search"
-            className="w-full max-w-2xl rounded-3xl overflow-hidden fade-up"
-            style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}>
+        <div className={styles.searchScrim}>
+          <div ref={searchRef} role="dialog" aria-modal="true" aria-label="Search" className={styles.searchPanel}>
 
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <Search size={18} className="text-gray-500 flex-shrink-0" aria-hidden="true" />
+            <div className={styles.searchInputRow}>
+              <Search size={18} strokeWidth={1.9} className="text-muted-foreground flex-shrink-0" aria-hidden="true" />
               <input
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={e => { setSearchQuery(e.target.value); setHighlighted(0) }}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search incidents, tickets, announcements..."
+                placeholder="Search incidents, tickets, announcements…"
                 aria-label="Search"
                 role="combobox"
                 aria-expanded={totalResults > 0}
                 aria-controls="search-results"
                 aria-autocomplete="list"
                 aria-activedescendant={totalResults > 0 ? `search-result-${highlighted}` : undefined}
-                className="flex-1 bg-transparent outline-none text-sm text-gray-800 placeholder-gray-500"
+                className="flex-1 min-w-0 bg-transparent outline-none text-sm text-ink placeholder:text-muted-foreground"
               />
-              <kbd className="px-2 py-0.5 rounded-md text-xs font-bold"
-                style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
-                ESC
-              </kbd>
-              <button onClick={closeSearch} aria-label="Close search"
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
-                <X size={14} />
+              <kbd className={styles.kbdPage}>Esc</kbd>
+              <button onClick={closeSearch} aria-label="Close search" className={styles.closeButton}>
+                <X size={16} strokeWidth={1.9} />
               </button>
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto" ref={resultsRef} id="search-results" role="listbox" aria-label="Search results">
               {!searchQuery && (
                 <div className="px-5 py-8 text-center">
-                  <div className="w-12 h-12 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                    style={{ background: 'var(--brand-soft)' }}>
-                    <Sparkles size={20} style={{ color: 'var(--brand)' }} />
-                  </div>
-                  <p className="text-sm font-semibold text-gray-700">Quick Search</p>
-                  <p className="text-xs text-gray-500 mt-1">Type to search across all your barangay data</p>
-                  <div className="mt-5 flex items-center justify-center gap-2 flex-wrap text-xs text-gray-500">
-                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>incidents</span>
-                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>tickets</span>
-                    <span className="px-2 py-1 rounded-lg" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>announcements</span>
-                  </div>
+                  <p className="text-sm font-bold text-ink">Search this barangay</p>
+                  <p className="text-[13px] text-muted-foreground mt-1">Type a title, a street or a few words from a report, ticket or announcement.</p>
                 </div>
               )}
 
               {searchQuery && totalResults === 0 && (
-                <div className="px-5 py-12 text-center">
-                  <p className="text-sm font-semibold text-gray-700">No results for &quot;{searchQuery}&quot;</p>
-                  <p className="text-xs text-gray-500 mt-1">Try a different search term</p>
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm font-bold text-ink">No results for &quot;{searchQuery}&quot;</p>
+                  <p className="text-[13px] text-muted-foreground mt-1">Try a different word.</p>
                 </div>
               )}
 
               {filteredResults.incidents.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
-                    style={{ background: 'var(--app-surface)' }}>
-                    Incidents ({filteredResults.incidents.length})
-                  </p>
+                  <p className={styles.groupLabel}>Incidents · {filteredResults.incidents.length}</p>
                   {filteredResults.incidents.map((inc, i) => (
                     <ResultRow
                       key={`inc-${inc.id}`}
                       idx={i}
-                      icon={<AlertTriangle size={14} className="text-orange-500" />}
-                      iconStyle={{ background: '#fff7ed' }}
+                      icon={<IncidentsIcon size={18} />}
                       title={inc.title}
-                      subtitle={`📍 ${inc.location} · ${inc.status}`}
+                      subtitle={[inc.location, inc.status].filter(Boolean).join(' · ')}
                       onClick={() => selectResult('incidents', inc)}
                       highlighted={highlighted}
                       onHighlight={setHighlighted}
@@ -455,16 +394,12 @@ export default function DashboardHeader({
 
               {filteredResults.tickets.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
-                    style={{ background: 'var(--app-surface)' }}>
-                    Tickets ({filteredResults.tickets.length})
-                  </p>
+                  <p className={styles.groupLabel}>Tickets · {filteredResults.tickets.length}</p>
                   {filteredResults.tickets.map((t, i) => (
                     <ResultRow
                       key={`tkt-${t.id}`}
                       idx={ticketsOffset + i}
-                      icon={<FileText size={14} className="text-white" />}
-                      iconStyle={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      icon={<TicketsIcon size={18} />}
                       title={t.title}
                       subtitle={`Status: ${t.status}`}
                       onClick={() => selectResult('tickets', t)}
@@ -477,16 +412,12 @@ export default function DashboardHeader({
 
               {filteredResults.announcements.length > 0 && (
                 <div>
-                  <p className="px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-500"
-                    style={{ background: 'var(--app-surface)' }}>
-                    Announcements ({filteredResults.announcements.length})
-                  </p>
+                  <p className={styles.groupLabel}>Announcements · {filteredResults.announcements.length}</p>
                   {filteredResults.announcements.map((a, i) => (
                     <ResultRow
                       key={`ann-${a.id}`}
                       idx={announcementsOffset + i}
-                      icon={<Bell size={14} className="text-white" />}
-                      iconStyle={{ background: 'linear-gradient(135deg, #5B54E8, #7C75F0)' }}
+                      icon={<AnnouncementsIcon size={18} />}
                       title={a.title}
                       subtitle={a.content}
                       onClick={() => selectResult('announcements', a)}
@@ -499,18 +430,9 @@ export default function DashboardHeader({
             </div>
 
             {searchQuery && totalResults > 0 && (
-              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between" style={{ background: 'var(--app-surface)' }}>
-                <p className="text-xs text-gray-500" aria-live="polite">{totalResults} {totalResults === 1 ? 'result' : 'results'} found</p>
-                <div className="flex items-center gap-3 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↑↓</kbd>
-                    navigate
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'white', border: '1px solid #e5e7eb' }}>↵</kbd>
-                    select
-                  </span>
-                </div>
+              <div className={styles.searchFoot}>
+                <p className="text-xs text-muted-foreground" aria-live="polite">{totalResults} {totalResults === 1 ? 'result' : 'results'}</p>
+                <p className="text-xs text-muted-foreground"><kbd className={styles.kbdPage}>↑↓</kbd> move · <kbd className={styles.kbdPage}>↵</kbd> open</p>
               </div>
             )}
           </div>

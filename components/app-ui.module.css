@@ -1,55 +1,81 @@
 /* Breakpoints follow Tailwind's: sm 640 / md 768 / lg 1024 / xl 1280 /
-   2xl 1536 ("max-width: 639px" = below sm, and so on). */
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 11px 17px; border: 1px solid transparent; border-radius: 14px; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.5; text-align: center; transition: background .15s,box-shadow .15s,border-color .15s; cursor: pointer; }
+   2xl 1536 ("max-width: 639px" = below sm, and so on).
+   Crafted values: docs/design/crafted/DESIGN.md §5 and source/kit.py. */
+
+/* ---- Buttons (kit.py btn()) ---- */
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: 10px; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; text-align: center; white-space: nowrap; transition: background-color .15s, border-color .15s, color .15s; cursor: pointer; }
 .button svg { flex-shrink: 0; }
-.button:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
-.button:focus-visible, .back:focus-visible { outline: 3px solid #b8acf9; outline-offset: 3px; }
-.primary { background: linear-gradient(135deg,var(--brand-dark),var(--brand)); color: white; box-shadow: 0 4px 14px #5b54e826; }
-.secondary { background: var(--brand-soft); color: var(--brand-dark); border-color: var(--brand-border); }
-.danger { background: #b91c1c; color: white; }
-.ghost { background: transparent; color: #514765; border-color: var(--brand-border); }
-.header { position: sticky; top: 0; z-index: 30; padding-top: env(safe-area-inset-top, 0px); background: white; border-bottom: 1px solid var(--brand-border); box-shadow: 0 2px 12px #5b54e80a; }
-.headerInner { display: flex; align-items: center; gap: 12px; max-width: 1320px; margin-inline: auto; padding: 14px max(24px, env(safe-area-inset-right, 0px)) 14px max(24px, env(safe-area-inset-left, 0px)); min-height: 76px; }
-.back { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; border: 1px solid #ede9f6; background: var(--app-surface); color: #62576f; flex-shrink: 0; cursor: pointer; }
-.headerIcon { display: grid; place-items: center; width: 43px; height: 43px; border-radius: 14px; background: var(--brand-soft); color: var(--brand); flex-shrink: 0; }
+.button:disabled { opacity: .55; cursor: not-allowed; }
+.button:focus-visible, .back:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+.primary { background: var(--brand-fill); border-color: var(--brand-fill); color: #fff; }
+.secondary { background: var(--surface); border-color: var(--line); color: var(--ink); }
+.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.ghost { background: transparent; color: var(--brand-strong); }
+.onband { background: var(--onband); color: #fff; }
+.white { background: #fff; border-color: #fff; color: #4A43D4; }
+.onband:focus-visible, .white:focus-visible { outline-color: #fff; }
+@media (hover: hover) {
+  .primary:not(:disabled):hover { background: var(--brand-deep); border-color: var(--brand-deep); }
+  .secondary:not(:disabled):hover { border-color: var(--line-strong); }
+  .ghost:not(:disabled):hover { background: var(--brand-soft); color: var(--brand-deep); }
+  .danger:not(:disabled):hover { filter: brightness(.95); }
+  .onband:not(:disabled):hover { background: var(--onband-hover); }
+  .white:not(:disabled):hover { background: #EFEDFC; }
+}
+
+/* ---- Page header: a purple band bar (DESIGN.md §3–4, kit.py phone_top()).
+   The band itself is <Band mode="fill"> inside it. ---- */
+.header { position: sticky; top: 0; z-index: 30; padding-top: env(safe-area-inset-top, 0px); color: #fff; overflow: hidden; }
+.headerInner { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; max-width: 1320px; margin-inline: auto; padding: 12px max(28px, env(safe-area-inset-right, 0px)) 12px max(28px, env(safe-area-inset-left, 0px)); min-height: 68px; }
+.back { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--onband); color: #fff; flex-shrink: 0; cursor: pointer; transition: background-color .15s; }
+.back:focus-visible { outline-color: #fff; }
+/* Crafted puts no icons in tinted tiles: the header icon is left out. */
+.headerIcon { display: none; }
 .heading { flex: 1; min-width: 0; }
-.heading h1 { font-size: 20px; font-weight: 750; line-height: 1.35; letter-spacing: -.4px; margin: 0; color: #292338; overflow-wrap: anywhere; }
-.heading p { color: #70677d; font-size: 12px; line-height: 1.6; margin: 4px 0 0; overflow-wrap: anywhere; }
+.heading h1 { font-size: 20px; font-weight: 800; line-height: 1.3; letter-spacing: -.3px; margin: 0; color: #fff; overflow-wrap: anywhere; }
+.heading p { color: rgba(255, 255, 255, .82); font-size: 12px; line-height: 1.5; margin: 2px 0 0; overflow-wrap: anywhere; }
 .headerActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; min-height: 26px; border-radius: 9px; font-size: 12px; font-weight: 700; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
-.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.tone_neutral { background: #f3f4f6; color: #596273; }
-.tone_pending { background: #fffbeb; color: #92400e; }
-.tone_active { background: #eff6ff; color: #1d4ed8; }
-.tone_success { background: #ecfdf5; color: #047857; }
-.tone_danger { background: #fef2f2; color: #b91c1c; }
-.tone_info { background: var(--brand-soft); color: var(--brand-dark); }
-.state { padding: 36px 24px; background: white; border: 1px solid var(--brand-border); border-radius: 24px; text-align: center; color: #292338; }
-.stateIcon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 15px; background: var(--brand-soft); color: var(--brand); border-radius: 18px; }
-.state h2 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.5; }
-.state p { color: #70677d; font-size: 13px; line-height: 1.8; margin: 8px auto 0; max-width: 46ch; }
-.state .button { margin-top: 18px; }
-.stateError .stateIcon { background: #fff7ed; color: #9a3412; }
-.fullPage { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: linear-gradient(145deg,var(--brand-dark),#6B5FEE,var(--brand-light)); }
-.fullPage .state { width: min(100%,440px); }
+/* Buttons in the header sit on the band. */
+.headerActions .primary { background: #fff; border-color: #fff; color: #4A43D4; }
+.headerActions .secondary, .headerActions .ghost { background: var(--onband); border-color: transparent; color: #fff; }
+.headerActions .button:focus-visible { outline-color: #fff; }
+
+/* ---- Status badge → Crafted tag (radius 6, 12px/700, tone on soft) ---- */
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; min-height: 22px; border-radius: 6px; font-size: 12px; font-weight: 700; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.tone_neutral { background: var(--quiet-soft); color: var(--text-muted); }
+.tone_pending { background: var(--warn-soft); color: var(--warn); }
+.tone_active { background: var(--info-soft); color: var(--info); }
+.tone_success { background: var(--ok-soft); color: var(--ok); }
+.tone_danger { background: var(--danger-soft); color: var(--danger); }
+.tone_info { background: var(--brand-soft); color: var(--brand-strong); }
+
+/* ---- Empty / error / loading state: muted text in a card, a bare icon ---- */
+.state { padding: 32px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; text-align: center; color: var(--ink); }
+.stateIcon { display: grid; place-items: center; margin: 0 auto 12px; color: var(--text-muted); }
+.state h2 { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.5; }
+.state p { color: var(--text-muted); font-size: 13px; line-height: 1.55; margin: 6px auto 0; max-width: 46ch; }
+.state .button { margin-top: 16px; }
+.stateError .stateIcon { color: var(--danger); }
+.fullPage { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: linear-gradient(180deg, var(--band-from), var(--band-to)); }
+.fullPage .state { width: min(100%, 440px); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Kept for markup that still references them (old dashboard header). */
 .dashboardHeader { min-height: 76px; }
 /* Sticky headers clear the notch / status bar (viewport-fit=cover) and the
    notch side of a landscape phone. Zero everywhere else. */
 .safeTop { padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 @media (min-width: 640px) { .safeTop { padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); } }
-.dashboardHeader h1 { font-size: 20px; line-height: 1.35; }
-.dashboardHeader button[aria-label="Open sidebar"] { width: 44px; height: 44px; }
-@media (hover: hover) { .primary:not(:disabled):hover { box-shadow: 0 5px 18px #5b54e838; background: var(--brand-dark); } .secondary:not(:disabled):hover, .back:hover { background: var(--brand-border); } }
+
+@media (hover: hover) { .back:hover { background: var(--onband-hover); } }
 @media (max-width: 639px) {
-  .headerInner { padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); gap: 10px; flex-wrap: wrap; min-height: 72px; }
-  .headerIcon { display: none; }
+  .headerInner { padding: 12px max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); gap: 10px; flex-wrap: wrap; min-height: 64px; }
   .headerActions.desktopOnly { display: none; }
-  .heading h1, .dashboardHeader h1 { font-size: 17px; }
-  .heading p { font-size: 12px; }
+  .heading h1 { font-size: 17px; }
   .headerActions { flex-basis: 100%; }
-  .headerActions .button { flex: 1; padding-inline: 12px; white-space: nowrap; }
+  .headerActions .button { flex: 1; padding-inline: 12px; }
   .state { padding: 28px 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } .button { transition: none; } }

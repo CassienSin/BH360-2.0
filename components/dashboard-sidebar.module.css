@@ -1,26 +1,174 @@
-.sidebar { color: #292338; }
+/* The Crafted sidebar (DESIGN.md §4, kit.py sidebar()): 232px, flush
+   white, 1px right hairline; nav groups with 11px uppercase labels; 36px
+   items; the active one brand-soft with brand text and the solid icon.
+   Collapsed (768–1023px by default, or by choice): a 64px icon rail.
+   Phone layout: the same sidebar as a slide-in drawer (globals .sidebar). */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  color: var(--body);
+}
+.isOpen { width: 232px; }
+.isClosed { width: 64px; }
 .sidebar > div:not(.scrollArea) { flex-shrink: 0; }
-.scrollArea { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
-.sidebar button { cursor: pointer; }
+.sidebar button, .sidebar a { cursor: pointer; }
 .sidebar button:disabled { cursor: default; }
-.sidebar button:focus-visible, .search:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
-.iconButton { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px; background: #f6f4ff; color: #62576f; }
-.iconButton:hover { background: var(--brand-border); }
-.search { min-height: 44px; color: #292338; }
-.search::placeholder { color: #70677d; }
-.clearSearch { position: absolute; right: 2px; top: 2px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: #62576f; }
-.clearSearch:hover { background: var(--brand-soft); }
-.navRow { position: relative; display: flex; align-items: center; gap: 2px; }
-.navButton { flex: 1; min-width: 0; min-height: 44px; }
-/* Wrap between words only: break-word split "Blotter / Lupon" mid-word
-   ("Blott er / Lupo n") when its badges squeezed it. */
-.navButton > span { min-width: 0; overflow-wrap: normal; }
-.pinButton { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 40px; border-radius: 10px; color: #81738f; }
-.pinButton:hover, .pinButton[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand-dark); }
-.sidebar:not(:global(.open)) nav { padding-inline: 8px; }
-.sidebar button[aria-label="Sign out"] { width: 36px; height: 36px; }
-/* Phone layout: narrow, or a phone held sideways (lib/layout.js). */
+.sidebar :is(button, a, input):focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -2px; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 12px 8px 18px;
+}
+.isClosed .brand { justify-content: center; padding: 16px 0 8px; }
+.logo { position: relative; width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px; }
+.isOpen .logo { cursor: default; }
+.appName { margin: 0; font-size: 14px; font-weight: 800; color: var(--ink); white-space: nowrap; }
+.place { margin: 0; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+.iconButton:hover { background: var(--track); color: var(--ink); }
+
+.scrollArea { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 12px 12px; }
+.isClosed .scrollArea { padding: 0 12px 12px; }
+
+.searchRow { padding: 6px 0 4px; }
+.searchIcon { position: absolute; left: 12px; top: 50%; translate: 0 -50%; color: var(--text-muted); }
+.search {
+  width: 100%;
+  height: 44px;
+  padding: 0 44px 0 36px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  outline: none;
+}
+.search::placeholder { color: var(--text-muted); }
+.search:focus { border-color: var(--brand-strong); }
+.clearSearch { position: absolute; right: 2px; top: 2px; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 8px; color: var(--text-muted); }
+.clearSearch:hover { background: var(--track); }
+
+.nav { display: block; }
+.group { margin-top: 6px; }
+.groupLabel {
+  margin: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.railRule { display: block; height: 1px; margin: 10px 8px; background: var(--line); }
+.group:first-child .railRule { display: none; }
+
+.navRow { position: relative; display: flex; align-items: center; }
+.navButton {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--body);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  transition: background-color .12s, color .12s;
+}
+.navButton:hover { background: var(--surface-sunk); color: var(--ink); }
+.active, .active:hover { background: var(--brand-soft); color: var(--brand-strong); font-weight: 700; }
+.isClosed .navButton { justify-content: center; padding: 0; width: 40px; height: 40px; flex: none; margin-inline: auto; }
+.navIcon { position: relative; display: flex; flex-shrink: 0; }
+/* The solid icon's knock-out matches the row behind it. */
+.active .navIcon { --bh-icon-knockout: var(--brand-soft); }
+.navLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.count { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.active .count { color: var(--brand-strong); }
+.countDanger, .active .countDanger { color: var(--danger); }
+.navBadge {
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--quiet-soft);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  letter-spacing: 0.04em;
+}
+.newDot { width: 7px; height: 7px; margin-left: auto; border-radius: 50%; background: var(--brand-strong); }
+.railDot { position: absolute; top: -2px; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-strong); box-shadow: 0 0 0 2px var(--surface); }
+.railDotDanger { background: var(--danger); }
+
+/* The pin shows on hover or keyboard focus (always on touch screens, and
+   while an item is pinned). */
+.pinButton {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 32px;
+  margin-left: 2px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity .12s;
+}
+.navRow:hover .pinButton, .navRow:focus-within .pinButton, .pinButton[aria-pressed="true"] { opacity: 1; }
+.pinButton:hover { background: var(--track); color: var(--ink); }
+@media (hover: none) { .pinButton { opacity: 1; } }
+
+.footer { padding: 10px 12px 14px; border-top: 1px solid var(--line); }
+.user { display: flex; align-items: center; gap: 10px; padding: 0 0 0 6px; }
+.avatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+.avatar img { border-radius: 8px; }
+.online { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--surface); }
+.userName { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.userRole { margin: 0; font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.signOut { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; color: var(--text-muted); }
+.signOut:hover { background: var(--track); color: var(--ink); }
+.railFooter { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+.scrim { position: fixed; inset: 0; z-index: 30; background: var(--scrim); }
+@media (min-width: 768px) and (min-height: 500px) { .scrim { display: none; } }
+
+/* Phone layout: narrow, or a phone held sideways (lib/layout.js). The
+   drawer gets touch-sized rows. */
 @media (max-width: 767px), (max-height: 499px) {
-  .iconButton, .pinButton, .sidebar button[aria-label="Sign out"] { width: 44px; height: 44px; }
-  .sidebar button:focus-visible { outline-offset: -2px; }
+  .navButton { height: 44px; }
+  .iconButton, .signOut { width: 44px; height: 44px; }
+  .pinButton { width: 36px; height: 44px; }
 }
