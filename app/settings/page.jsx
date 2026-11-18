@@ -12,7 +12,8 @@ import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, Aler
 import Image from 'next/image'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { isSupported, getPermission, requestPermission, showNotification } from '@/lib/notifications'
+import { isSupported, getPermission, requestPermission } from '@/lib/notifications'
+import { pushSupport, isSubscribed, subscribeToPush } from '@/lib/push'
 
 const dots = [...Array(20)].map((_, i) => ({
   size: (((i * 7) % 6) + 3),
@@ -69,6 +70,9 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState('default')
+  // This device is registered for background push (what the test needs).
+  const [pushReady, setPushReady] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   const [prefs, setPrefs] = useState({
@@ -100,6 +104,11 @@ export default function SettingsPage() {
       if (prof.notification_prefs) setPrefs(prof.notification_prefs)
       if (prof.language) setLanguage(prof.language)
       if (isSupported()) setNotificationPermission(getPermission())
+      // Not awaited: it waits for the service worker, which never comes if
+      // registration failed, and the page must not hang on that.
+      if (pushSupport().supported) {
+        isSubscribed().then(subscribed => { if (!cancelled) setPushReady(subscribed) }).catch(() => {})
+      }
       setLoading(false)
     }
     load()
@@ -141,21 +150,35 @@ export default function SettingsPage() {
     const permission = await requestPermission()
     setNotificationPermission(permission)
     if (permission === 'granted') {
+      // Register this device for background push too, so the test button
+      // (and notifications with the app closed) work straight away.
+      const push = pushSupport().supported ? await subscribeToPush() : { ok: false }
+      setPushReady(push.ok)
       toast.success('Notifications enabled!')
-      sendTestNotification()
     } else if (permission === 'denied') {
       toast.error('Notifications blocked. You can enable them in browser settings.')
     }
   }
 
-  // force: true because this page is visible — the lib normally suppresses
-  // notifications while the user is looking at the app, which would make
-  // the test button appear to do nothing.
-  function sendTestNotification() {
-    showNotification('BarangayHub 360', {
-      body: 'Notifications are working! 🎉',
-      force: true,
-    })
+  // A real push, through the push service, to this person's own devices:
+  // it arrives the way every notification does, so it shows whether the
+  // phone delivers them with the app in the background. (A notification
+  // shown from this open page proved nothing about that.)
+  async function sendTestPush() {
+    setTesting(true)
+    try {
+      const res = await fetch('/api/push/test', { method: 'POST' })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) toast.error(body.error || 'Could not send a test notification.')
+      else if (body.sent > 0) toast.success(body.sent === 1
+        ? 'Test sent. It should appear in a few seconds, even with the app closed.'
+        : `Test sent to your ${body.sent} devices. It should appear in a few seconds.`)
+      else toast.error(body.reason || 'No device received the test.')
+    } catch {
+      toast.error('Could not reach the server. Check your connection.')
+    } finally {
+      setTesting(false)
+    }
   }
 
   async function downloadMyData() {
@@ -297,11 +320,11 @@ export default function SettingsPage() {
                     Enable Notifications
                   </button>
                 )}
-                {notificationPermission === 'granted' && (
-                  <button onClick={sendTestNotification}
-                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg"
+                {notificationPermission === 'granted' && pushReady && (
+                  <button onClick={sendTestPush} disabled={testing}
+                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
                     style={{ background: 'white', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                    Send test notification
+                    {testing ? 'Sending…' : 'Send test notification'}
                   </button>
                 )}
               </div>

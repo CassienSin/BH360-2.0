@@ -25,6 +25,7 @@ const STATIC_FILES = [
   '/icon-maskable-512.png',
   '/apple-touch-icon.png',
   '/favicon-32.png',
+  '/badge-96.png',
 ]
 
 // Install event - cache static files
@@ -152,7 +153,10 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192.png',
-    badge: '/favicon-32.png',
+    // Android draws the badge from its alpha channel alone, so it has to be
+    // a white shape on transparency: the full-colour favicon came out as a
+    // blank square. The large colour image is the icon above.
+    badge: '/badge-96.png',
     // tag collapses repeats of the same event — a critical incident pushed
     // to a tanod who also has the page open should not stack up twice.
     tag: payload.tag,

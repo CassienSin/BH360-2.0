@@ -1,6 +1,6 @@
-import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase-server'
-import { pushAllowed, pushPayload, recipientAllowed } from '@/lib/notificationTypes'
+import { pushAllowed, pushPayload, pushDelivery, recipientAllowed } from '@/lib/notificationTypes'
+import { pushConfigured, sendToDevices } from '@/lib/pushSender'
 
 /**
  * Sends one notification row to its recipient's devices as a Web Push.
@@ -16,31 +16,22 @@ import { pushAllowed, pushPayload, recipientAllowed } from '@/lib/notificationTy
  * same event twice while the old triggers still exist (they are removed by
  * supabase/cleanup-after-notifications.sql after the merge).
  *
- * Runs on Node, not Edge: web-push signs a VAPID JWT and encrypts the
- * payload with primitives the Edge runtime does not provide.
+ * How urgently each type is pushed, and for how long the push service
+ * keeps trying, is per type: PUSH_DELIVERY in lib/notificationTypes.js.
+ *
+ * Runs on Node, not Edge (lib/pushSender.js says why).
  */
 
 export const runtime = 'nodejs'
 
-const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:barangayhub360@example.com'
 const WEBHOOK_SECRET = process.env.PUSH_WEBHOOK_SECRET
 // Set on a preview only: limits who it can push to. A preview without it
 // pushes to nobody (see recipientAllowed).
 const ONLY_BARANGAY_IDS = process.env.PUSH_ONLY_BARANGAY_IDS
 const DEPLOYMENT = process.env.VERCEL_ENV
 
-// The push service says the subscription is gone: unsubscribed, expired,
-// or the app was uninstalled. Delete it rather than retry it forever.
-const DEAD_ENDPOINT_CODES = new Set([404, 410])
-
 function configured() {
-  return Boolean(VAPID_PUBLIC && VAPID_PRIVATE && WEBHOOK_SECRET)
-}
-
-if (configured()) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE)
+  return Boolean(pushConfigured() && WEBHOOK_SECRET)
 }
 
 export async function POST(request) {
@@ -104,32 +95,6 @@ export async function POST(request) {
   }
   if (!subs?.length) return Response.json({ sent: 0, reason: 'No devices registered.' })
 
-  const payload = pushPayload(record)
-  // Critical reports are worth retrying for a while; the rest are stale
-  // within the hour and should not pile up on a phone that was off.
-  const ttl = payload.priority === 'Critical' ? 3600 : 600
-
-  const results = await Promise.allSettled(
-    subs.map(sub => webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      JSON.stringify(payload),
-      { TTL: ttl, urgency: payload.priority === 'Critical' ? 'high' : 'normal' }
-    ))
-  )
-
-  const dead = []
-  let sent = 0
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') { sent += 1; return }
-    const status = result.reason?.statusCode
-    if (DEAD_ENDPOINT_CODES.has(status)) dead.push(subs[i].id)
-    else console.error('push/send: delivery failed', status, result.reason?.body || result.reason?.message)
-  })
-
-  if (dead.length) {
-    const { error } = await admin.from('push_subscriptions').delete().in('id', dead)
-    if (error) console.error('push/send: could not clear dead endpoints:', error)
-  }
-
-  return Response.json({ sent, failed: results.length - sent, removed: dead.length })
+  const result = await sendToDevices(admin, subs, pushPayload(record), pushDelivery(record))
+  return Response.json(result)
 }
