@@ -91,8 +91,11 @@ function fireBrowserNotification(incident, url) {
   // force: true because this one is worth showing even with the tab in
   // front — an official looking at a different part of the dashboard still
   // needs to be told.
-  showNotification('🚨 CRITICAL INCIDENT', {
-    body: `${incident.title}\n📍 ${incident.location || 'Location not specified'}`,
+  //
+  // On a device with push, the critical push shows it instead (see
+  // showNotification), so this only runs where there is no push.
+  showNotification(`Critical report: ${incident.title}`, {
+    body: incident.location || 'Location not specified',
     tag: `critical-${incident.id}`,   // replaces rather than stacks duplicates
     requireInteraction: true,          // stays until dismissed
     force: true,

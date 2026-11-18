@@ -620,7 +620,7 @@ function ResidentDashboard() {
   // verification, announcements (supabase/setup.sql Section 18). New
   // announcements already get their own toast below, so the hook stays
   // quiet for those.
-  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['announcement'] })
+  const notificationCenter = useNotifications(profile?.id, { silentTypes: ['announcement', 'incident_status'] })
   const { rows: notificationRows, markRead: markNotificationsRead } = notificationCenter
 
   // Unread announcements are the ones with an unread notification. (Ones
