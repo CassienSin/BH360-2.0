@@ -15,7 +15,7 @@ import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import DashboardFrame from '@/components/crafted/DashboardFrame'
-import { AnalyticsIcon, AnnouncementsIcon, BlotterIcon, CalendarIcon, DashboardIcon, DocumentsIcon, IncidentsIcon, MapIcon, TanodsIcon, TicketsIcon, UsersIcon, VerificationsIcon } from '@/components/icons/BhIcons'
+import { AnalyticsIcon, AnnouncementsIcon, CalendarIcon, MapIcon } from '@/components/icons/BhIcons'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TanodRoster from '@/components/TanodRoster'
 import TanodManagement from '@/components/TanodManagement'
@@ -29,6 +29,7 @@ import TicketsSection from '@/components/official/TicketsSection'
 import UsersSection from '@/components/official/UsersSection'
 import AnnouncementsSection from '@/components/official/AnnouncementsSection'
 import { SectionLauncher } from '@/components/official/OfficialSections'
+import { officialNavItems, OFFICIAL_TOOL_PAGES } from '@/components/official/OfficialShell'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
 import { Card } from '@/components/ui/card'
@@ -478,9 +479,11 @@ function OfficialDashboard() {
   }, [users, userSearch, userRoleFilter])
 
   const navClick = useCallback((key) => {
-    setActiveSection(key)
     if (isPhoneLayout()) setSidebarOpen(false)
-  }, [setSidebarOpen, setActiveSection])
+    // Map, Calendar and Analytics are pages of their own (OfficialShell).
+    if (OFFICIAL_TOOL_PAGES[key]) { router.push(OFFICIAL_TOOL_PAGES[key]); return }
+    setActiveSection(key)
+  }, [setSidebarOpen, setActiveSection, router])
 
   // Sections share one scrolling <main>; start each one at the top.
   const mainRef = useRef(null)
@@ -930,28 +933,15 @@ function OfficialDashboard() {
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
         activeSection={activeSection}
-        setActiveSection={setActiveSection}
+        setActiveSection={navClick}
         roleLabel="Barangay Official"
-        navItems={[
-          { section: 'MAIN', items: [
-            { key: 'dashboard', label: 'Dashboard', icon: DashboardIcon },
-            { key: 'incidents', label: 'Incidents', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length, hasNew: incidents.filter(i => i.status === 'pending').length > 0 },
-            { key: 'announcements', label: 'Announcements', icon: AnnouncementsIcon },
-          ]},
-          { section: 'MANAGE', items: [
-            { key: 'tickets', label: 'Tickets', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
-            { key: 'documents', label: 'Documents', icon: DocumentsIcon, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
-            { key: 'verifications', label: 'Verifications', icon: VerificationsIcon, count: pendingVerifications, hasNew: pendingVerifications > 0 },
-            { key: 'blotter', label: 'Blotter / Lupon', icon: BlotterIcon, count: blotterCounts.open, badge: blotterCounts.breach > 0 ? 'OVERDUE' : undefined },
-            { key: 'tanods', label: 'Tanods', icon: TanodsIcon },
-            { key: 'users', label: 'Users', icon: UsersIcon },
-          ]},
-          { section: 'TOOLS', items: [
-            { key: 'map', label: 'Incident map', icon: MapIcon },
-            { key: 'calendar', label: 'Calendar', icon: CalendarIcon },
-            { key: 'analytics', label: 'Analytics', icon: AnalyticsIcon },
-          ]},
-        ]}
+        navItems={officialNavItems({
+          incidents: incidents.filter(i => i.status === 'pending').length,
+          tickets: tickets.filter(t => t.status === 'open').length,
+          documents: documentCounts.open, documentsBreach: documentCounts.breach,
+          verifications: pendingVerifications,
+          blotter: blotterCounts.open, blotterBreach: blotterCounts.breach,
+        })}
       />}
         header={<DashboardHeader
           profile={profile}

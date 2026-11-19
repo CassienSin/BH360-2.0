@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
-import { goBack } from '@/lib/goBack'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { categoryColor } from '@/lib/categoryIcons'
 import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
 import styles from './calendar.module.css'
-import { PageHeader, AppButton } from '@/components/AppUI'
+import OfficialShell from '@/components/official/OfficialShell'
+import { Button } from '@/components/ui/button'
+import { StatStrip } from '@/components/ui/stat-strip'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: 'var(--brand-strong)' }, incidents: { label: 'Incidents', singular: 'Incident', color: 'var(--warn)' }, announcements: { label: 'Announcements', singular: 'Announcement', color: 'var(--ok)' } }
@@ -42,7 +43,7 @@ export default function CalendarView() {
         if (cancelled) return
         if (error) throw error
         if (!user) { router.replace(loginHref()); return }
-        const { data: official, error: profileError } = await supabase.from('profiles').select('id, role, barangay_id, barangays(name)').eq('id', user.id).single()
+        const { data: official, error: profileError } = await supabase.from('profiles').select('id, role, barangay_id, full_name, avatar_url, barangays(id, name, city, province)').eq('id', user.id).single()
         if (cancelled) return
         if (profileError) throw profileError
         if (official?.role !== 'official' || !official?.barangay_id) { router.replace(loginHref()); return }
@@ -100,25 +101,25 @@ export default function CalendarView() {
     requestAnimationFrame(() => dayButtons.current.get(next)?.focus())
   }
 
-  return <div className={styles.page}>
-    <PageHeader
-      title="Calendar"
-      description={`Hearings, appointments, reports and announcements by day${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
-      icon={CalendarDays}
-      onBack={() => goBack(router, '/official?section=calendar')}
-      backLabel="Back to dashboard"
-      actions={<>
-        <AppButton variant="secondary" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={15} aria-hidden="true" />Appointments</AppButton>
-        <AppButton onClick={() => router.push('/official/calendar/appointments/new')}><Plus size={15} aria-hidden="true" />New appointment</AppButton>
-      </>}
-    />
+  // The month's numbers as the dashboard's stat strip (one card, hairlines).
+  const missing = key => loading || Boolean(authError) || errors.some(e => e.includes(key))
+  const stats = [
+    { label: 'Appointments', value: missing('appointments') ? '—' : data.appointments.length, note: 'scheduled this month' },
+    { label: 'Incidents', value: missing('incidents') ? '—' : data.incidents.length, note: 'reported this month' },
+    { label: 'Waiting for a tanod', value: missing('incidents') ? '—' : data.incidents.filter(i => i.status === 'pending').length, note: 'unassigned' },
+    { label: 'Announcements', value: missing('announcements') ? '—' : data.announcements.length, note: 'posted this month' },
+  ]
 
-    <main className={styles.main}>
-      <div className={styles.intro}><div><p className={styles.eyebrow}>MONTHLY OVERVIEW</p><h2>Plan the day. Keep track of your barangay.</h2></div><p>Appointments, reported incidents, and posted announcements in one place.</p></div>
+  return <OfficialShell profile={profile} active="calendar"
+    eyebrow="Calendar" title="Hearings, pickups and events"
+    desc="Appointments, reports and announcements by day, in Philippine time."
+    actions={<>
+      <Button variant="onband" onClick={() => router.push('/official/calendar/appointments')}><ClipboardList aria-hidden="true" />Appointments</Button>
+      <Button variant="white" onClick={() => router.push('/official/calendar/appointments/new')}><Plus aria-hidden="true" />New appointment</Button>
+    </>}>
+    <div className={styles.main}>
       {authError && <div className={styles.error} role="alert">{authError}</div>}
-      <section className={styles.stats} aria-label="Monthly totals">
-        {[['Appointments', data.appointments.length, 'Scheduled this month', 'var(--brand-strong)'], ['Incidents', data.incidents.length, 'Reported this month', 'var(--warn)'], ['Pending incidents', data.incidents.filter(i => i.status === 'pending').length, 'Awaiting assignment', 'var(--danger)'], ['Announcements', data.announcements.length, 'Posted this month', 'var(--ok)']].map(([label, count, note, tint]) => <div className={styles.stat} key={label}><span className={styles.statMarker} style={{ background: tint }} /><div><p>{label}</p><strong>{loading || authError || errors.some(e => e.includes(label === 'Pending incidents' ? 'incidents' : label.toLowerCase())) ? '—' : count}</strong><small>{note}</small></div></div>)}
-      </section>
+      <StatStrip stats={stats} className="mb-3.5" />
       <div className={styles.workspace}>
         <section className={styles.calendar} aria-label="Month calendar" aria-busy={loading}>
           <div className={styles.toolbar}><div><h2 aria-live="polite">{monthTitle}</h2><p>Select a day to see its schedule.</p></div><div className={styles.navigation}><button className={styles.secondary} onClick={goToday}>Today</button><button className={styles.iconButton} aria-label="Previous month" onClick={() => navigate(-1)}><ChevronLeft size={19} /></button><button className={styles.iconButton} aria-label="Next month" onClick={() => navigate(1)}><ChevronRight size={19} /></button></div></div>
@@ -158,6 +159,6 @@ export default function CalendarView() {
           <button className={styles.agendaAction} onClick={() => router.push('/official/calendar/appointments')}><ClipboardList size={16} />View appointment list<ChevronRight size={16} /></button>
         </aside>
       </div>
-    </main>
-  </div>
+    </div>
+  </OfficialShell>
 }

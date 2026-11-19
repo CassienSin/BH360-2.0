@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase'
 import { Phone } from 'lucide-react'
 import { Card, CardHead } from '@/components/ui/card'
 import { Rows, Row, RowTitle } from '@/components/ui/table'
-import { Status, Tag } from '@/components/ui/tag'
+import { Status } from '@/components/ui/tag'
 import { Avatar } from '@/components/ui/avatar'
 import { Muted } from '@/components/ui/text'
 import { timeAgo } from '@/lib/timeAgo'
@@ -185,9 +185,12 @@ export default function TanodRoster({ profile }) {
                           ? `Off since ${timeAgo(t.duty_changed_at)}`
                           : 'Never on duty yet')
                       + (assignments > 0 ? ` · ${assignments} active ${assignments === 1 ? 'incident' : 'incidents'}` : '')} />
-                  {/* On duty but not seen in a while: call before dispatching. */}
-                  {stale && <Tag tone="warn" className="shrink-0" title="On duty but not seen recently. Call first.">Inactive</Tag>}
-                  <Status tone={sc.tone} className="shrink-0">{sc.label}</Status>
+                  {/* One state per tanod. On duty but not seen in the app for a
+                      while reads as that, not as Available: call first. */}
+                  <Status tone={stale ? 'warn' : sc.tone} className="shrink-0"
+                    title={stale ? 'On duty, but not seen in the app recently. Call before dispatching.' : undefined}>
+                    {stale ? 'Not seen lately' : sc.label}
+                  </Status>
                   {t.phone && (
                     <a href={`tel:${t.phone}`} aria-label={`Call ${t.full_name}`}
                       className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-surface-sunk hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-strong">

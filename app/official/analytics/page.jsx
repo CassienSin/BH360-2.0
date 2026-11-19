@@ -2,12 +2,14 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
-import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { useNow } from '@/lib/useNow'
-import { PageHeader, AppButton } from '@/components/AppUI'
+import OfficialShell from '@/components/official/OfficialShell'
+import { DashboardShellSkeleton } from '@/components/Skeletons'
+import { Button } from '@/components/ui/button'
+import { StatStrip } from '@/components/ui/stat-strip'
 import { Notice } from '@/components/ui/notice'
-import { BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Ticket, Minus } from 'lucide-react'
+import { BarChart2, RefreshCw, TrendingUp, Trophy, Star, Activity, Zap, Ticket } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
 import { CATEGORY_CONFIG } from '@/lib/legalBasis'
@@ -23,26 +25,6 @@ function formatHours(hours) {
   if (hours < 1) return `${Math.round(hours * 60)}m`
   if (hours < 48) return `${hours.toFixed(1)}h`
   return `${(hours / 24).toFixed(1)}d`
-}
-
-/** Small up/down/flat badge comparing this week vs last week. */
-function TrendBadge({ current, previous }) {
-  if (previous === 0 && current === 0) return null
-  const diff = current - previous
-  const Icon = diff > 0 ? TrendingUp : diff < 0 ? TrendingDown : Minus
-  // For incident counts, "up" is bad — color accordingly
-  const color = diff > 0 ? '#dc2626' : diff < 0 ? '#16a34a' : '#9ca3af'
-  const bg = diff > 0 ? '#fef2f2' : diff < 0 ? '#f0fdf4' : '#f9fafb'
-  return (
-    <span
-      className="text-xs font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5"
-      style={{ background: bg, color }}
-      title={`${current} this week vs ${previous} last week`}
-    >
-      <Icon size={10} />
-      {diff > 0 ? `+${diff}` : diff}
-    </span>
-  )
 }
 
 // Chart tooltip. Module level: defined inside the page, it was a new
@@ -332,48 +314,24 @@ export default function AIAnalytics() {
   }
 
   // ---- Page loading skeleton ----
-  if (pageLoading) {
-    return (
-      <div className="min-h-dvh relative overflow-clip bg-page">
-        <PageHeader title="Analytics" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
-        <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="white-card p-5 space-y-3">
-                <div className="skeleton-shimmer w-10 h-10 rounded-[12px]" />
-                <div className="skeleton-shimmer h-8 w-16 rounded-lg" />
-                <div className="skeleton-shimmer h-3 w-24 rounded-lg" />
-              </div>
-            ))}
-          </div>
-          {[...Array(2)].map((_, i) => (
-            <div key={i} className="white-card p-5">
-              <div className="skeleton-shimmer h-4 w-40 rounded-lg mb-4" />
-              <div className="skeleton-shimmer h-48 rounded-[12px]" />
-            </div>
-          ))}
-        </main>
-      </div>
-    )
-  }
+  if (pageLoading) return <DashboardShellSkeleton path="/official" kind="analytics" />
 
   return (
-    <div className="min-h-dvh relative overflow-clip bg-page">
-
-      <PageHeader
-        title="Analytics"
-        description={`How the barangay is doing${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
-        icon={BarChart2} maxWidth={1168}
-        onBack={() => goBack(router, '/official?section=analytics')}
-        actions={
-          <AppButton onClick={generateAnalysis} disabled={!dataLoaded} busy={loading} busyLabel="Analyzing…">
-            <RefreshCw size={15} aria-hidden="true" />
-            AI Report
-          </AppButton>
-        }
-      />
-
-      <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <OfficialShell profile={profile} active="analytics"
+      eyebrow="Analytics" title="How the barangay is doing"
+      desc="Reports, response times and ratings from what is on record."
+      actions={
+        <Button variant="white" onClick={generateAnalysis} disabled={!dataLoaded || loading} aria-busy={loading || undefined}>
+          <RefreshCw className={loading ? 'animate-spin' : ''} aria-hidden="true" />{loading ? 'Analyzing…' : 'AI report'}
+        </Button>
+      }
+      band={<StatStrip stats={[
+        { label: 'Reports', value: stats.totalIncidents, note: `${stats.thisWeek} this week, ${stats.lastWeek} the week before` },
+        { label: 'Avg. response', value: formatHours(stats.avgResponseHours), note: 'to the first response' },
+        { label: 'Resolved', value: stats.resolvedIncidents, tone: stats.resolvedIncidents ? 'ok' : 'default', note: `${stats.resolutionRate}% of reports` },
+        { label: 'Rating', value: stats.avgRating ? `${stats.avgRating} / 5` : '—', note: 'from residents' },
+      ]} />}>
+      <div className="space-y-6">
 
         {/* Critical alert strip — most urgent info first */}
         {stats.criticalPending > 0 && (
@@ -382,67 +340,7 @@ export default function AIAnalytics() {
           </Notice>
         )}
 
-        {/* KPI Scorecards */}
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground mb-3">Key Performance Indicators</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="white-card p-5">
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
-                  style={{ background: 'var(--brand-strong)' }}
-                >
-                  <Activity size={18} className="text-white" />
-                </div>
-                <TrendBadge current={stats.thisWeek} previous={stats.lastWeek} />
-              </div>
-              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.totalIncidents}</p>
-              <p className="text-xs text-muted-foreground mt-1">Total Incidents</p>
-            </div>
-
-            <div className="white-card p-5">
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
-                  style={{ background: 'var(--ok)' }}
-                >
-                  <Award size={18} className="text-white" />
-                </div>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>RATE</span>
-              </div>
-              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.resolutionRate}%</p>
-              <p className="text-xs text-muted-foreground mt-1">Resolution Rate</p>
-            </div>
-
-            <div className="white-card p-5">
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
-                  style={{ background: 'var(--info)' }}
-                >
-                  <Clock size={18} className="text-white" />
-                </div>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>SPEED</span>
-              </div>
-              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{formatHours(stats.avgResponseHours)}</p>
-              <p className="text-xs text-muted-foreground mt-1">Avg Response Time</p>
-            </div>
-
-            <div className="white-card p-5">
-              <div className="flex items-center justify-between mb-2">
-                <div
-                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
-                  style={{ background: 'var(--warn)' }}
-                >
-                  <Star size={18} className="text-white fill-white" />
-                </div>
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>RATING</span>
-              </div>
-              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.avgRating ? `${stats.avgRating}★` : 'N/A'}</p>
-              <p className="text-xs text-muted-foreground mt-1">Avg Resident Rating</p>
-            </div>
-          </div>
-
           {/* Ticket summary strip — tickets were fetched but never shown before */}
           {(stats.openTickets > 0 || stats.inProgressTickets > 0) && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -884,7 +782,7 @@ export default function AIAnalytics() {
           </div>
         </div>
 
-      </main>
-    </div>
+      </div>
+    </OfficialShell>
   )
 }
