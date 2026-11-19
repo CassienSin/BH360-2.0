@@ -10,7 +10,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, Bell, BarChart2, Plus, ChevronRight, Map, Calendar } from 'lucide-react'
+import { AlertTriangle, BarChart2, Plus, ChevronRight, Map, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -19,7 +19,7 @@ import { AnalyticsIcon, AnnouncementsIcon, BlotterIcon, CalendarIcon, DashboardI
 import ConfirmDialog from '@/components/ConfirmDialog'
 import TanodRoster from '@/components/TanodRoster'
 import TanodManagement from '@/components/TanodManagement'
-import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import { timeAgo } from '@/lib/timeAgo'
 import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
@@ -27,6 +27,7 @@ import { useNotifications } from '@/lib/useNotifications'
 import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
 import TicketsSection from '@/components/official/TicketsSection'
 import UsersSection from '@/components/official/UsersSection'
+import AnnouncementsSection from '@/components/official/AnnouncementsSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
 import { Button } from '@/components/ui/button'
@@ -789,7 +790,7 @@ function OfficialDashboard() {
       }
       case 'announcements': return {
         eyebrow: 'Announcements', title: 'Keep everyone informed',
-        desc: 'Every resident, official and tanod gets these, with push alerts for urgent ones.',
+        desc: 'Everyone in the barangay sees these. Phones with notifications on get an alert.',
         actions: <Button variant="white" onClick={() => router.push('/official/announcement/new')}><Plus aria-hidden="true" />New announcement</Button>,
       }
       default: return { title: sectionTitle[section], desc: sectionDesc[section] }
@@ -1031,122 +1032,8 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
-            <div className="space-y-3">
-
-              {/* Header with stats + New button */}
-              <div className="white-card p-5">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
-                      <Bell size={20} className="text-white" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800">Community Broadcasts</h3>
-                      <p className="text-xs text-gray-500">
-                        {announcements.length} total · Reaches all residents in {profile?.barangays?.name}
-                      </p>
-                    </div>
-                  </div>
-                  <button onClick={() => router.push('/official/announcement/new')}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold text-white transition-all hover:scale-105"
-                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
-                    <Plus size={14} /> New Announcement
-                  </button>
-                </div>
-
-                {/* Quick stats */}
-                {announcements.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100">
-                    <div className="text-center">
-                      <p className="text-xl font-black" style={{color: 'var(--brand)'}}>{announcements.length}</p>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">Total</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xl font-black" style={{color: '#22c55e'}}>
-                        {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 7).length}
-                      </p>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">This Week</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xl font-black" style={{color: '#f97316'}}>
-                        {announcements.filter(a => (now - new Date(a.created_at)) / 86400000 <= 1).length}
-                      </p>
-                      <p className="text-xs text-gray-500 uppercase tracking-wider mt-0.5">Today</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Empty state */}
-              {announcements.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                    style={{background: 'var(--brand-soft)'}}>
-                    <Bell size={28} style={{color: 'var(--brand)', opacity: 0.5}} />
-                  </div>
-                  <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
-                  <p className="text-gray-500 text-xs mt-1">Start broadcasting updates to your community</p>
-                  <button onClick={() => router.push('/official/announcement/new')}
-                    className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-white text-sm font-bold transition-all hover:scale-105"
-                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)'}}>
-                    <Plus size={14} /> Create First Announcement
-                  </button>
-                </div>
-              )}
-
-              {/* Announcement cards */}
-              {announcements.map(a => {
-                const daysAgo = (now - new Date(a.created_at)) / 86400000
-                const isNew = daysAgo <= 1
-                const isThisWeek = daysAgo <= 7
-
-                return (
-                  <div key={a.id} className="white-card p-5 relative overflow-hidden">
-                    {/* New badge accent bar */}
-                    {isNew && (
-                      <div className="absolute top-0 left-0 right-0 h-1"
-                        style={{background: 'linear-gradient(90deg, var(--brand), var(--brand-light), var(--brand))', animation: 'shimmer 2s linear infinite'}} />
-                    )}
-
-                    <div className="flex items-start gap-3">
-                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)'}}>
-                        <Bell size={18} className="text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
-                          {isNew && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
-                              style={{background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite'}}>
-                              NEW
-                            </span>
-                          )}
-                          {!isNew && isThisWeek && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
-                              style={{background: '#f0fdf4', color: '#16a34a'}}>
-                              THIS WEEK
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
-
-                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-500">
-                          <span className="flex items-center gap-1" title={fullDate(a.created_at)}>
-                            📅 {timeAgoLong(a.created_at)}
-                          </span>
-                          <span>·</span>
-                          <span className="flex items-center gap-1">
-                            👥 All residents
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <AnnouncementsSection announcements={announcements} now={now}
+              onNew={() => router.push('/official/announcement/new')} />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tanods' && (

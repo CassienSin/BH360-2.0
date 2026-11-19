@@ -17,6 +17,7 @@ import BlotterQueue from '@/components/BlotterQueue'
 import TicketsSection from '@/components/official/TicketsSection'
 import TanodManagement from '@/components/TanodManagement'
 import UsersSection from '@/components/official/UsersSection'
+import AnnouncementsSection from '@/components/official/AnnouncementsSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { useNow } from '@/lib/useNow'
@@ -31,7 +32,7 @@ const HEADS = {
   blotter: { eyebrow: 'Blotter / Lupon', title: 'Barangay justice cases', desc: '2 cases before the Lupon. 1 is past the deadline.' },
   tanods: { eyebrow: 'Tanod management', title: 'Your tanods', desc: '1 of 2 on duty now.' },
   users: { eyebrow: 'User management', title: 'People in your barangay', desc: '3 residents, 1 official and 2 tanods.' },
-  announcements: { eyebrow: 'Announcements', title: 'Keep everyone informed', desc: 'Every resident, official and tanod gets these, with push alerts for urgent ones.' },
+  announcements: { eyebrow: 'Announcements', title: 'Keep everyone informed', desc: 'Everyone in the barangay sees these. Phones with notifications on get an alert.' },
 }
 
 const NOTIFICATIONS = { items: [], unread: 0, markAllRead() {}, openItem() {} }
@@ -128,6 +129,7 @@ export default function OfficialPreview({ initial }) {
           <TicketsSection tickets={TICKETS} filtered={tickets} now={now} search={ticketSearch} onSearch={setTicketSearch}
             filter={ticketFilter} onFilter={setTicketFilter} onOpen={noop} onExport={noop} />
         )}
+        {section === 'announcements' && <AnnouncementsSection announcements={ANNOUNCEMENTS} now={now} onNew={noop} />}
         {section === 'users' && (
           <UsersSection users={USERS} filtered={USERS.filter(u => userRole === 'all' || u.role === userRole)} search="" onSearch={noop}
             role={userRole} onRole={setUserRole} generating={false} onGenerate={noop} onCopy={noop} onExport={noop} onReview={noop}
@@ -137,8 +139,8 @@ export default function OfficialPreview({ initial }) {
         {section === 'documents' && <DocumentQueue profile={PROFILE} requests={DOCUMENTS} onUpdated={noop} />}
         {section === 'verifications' && <VerificationQueue profile={PROFILE} users={USERS} onUpdated={noop} />}
         {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS.filter(u => u.role === 'resident')} onChanged={noop} />}
-        {!['dashboard', 'incidents', 'tickets', 'users', 'tanods', 'documents', 'verifications', 'blotter'].includes(section) && (
-          <p className="text-sm text-muted-foreground">Not in the preview yet: {section}. ({TICKETS.length} tickets, {ANNOUNCEMENTS.length} announcements in the fixtures.)</p>
+        {!['dashboard', 'incidents', 'announcements', 'tickets', 'users', 'tanods', 'documents', 'verifications', 'blotter'].includes(section) && (
+          <p className="text-sm text-muted-foreground">Not in the preview yet: {section}.</p>
         )}
       </div>
     </DashboardFrame>
