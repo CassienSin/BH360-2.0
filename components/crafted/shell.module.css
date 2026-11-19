@@ -1,7 +1,7 @@
 /* Auth shell and standalone page shell (DESIGN.md §4). */
 
-.deskOnlyFlex { display: none !important; }
-@media (min-width: 768px) and (min-height: 500px) { .deskOnlyFlex { display: flex !important; } }
+.deskOnlyFlex, .deskOnlyBlock { display: none !important; }
+@media (min-width: 768px) and (min-height: 500px) { .deskOnlyFlex { display: flex !important; } .deskOnlyBlock { display: block !important; } }
 
 /* The logo as is: its purple body melts into the band and its white
    outline reads as a line drawing, as in the reference screens. */
@@ -100,10 +100,13 @@
   color: #fff;
 }
 .pageHeadInner { position: relative; z-index: 1; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+.pageBrand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; color: #fff; }
 .pageTop { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .pageTitles { flex: 1; min-width: 0; }
 .pageEyebrow { display: none; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
 .pageTitle { margin: 0; font-size: 17px; font-weight: 800; line-height: 1.3; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pageTitleLarge { font-size: 26px; letter-spacing: -0.6px; line-height: 1.2; white-space: normal; }
+.pageTitleLarge + .pageSub { white-space: normal; font-size: 14px; }
 .pageSub { margin: 2px 0 0; font-size: 12px; color: rgba(255, 255, 255, 0.8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pageActions { display: flex; gap: 8px; flex-shrink: 0; }
 .pageBody {

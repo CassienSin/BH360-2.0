@@ -1,9 +1,18 @@
 'use client'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { WifiOff, RefreshCw } from 'lucide-react'
+import { Clock, Check, Phone } from 'lucide-react'
 import { useOnline } from '@/lib/useOnline'
 import { pending, describe } from '@/lib/offline/outbox'
+import { HOTLINES, telHref } from '@/lib/hotlines'
+import PageShell from '@/components/crafted/PageShell'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { SectionLabel } from '@/components/ui/text'
+
+// The lines shown here: emergency first, then fire and ambulance.
+const OFFLINE_LINES = ['emergency', 'bfp', 'redcross', 'pnp'].map(key => HOTLINES.find(h => h.key === key))
 
 /**
  * Where the service worker sends a navigation it cannot serve.
@@ -21,42 +30,55 @@ function OfflineInner() {
   useEffect(() => { pending().then(items => setWaiting(describe(items))) }, [])
 
   return (
-    <main className="min-h-dvh bg-brand flex items-center justify-center p-6">
-      <div className="white-card p-7 max-w-md w-full text-center">
-        <div className="w-14 h-14 rounded-3xl mx-auto mb-4 grid place-items-center"
-          style={{ background: '#fffbeb' }}>
-          <WifiOff size={26} style={{ color: '#b45309' }} aria-hidden="true" />
-        </div>
+    <PageShell large
+      title={online ? 'You’re back online' : 'You’re offline'}
+      sub={online ? 'This page wasn’t saved for offline. Try again to carry on.' : 'Some things still work.'}
+      footer={
+        <Button size="lg" full onClick={() => { window.location.href = from || '/' }}>
+          {from ? 'Try that page again' : 'Try again'}
+        </Button>
+      }
+      >
+      {waiting && (
+        <Card lift className="flex items-start gap-3 px-[18px] py-3.5">
+          <Clock size={18} strokeWidth={1.9} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-ink">{waiting.charAt(0).toUpperCase() + waiting.slice(1)} waiting to send</p>
+            <p className="text-xs text-muted-foreground mt-0.5">It goes out the next time you open the app with a connection.</p>
+          </div>
+        </Card>
+      )}
 
-        <h1 className="text-lg font-extrabold text-gray-800">
-          {online ? 'This page is not saved for offline' : 'No connection'}
-        </h1>
-        <p className="text-[13.5px] text-gray-600 mt-2 leading-relaxed">
-          {online
-            ? 'You are back online — reload to carry on.'
-            : 'BarangayHub keeps working with what it already has. Pages you opened before are still here.'}
-        </p>
+      <Card lift={!waiting}>
+        <Rows>
+          {[
+            'Write a report now. It sends when you are back online.',
+            'Pages you opened before are still here.',
+            'Call a hotline. Calls do not need data.',
+          ].map(line => (
+            <Row key={line} className="flex items-start gap-3">
+              <Check size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-ok" aria-hidden="true" />
+              <p className="text-[13px] leading-[1.55] text-body">{line}</p>
+            </Row>
+          ))}
+        </Rows>
+      </Card>
 
-        {waiting && (
-          <p className="text-[12.5px] mt-3 px-3 py-2.5 rounded-xl leading-relaxed"
-            style={{ background: '#eff6ff', color: '#1d4ed8' }}>
-            {waiting.charAt(0).toUpperCase() + waiting.slice(1)} is being held and will be sent
-            the next time you open the app with a connection.
-          </p>
-        )}
-
-        <button onClick={() => { window.location.href = from || '/' }}
-          className="mt-5 w-full py-3 rounded-2xl text-sm font-bold text-white
-            flex items-center justify-center gap-2 transition-transform active:scale-95"
-          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-          <RefreshCw size={15} /> {from ? 'Try that page again' : 'Try again'}
-        </button>
-
-        <p className="text-xs mt-3" style={{ color: 'var(--app-text-muted)' }}>
-          In a real emergency, call the barangay directly rather than waiting for a signal.
-        </p>
+      <div>
+        <SectionLabel>Hotlines</SectionLabel>
+        <Card>
+          <Rows>
+            {OFFLINE_LINES.map(line => (
+              <Row key={line.key} as="a" href={telHref(line.number)} interactive className="flex items-center gap-3">
+                <Phone size={18} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${line.danger ? 'text-danger' : 'text-brand-strong'}`} />
+                <span className="flex-1 min-w-0 truncate text-sm font-bold text-ink">{line.short}</span>
+                <span className="text-[13px] font-bold text-muted-foreground tabular-nums">{line.number}</span>
+              </Row>
+            ))}
+          </Rows>
+        </Card>
       </div>
-    </main>
+    </PageShell>
   )
 }
 
