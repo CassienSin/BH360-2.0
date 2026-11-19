@@ -18,6 +18,7 @@ import TicketsSection from '@/components/official/TicketsSection'
 import TanodManagement from '@/components/TanodManagement'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useNow } from '@/lib/useNow'
 import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS } from './fixtures'
 
 // The band heading per section, as app/official/page.jsx sets it.
@@ -68,6 +69,7 @@ export default function OfficialPreview({ initial }) {
   }), [])
 
   const home = section === 'dashboard'
+  const now = useNow()
   const [ticketSearch, setTicketSearch] = useState('')
   const [ticketFilter, setTicketFilter] = useState('all')
   const tickets = TICKETS.filter(t => (ticketFilter === 'all' || t.status === ticketFilter) && t.title.toLowerCase().includes(ticketSearch.toLowerCase()))
@@ -121,7 +123,7 @@ export default function OfficialPreview({ initial }) {
             onLoadMore={noop} onDispatch={noop} onResolve={noop} onExport={noop} onPriorityChange={noop} />
         )}
         {section === 'tickets' && (
-          <TicketsSection tickets={TICKETS} filtered={tickets} now={Date.now()} search={ticketSearch} onSearch={setTicketSearch}
+          <TicketsSection tickets={TICKETS} filtered={tickets} now={now} search={ticketSearch} onSearch={setTicketSearch}
             filter={ticketFilter} onFilter={setTicketFilter} onOpen={noop} onExport={noop} />
         )}
         {section === 'tanods' && <TanodManagement profile={PROFILE} onInvite={noop} onOpenIncident={noop} />}
