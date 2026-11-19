@@ -670,7 +670,7 @@ function AdminPanel() {
   // The platform's numbers (A02: on the band of Barangays).
   const platformStats = [
     { label: 'Applications waiting', value: pendingCount, note: `${approvedCount} approved in all`, onClick: () => setActiveTab('applications') },
-    { label: 'Barangays', value: totalBarangaysWithUsers, note: 'with people on the platform' },
+    { label: 'Barangays', value: totalBarangaysWithUsers, note: 'with people' },
     { label: 'People', value: `${users.length}${users.length >= 100 ? '+' : ''}`, note: 'accounts' },
     { label: 'Open reports', value: incidentStats.pending, tone: incidentStats.critical ? 'danger' : 'default', note: `across ${incidentStats.barangays} barangay${incidentStats.barangays === 1 ? '' : 's'}`, onClick: () => setActiveTab('incidents') },
   ]
@@ -683,7 +683,7 @@ function AdminPanel() {
         roleLabel="Platform admin"
         navItems={[{ section: 'PLATFORM', items: [
           { key: 'applications', label: 'Applications', icon: VerificationsIcon, count: pendingCount, hasNew: pendingCount > 0 },
-          { key: 'incidents', label: 'All incidents', icon: IncidentsIcon, ...(incidentStats.critical ? { count: incidentStats.critical, badge: 'CRITICAL' } : {}) },
+          { key: 'incidents', label: 'All incidents', icon: IncidentsIcon, count: incidentStats.critical || undefined, hasNew: incidentStats.critical > 0 },
           { key: 'codes', label: 'Invite codes', icon: UsersIcon },
           { key: 'barangays', label: 'Barangays', icon: DashboardIcon },
           { key: 'users', label: 'Users', icon: ResidentIcon },
@@ -957,11 +957,17 @@ function AdminPanel() {
               ) : (
                 <Rows className="border-t border-line">
                   {inviteCodes.slice(0, 30).map(code => (
-                    <Row key={code.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <code className={`font-mono text-sm font-bold tracking-[0.06em] ${code.used ? 'text-muted-foreground line-through decoration-1' : 'text-ink'}`}>{code.code}</code>
-                      <Tag tone={code.role === 'official' ? 'brand' : 'quiet'}>{code.role === 'official' ? 'Official' : 'Tanod'}</Tag>
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-body">{code.barangays?.name || '—'}</span>
-                      <Status tone={code.used ? 'ok' : 'quiet'}>{code.used ? 'Used' : 'Unused'}</Status>
+                    <Row key={code.id} className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="flex flex-wrap items-center gap-2">
+                          <code className={`font-mono text-sm font-bold tracking-[0.06em] ${code.used ? 'text-muted-foreground line-through decoration-1' : 'text-ink'}`}>{code.code}</code>
+                          <Tag tone={code.role === 'official' ? 'brand' : 'quiet'}>{code.role === 'official' ? 'Official' : 'Tanod'}</Tag>
+                        </p>
+                        <p className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                          <span className="truncate">{code.barangays?.name || '—'}</span>
+                          <Status tone={code.used ? 'ok' : 'quiet'} className="shrink-0">{code.used ? 'Used' : 'Unused'}</Status>
+                        </p>
+                      </div>
                       {!code.used && (
                         <button type="button" onClick={() => copyToClipboard(code.code)} aria-label={`Copy code ${code.code}`}
                           className="flex size-[34px] shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
@@ -1033,7 +1039,7 @@ function AdminPanel() {
                 <thead>
                   <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
                     <th scope="col" className="py-2.5 pl-[18px] font-bold">Barangay</th>
-                    <th scope="col" className="w-[18%] px-3 py-2.5 font-bold">Residents</th>
+                    <th scope="col" className="w-[96px] px-3 py-2.5 font-bold">Residents</th>
                     <th scope="col" className="hidden w-[22%] px-3 py-2.5 font-bold @md:table-cell">Officials · tanods</th>
                     <th scope="col" className="hidden w-[18%] py-2.5 pr-[18px] font-bold @lg:table-cell">Status</th>
                   </tr>
