@@ -1,11 +1,27 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { BadgeCheck, ShieldCheck, ShieldX, Scale, Loader2, RotateCcw } from 'lucide-react'
+import { Check, ChevronLeft, Loader2, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
-import RecordListToolbar, { RecordListEmpty } from './RecordListToolbar'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import { verificationStyle } from '@/lib/verification'
+import { Card } from '@/components/ui/card'
+import { Status } from '@/components/ui/tag'
+import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
+import { Textarea } from '@/components/ui/textarea'
+import { SearchBox, FilterSelect } from '@/components/official/Toolbar'
+
+// O06: a split view. The list filters by where people stand.
+const TABS = [
+  { value: 'pending', label: 'Waiting' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'rejected', label: 'Not verified' },
+  { value: 'all', label: 'Everyone' },
+]
+const STATUS_LABEL = { pending: 'Waiting', verified: 'Verified', rejected: 'Not verified' }
+const STATUS_TONE = { pending: 'warn', verified: 'ok', rejected: 'danger' }
 
 /**
  * Manual account verification, done by a barangay official.
@@ -23,6 +39,7 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
   const [working, setWorking] = useState(null)     // id being written
   const [rejecting, setRejecting] = useState(null) // the account being rejected
   const [reason, setReason] = useState('')
+  const [openId, setOpenId] = useState(null)       // the person opened on a phone
 
   // The official's own row is excluded: self-verification is refused by the
   // database anyway, and showing the button would just invite the error.
@@ -47,8 +64,6 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
         u.address?.toLowerCase().includes(q))
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at)) // oldest waiting first
   }, [candidates, tab, search])
-
-  function resetFilters() { setSearch(''); setTab('all') }
 
   async function decide(user, status, note) {
     if (working) return
@@ -80,141 +95,129 @@ export default function VerificationQueue({ profile, users, onUpdated }) {
     )
   }
 
-  return (
-    <div className="space-y-4">
+  // The person shown on the right. Wide screens fall back to the first in
+  // the list; on phones the list and the person take turns (`openId`).
+  const selected = shown.find(u => u.id === openId) || shown[0] || null
+  const ageLabel = u => `signed up ${timeAgo(u.created_at)}`
+  const tone = u => STATUS_TONE[u.verification_status || 'pending']
+  const busy = selected && working === selected.id
 
-      {/* Why this screen exists — an official deciding someone's standing
-          in the barangay should be able to see the basis for the duty. */}
-      <div className="white-card p-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)' }}>
-            <BadgeCheck size={18} className="text-white" />
+  return (
+    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
+      {/* Left: who is waiting */}
+      <Card lift className={`!overflow-visible ${openId ? 'hidden lg:block' : ''}`}>
+        <div className="flex items-center gap-2 px-3.5 py-3 sm:px-[18px]">
+          <FilterSelect label="Show" value={tab} onChange={v => { setTab(v); setOpenId(null) }} className="shrink-0"
+            options={TABS.map(t => ({ value: t.value, label: `${t.label} · ${t.value === 'all' ? candidates.length : counts[t.value]}` }))} />
+          <SearchBox value={search} onChange={setSearch} label="Search accounts" placeholder="Search" className="min-w-0 flex-1" />
+        </div>
+        {shown.length === 0 ? (
+          <div className="border-t border-line px-[18px] py-5">
+            <Muted>{candidates.length === 0 ? 'Nobody has joined yet. New accounts show up here for review.'
+              : search ? 'Nobody matches that search.' : tab === 'pending' ? 'Nobody is waiting. New sign-ups show up here.' : 'Nobody in this list.'}</Muted>
+            {search && <Button variant="secondary" size="sm" className="mt-3" onClick={() => setSearch('')}>Clear search</Button>}
           </div>
-          <div className="min-w-0">
-            <h3 className="font-bold text-gray-800">Resident Verification</h3>
-            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              You are confirming that this person actually lives in {profile?.barangays?.name || 'this barangay'}.
-              Verified accounts may request barangay documents; unverified accounts can still
-              report incidents, because an emergency should never wait on paperwork.
-            </p>
-            <div className="flex items-start gap-1.5 mt-2">
-              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-              <p className="text-xs text-gray-500 leading-relaxed">
-                <strong style={{ color: 'var(--brand)' }}>RA 7160, Sec. 394</strong> — the barangay secretary
-                keeps the record of the barangay’s inhabitants and reports the actual number of
-                residents. The barangay, not the signup form, is the authority on who lives here.
-              </p>
+        ) : (
+          <ul className="border-t border-line">
+            {shown.map(u => {
+              const on = selected?.id === u.id
+              return (
+                <li key={u.id} className="border-b border-line last:border-b-0">
+                  <button type="button" onClick={() => setOpenId(u.id)} aria-current={on ? 'true' : undefined}
+                    className={`flex w-full items-center gap-3 px-[18px] py-3 text-left outline-none transition-colors focus-visible:bg-surface-sunk ${on ? 'lg:bg-brand-soft lg:shadow-[inset_3px_0_0_var(--brand-strong)]' : 'hover:bg-surface-sunk'}`}>
+                    <Avatar name={u.full_name} src={u.avatar_url} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-bold text-ink">{u.full_name || 'No name given'}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{[u.address, ageLabel(u)].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    {tab === 'all' && <Status tone={tone(u)} className="shrink-0">{STATUS_LABEL[u.verification_status || 'pending']}</Status>}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
+
+      {/* Right: the person, the facts, the decision */}
+      {selected ? (
+        <Card lift className={openId ? '' : 'hidden lg:block'}>
+          <div className="flex items-start gap-3 px-[18px] pt-4">
+            <button type="button" onClick={() => setOpenId(null)} aria-label="Back to the list"
+              className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-line text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-brand-strong lg:hidden">
+              <ChevronLeft size={18} />
+            </button>
+            <Avatar name={selected.full_name} src={selected.avatar_url} size="lg" className="hidden sm:flex" />
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-xl font-extrabold text-ink">{selected.full_name || 'No name given'}</h2>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">Signed up {fullDate(selected.created_at)}</p>
+              <Status tone={tone(selected)} className="mt-1.5">{STATUS_LABEL[selected.verification_status || 'pending']}</Status>
             </div>
           </div>
-        </div>
-      </div>
 
-      <RecordListToolbar search={search} onSearchChange={setSearch} searchLabel="Search accounts"
-        placeholder="Name, phone, or address…" noun="Accounts"
-        filters={[{ value: 'all', label: 'All', count: candidates.length }, { value: 'pending', label: 'Awaiting review', count: counts.pending }, { value: 'verified', label: 'Verified', count: counts.verified }, { value: 'rejected', label: 'Rejected', count: counts.rejected }]}
-        value={tab} onFilterChange={setTab} shown={shown.length} total={candidates.length} onReset={resetFilters}
-        sortHint="Oldest registrations first. Counts include accounts eligible for this review list." />
-
-      {shown.length === 0 ? (
-        <RecordListEmpty total={candidates.length} search={search} noun="accounts" filterLabel={tab === 'pending' ? 'Awaiting review' : tab === 'verified' ? 'Verified' : tab === 'rejected' ? 'Rejected' : 'All'} icon={BadgeCheck} onReset={resetFilters} description="Accounts eligible for review will appear here when users join your barangay." />
-      ) : (
-        <div className="space-y-2">
-          {shown.map(u => {
-            const style = verificationStyle(u.verification_status)
-            const busy = working === u.id
-            return (
-              <div key={u.id} className="white-card p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-                    {u.avatar_url
-                      ? <img loading="lazy" decoding="async" src={u.avatar_url} alt="" className="w-full h-full object-cover" />
-                      : u.full_name?.[0]?.toUpperCase() || '?'}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-bold text-gray-800 text-sm truncate">{u.full_name}</h4>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                        style={{ background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>
-                        {style.icon} {style.short}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">
-                        {u.role}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{u.phone || 'No phone on file'}</p>
-                    <p className="text-xs text-gray-500">{u.address || 'No address on file'}</p>
-                    <p className="text-xs text-gray-500 mt-1" title={fullDate(u.created_at)}>
-                      Registered {timeAgo(u.created_at)}
-                      {u.verified_at && ` · reviewed ${timeAgo(u.verified_at)}`}
-                    </p>
-                    {u.verification_note && (
-                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                        style={{ background: style.bg, color: style.color }}>
-                        {u.verification_note}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {rejecting === u.id ? (
-                  <div className="mt-3 space-y-2">
-                    <textarea
-                      value={reason}
-                      onChange={e => setReason(e.target.value)}
-                      rows={2}
-                      aria-label={`Reason for not verifying ${u.full_name}`}
-                      placeholder="Why can this account not be verified? The resident will see this."
-                      className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800"
-                    />
-                    <div className="flex gap-2">
-                      <button onClick={() => decide(u, 'rejected', reason)}
-                        disabled={busy || !reason.trim()}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-xs font-bold text-white disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}>
-                        {busy ? <Loader2 size={13} className="animate-spin" /> : <ShieldX size={13} />}
-                        Confirm rejection
-                      </button>
-                      <button onClick={() => { setRejecting(null); setReason('') }}
-                        className="px-4 py-2.5 rounded-2xl text-xs font-bold"
-                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex gap-2 mt-3">
-                    {u.verification_status !== 'verified' && (
-                      <button onClick={() => decide(u, 'verified', null)} disabled={busy}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-xs font-bold text-white disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #16a34a, #22c55e)' }}>
-                        {busy ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
-                        Verify resident
-                      </button>
-                    )}
-                    {u.verification_status !== 'rejected' && (
-                      <button onClick={() => { setRejecting(u.id); setReason('') }} disabled={busy}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                        <ShieldX size={13} /> Can’t verify
-                      </button>
-                    )}
-                    {u.verification_status !== 'pending' && (
-                      <button onClick={() => decide(u, 'pending', null)} disabled={busy}
-                        title="Move back to the review queue"
-                        className="px-4 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                        style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-                        <RotateCcw size={13} />
-                      </button>
-                    )}
-                  </div>
-                )}
+          <dl className="mx-[18px] mt-4 border-t border-line text-sm">
+            {[
+              ['Full name', selected.full_name || 'Not given'],
+              ['Account', selected.role ? selected.role[0].toUpperCase() + selected.role.slice(1) : 'Resident'],
+              ['Address given', selected.address || 'No address on file'],
+              ['Phone', selected.phone || 'No phone on file'],
+              selected.verified_at && ['Reviewed', fullDate(selected.verified_at)],
+            ].filter(Boolean).map(([k, v]) => (
+              <div key={k} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 border-b border-line py-2.5 sm:grid-cols-[160px_minmax(0,1fr)]">
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className="min-w-0 font-bold break-words text-ink">{v}</dd>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </dl>
+
+          <div className="space-y-3 px-[18px] py-4">
+            {selected.verification_note && (
+              <Notice tone={selected.verification_status === 'rejected' ? 'danger' : 'info'} title="Note on the decision">{selected.verification_note}</Notice>
+            )}
+
+            {rejecting === selected.id ? (
+              <div className="space-y-2.5">
+                <Textarea value={reason} onChange={e => setReason(e.target.value)} rows={2}
+                  aria-label={`Reason for not verifying ${selected.full_name}`}
+                  placeholder="Why can this account not be verified? The resident will see this." />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" onClick={() => { setRejecting(null); setReason('') }}>Cancel</Button>
+                  <Button variant="danger" onClick={() => decide(selected, 'rejected', reason)} disabled={busy || !reason.trim()} aria-busy={busy || undefined}>
+                    {busy && <Loader2 className="animate-spin" aria-hidden="true" />}Not a resident
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <p className="flex-1 text-xs leading-relaxed text-muted-foreground">
+                  Verifying confirms they live in {profile?.barangays?.name || 'the barangay'} (RA 7160, Sec. 394). Verified residents can request documents; anyone can still report an emergency.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selected.verification_status && selected.verification_status !== 'pending' && (
+                    <Button variant="secondary" onClick={() => decide(selected, 'pending', null)} disabled={busy}>
+                      <RotateCcw aria-hidden="true" />Back to waiting
+                    </Button>
+                  )}
+                  {selected.verification_status !== 'rejected' && (
+                    <Button variant="secondary" onClick={() => { setRejecting(selected.id); setReason('') }} disabled={busy}>
+                      Not a resident
+                    </Button>
+                  )}
+                  {selected.verification_status !== 'verified' && (
+                    <Button onClick={() => decide(selected, 'verified', null)} disabled={busy} aria-busy={busy || undefined}>
+                      {busy ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Check aria-hidden="true" />}Verify resident
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      ) : (
+        <Card className="hidden px-8 py-12 text-center lg:block">
+          <p className="text-[15px] font-extrabold text-ink">Nobody to review</p>
+          <Muted className="mt-1">Pick another list on the left, or wait for new sign-ups.</Muted>
+        </Card>
       )}
     </div>
   )
