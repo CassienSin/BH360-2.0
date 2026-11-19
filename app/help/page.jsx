@@ -9,7 +9,8 @@ import { PAGE_HEADERS } from '@/lib/pageHeaders'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
-import { HOTLINES, telHref } from '@/lib/hotlines'
+import { telHref } from '@/lib/hotlines'
+import HotlineList from '@/components/crafted/HotlineList'
 import { MessageSquare, Phone, ChevronDown, ChevronRight, Search, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PageShell from '@/components/crafted/PageShell'
@@ -338,21 +339,7 @@ function HelpPage() {
       {activeTab === 'emergency' && (
         <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
           <Notice tone="danger" title="Life in danger? Call first.">BH360 helps the barangay follow up. For an emergency happening now, call a hotline below.</Notice>
-          <Card>
-            <Rows>
-              {HOTLINES.map(line => (
-                <Row key={line.key} as="a" href={telHref(line.number)} interactive
-                  aria-label={`Call ${line.name} at ${line.number}`} className="flex items-center gap-3">
-                  <Phone size={18} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${line.danger ? 'text-danger' : 'text-brand-strong'}`} />
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm font-bold text-ink truncate">{line.name}</span>
-                    <span className="block text-xs text-muted-foreground truncate">{line.desc}</span>
-                  </span>
-                  <span className="text-[13px] font-bold text-ink tabular-nums">{line.number}</span>
-                </Row>
-              ))}
-            </Rows>
-          </Card>
+          <HotlineList detailed />
           <Muted className="text-center text-xs">Numbers for the Philippines. Calls don’t need data.</Muted>
         </div>
       )}

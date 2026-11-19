@@ -1,18 +1,15 @@
 'use client'
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Clock, Check, Phone } from 'lucide-react'
+import { Clock, Check } from 'lucide-react'
 import { useOnline } from '@/lib/useOnline'
 import { pending, describe } from '@/lib/offline/outbox'
-import { HOTLINES, telHref } from '@/lib/hotlines'
+import HotlineList from '@/components/crafted/HotlineList'
 import PageShell from '@/components/crafted/PageShell'
 import { Card } from '@/components/ui/card'
 import { Rows, Row } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { SectionLabel } from '@/components/ui/text'
-
-// The lines shown here: emergency first, then fire and ambulance.
-const OFFLINE_LINES = ['emergency', 'bfp', 'redcross', 'pnp'].map(key => HOTLINES.find(h => h.key === key))
 
 /**
  * Where the service worker sends a navigation it cannot serve.
@@ -66,17 +63,7 @@ function OfflineInner() {
 
       <div>
         <SectionLabel>Hotlines</SectionLabel>
-        <Card>
-          <Rows>
-            {OFFLINE_LINES.map(line => (
-              <Row key={line.key} as="a" href={telHref(line.number)} interactive className="flex items-center gap-3">
-                <Phone size={18} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${line.danger ? 'text-danger' : 'text-brand-strong'}`} />
-                <span className="flex-1 min-w-0 truncate text-sm font-bold text-ink">{line.short}</span>
-                <span className="text-[13px] font-bold text-muted-foreground tabular-nums">{line.number}</span>
-              </Row>
-            ))}
-          </Rows>
-        </Card>
+        <HotlineList />
       </div>
     </PageShell>
   )
