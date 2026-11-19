@@ -6,14 +6,14 @@ import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RefreshCw, Clock3, UserRound, MapPin, ClipboardList } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-import { CATEGORY_CONFIG } from '@/lib/legalBasis'
+import { categoryColor } from '@/lib/categoryIcons'
 import { dateKey, monthCells, shiftMonth, groupEvents, loadMonth, TIME_ZONE } from './calendar-data.mjs'
 import styles from './calendar.module.css'
 import { PageHeader, AppButton } from '@/components/AppUI'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
-const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: '#087f8c' }, incidents: { label: 'Incidents', singular: 'Incident', color: '#d97706' }, announcements: { label: 'Announcements', singular: 'Announcement', color: '#6554dc' } }
-const PRIORITIES = { Low: '#15803d', Medium: '#2563eb', High: '#c2410c', Critical: '#dc2626' }
+const TYPES = { appointments: { label: 'Appointments', singular: 'Appointment', color: 'var(--brand-strong)' }, incidents: { label: 'Incidents', singular: 'Incident', color: 'var(--warn)' }, announcements: { label: 'Announcements', singular: 'Announcement', color: 'var(--ok)' } }
+const PRIORITIES = { Low: 'var(--line-strong)', Medium: 'var(--info)', High: 'var(--warn)', Critical: 'var(--danger)' }
 const EMPTY = { appointments: [], incidents: [], announcements: [] }
 const formatTime = value => new Date(value).toLocaleTimeString('en-PH', { timeZone: TIME_ZONE, hour: 'numeric', minute: '2-digit' })
 const formatDay = key => new Date(`${key}T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, weekday: 'long', month: 'long', day: 'numeric' })
@@ -85,7 +85,7 @@ export default function CalendarView() {
   const cells = useMemo(() => monthCells(month), [month])
   const events = byDay.get(selected) || []
   const monthTitle = new Date(`${month}-01T12:00:00+08:00`).toLocaleDateString('en-PH', { timeZone: TIME_ZONE, month: 'long', year: 'numeric' })
-  const color = item => item.type !== 'incidents' ? TYPES[item.type].color : colorBy === 'priority' ? PRIORITIES[item.priority] || '#64748b' : CATEGORY_CONFIG[item.category]?.color || '#64748b'
+  const color = item => item.type !== 'incidents' ? TYPES[item.type].color : colorBy === 'priority' ? PRIORITIES[item.priority] || 'var(--line-strong)' : categoryColor(item.category)
 
   function navigate(offset) { const next = shiftMonth(month, offset); setMonth(next); setSelected(`${next}-01`) }
   function goToday() { const key = dateKey(new Date()); setToday(key); setMonth(key.slice(0, 7)); setSelected(key) }
@@ -102,8 +102,8 @@ export default function CalendarView() {
 
   return <div className={styles.page}>
     <PageHeader
-      title="Barangay calendar"
-      description={`${profile?.barangays?.name || 'Schedule and activity'} · Philippine time`}
+      title="Calendar"
+      description={`Hearings, appointments, reports and announcements by day${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
       icon={CalendarDays}
       onBack={() => goBack(router, '/official?section=calendar')}
       backLabel="Back to dashboard"
@@ -117,7 +117,7 @@ export default function CalendarView() {
       <div className={styles.intro}><div><p className={styles.eyebrow}>MONTHLY OVERVIEW</p><h2>Plan the day. Keep track of your barangay.</h2></div><p>Appointments, reported incidents, and posted announcements in one place.</p></div>
       {authError && <div className={styles.error} role="alert">{authError}</div>}
       <section className={styles.stats} aria-label="Monthly totals">
-        {[['Appointments', data.appointments.length, 'Scheduled this month', '#087f8c'], ['Incidents', data.incidents.length, 'Reported this month', '#b45309'], ['Pending incidents', data.incidents.filter(i => i.status === 'pending').length, 'Awaiting assignment', '#c2410c'], ['Announcements', data.announcements.length, 'Posted this month', '#6554dc']].map(([label, count, note, tint]) => <div className={styles.stat} key={label}><span className={styles.statMarker} style={{ background: tint }} /><div><p>{label}</p><strong>{loading || authError || errors.some(e => e.includes(label === 'Pending incidents' ? 'incidents' : label.toLowerCase())) ? '—' : count}</strong><small>{note}</small></div></div>)}
+        {[['Appointments', data.appointments.length, 'Scheduled this month', 'var(--brand-strong)'], ['Incidents', data.incidents.length, 'Reported this month', 'var(--warn)'], ['Pending incidents', data.incidents.filter(i => i.status === 'pending').length, 'Awaiting assignment', 'var(--danger)'], ['Announcements', data.announcements.length, 'Posted this month', 'var(--ok)']].map(([label, count, note, tint]) => <div className={styles.stat} key={label}><span className={styles.statMarker} style={{ background: tint }} /><div><p>{label}</p><strong>{loading || authError || errors.some(e => e.includes(label === 'Pending incidents' ? 'incidents' : label.toLowerCase())) ? '—' : count}</strong><small>{note}</small></div></div>)}
       </section>
       <div className={styles.workspace}>
         <section className={styles.calendar} aria-label="Month calendar" aria-busy={loading}>
