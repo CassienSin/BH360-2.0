@@ -2,16 +2,19 @@
 .screen { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 .main { flex: 1; min-height: 0; display: flex; width: 100%; max-width: 1600px; margin: 0 auto; padding: 20px 24px 24px; box-sizing: border-box; }
 .main > * { flex: 1; min-width: 0; }
-.live { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; box-sizing: border-box; border-radius: 9px; font-size: 12px; font-weight: 700; }
-.liveOn { background: #ecfdf5; color: #047857; }
-.liveOff { background: #f3f4f6; color: #596273; }
+.screen:not(.dark) { background: var(--page); }
+/* On the band: the live pill and night mode as onband controls. */
+.live { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; box-sizing: border-box; border-radius: 10px; font-size: 13px; font-weight: 700; background: var(--onband); color: white; }
+.liveOn { }
+.liveOff { color: rgba(255, 255, 255, 0.8); }
 .liveDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.liveOn .liveDot { background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.18); }
+.liveOn .liveDot { background: #3DC48A; }
 .night {
-  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 14px;
-  border: 1px solid var(--brand-border); background: transparent; color: #514765; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 10px;
+  border: 0; background: var(--onband); color: white; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
 }
-.night[aria-pressed='true'] { background: #292338; border-color: #292338; color: #fff; }
+.night:hover { background: var(--onband-hover); }
+.night[aria-pressed='true'] { background: white; color: var(--brand-strong); }
 .loading { flex: 1; display: grid; place-items: center; }
 
 /* Night mode darkens the whole screen, not only the console: a white header

@@ -2,18 +2,19 @@
    Every colour is a token here, so night mode is one attribute flip. */
 
 .console {
-  --cm-surface: #ffffff; --cm-raised: var(--app-surface); --cm-soft: var(--brand-soft); --cm-line: var(--brand-soft); --cm-line-strong: var(--brand-border);
-  --cm-text: #292338; --cm-sub: #70677d; --cm-body: #514765; --cm-accent: var(--brand); --cm-accent-strong: var(--brand-dark);
-  --cm-on-accent: #ffffff; --cm-selected-line: #c9c2fb; --cm-shadow: 0 4px 14px rgba(41,35,56,.12);
-  --cm-danger-bg: #fef2f2; --cm-danger: #b91c1c; --cm-danger-line: #fde2e2;
-  --cm-high-bg: #fff7ed; --cm-high: #c2410c; --cm-high-line: #fed7aa; --cm-refer: #9a3412;
-  --cm-warn-bg: #fffbeb; --cm-warn: #92400e; --cm-warn-line: #fde9b8;
-  --cm-ok-bg: #ecfdf5; --cm-ok: #047857; --cm-ok-line: #bbf0d3;
-  --cm-info-bg: #eff6ff; --cm-info: #1d4ed8;
-  --cm-switch-off: #d8d3e6; --cm-chip-dark: #292338;
+  /* Light: the Crafted tokens (DESIGN.md). Night mode keeps its own set below. */
+  --cm-surface: var(--surface); --cm-raised: var(--surface-sunk); --cm-soft: var(--brand-soft); --cm-line: var(--line); --cm-line-strong: var(--line-strong);
+  --cm-text: var(--ink); --cm-sub: var(--text-muted); --cm-body: var(--body); --cm-accent: var(--brand-strong); --cm-accent-strong: var(--brand-strong);
+  --cm-on-accent: #ffffff; --cm-selected-line: var(--brand-strong); --cm-shadow: var(--shadow-lift);
+  --cm-danger-bg: var(--danger-soft); --cm-danger: var(--danger); --cm-danger-line: var(--line);
+  --cm-high-bg: var(--warn-soft); --cm-high: var(--warn); --cm-high-line: var(--line); --cm-refer: var(--warn);
+  --cm-warn-bg: var(--warn-soft); --cm-warn: var(--warn); --cm-warn-line: var(--line);
+  --cm-ok-bg: var(--ok-soft); --cm-ok: var(--ok); --cm-ok-line: var(--line);
+  --cm-info-bg: var(--info-soft); --cm-info: var(--info);
+  --cm-switch-off: var(--line-strong); --cm-chip-dark: var(--ink);
 
   display: flex; flex-direction: column; min-height: 0; height: 100%;
-  background: var(--cm-surface); color: var(--cm-text); border-radius: 24px; overflow: hidden;
+  background: var(--cm-surface); color: var(--cm-text); border-radius: 14px; overflow: hidden;
   box-shadow: 0 6px 24px rgba(91,84,232,.09); font-family: inherit;
 }
 .console[data-theme='dark'] {
@@ -29,7 +30,7 @@
   box-shadow: none;
 }
 .console button, .console input, .console select, .console a { font-family: inherit; }
-.console :focus-visible { outline: 3px solid #b8acf9; outline-offset: 2px; }
+.console :focus-visible { outline: 2px solid var(--cm-accent); outline-offset: 2px; }
 
 /* ---------- stat strip ---------- */
 .statBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--cm-line); }

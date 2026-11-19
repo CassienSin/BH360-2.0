@@ -67,9 +67,9 @@ export default function IncidentMapScreen({
   const dark = prefs.theme === 'dark'
 
   return (
-    <div className={`${styles.screen} ${dark ? styles.dark : 'bg-brand'}`}>
+    <div className={`${styles.screen} ${dark ? styles.dark : ''}`}>
       <PageHeader
-        title="Incident Map"
+        title="Incident map"
         description={`${barangayName ? `${barangayName} · ` : ''}Incidents and on-duty tanods, live`}
         icon={MapIcon}
         onBack={onBack}
