@@ -1,17 +1,24 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { createClient } from '@/lib/supabase'
 import {
-  Scale, X, Plus, Loader2, Gavel, ShieldAlert, Users, Clock,
+  X, Plus, Loader2, Gavel, ShieldAlert, Users, Clock,
   FileCheck2, ArrowRightCircle, Handshake,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from './ConfirmDialog'
-import RecordListToolbar, { RecordListEmpty } from './RecordListToolbar'
-import { AppButton } from './AppUI'
-import { timeAgo, fullDate } from '@/lib/timeAgo'
+import { timeAgo } from '@/lib/timeAgo'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Tag, Status } from '@/components/ui/tag'
+import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
+import { Textarea } from '@/components/ui/textarea'
+import { SearchBox } from '@/components/official/Toolbar'
 import {
-  KP_EXCLUSIONS, CATEGORY_KP_HINTS, CASE_STATUS, KP_DEADLINE_STYLE,
+  KP_EXCLUSIONS, CATEGORY_KP_HINTS, CASE_STATUS,
   assessEligibility, stageDeadline, availableActions, isOpen,
   summonDeadline, mediationDeadline, pangkatDeadline,
 } from '@/lib/katarungan'
@@ -41,13 +48,19 @@ const ACTION_META = {
                           prompt: 'Reason for withdrawal', required: false },
 }
 
-const TONE = {
-  primary: { background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', color: 'white', border: 'none' },
-  good:    { background: 'linear-gradient(135deg, #16a34a, #22c55e)', color: 'white', border: 'none' },
-  danger:  { background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' },
-  warn:    { background: '#fffbeb', color: '#b45309', border: '1px solid #fef3c7' },
-  muted:   { background: '#fafaff', color: '#6b7280', border: '1px solid #f0effe' },
+// The stage as a tag (O07).
+const STAGE_TONE = {
+  filed: 'quiet', mediation: 'brand', pangkat: 'warn', settled: 'ok',
+  repudiated: 'warn', cfa_issued: 'danger', referred: 'quiet', withdrawn: 'quiet',
 }
+
+// The Katarungang Pambarangay steps, for the card under the docket.
+const KP_STEPS = [
+  ['Summons', 'The respondent is summoned by the next working day after filing (Sec. 410(b)).'],
+  ['Mediation', 'The Punong Barangay has 15 days from the first meeting (Sec. 410(b)).'],
+  ['Conciliation', 'The Pangkat has 15 days, extendable once by 15 (Sec. 410(e)).'],
+  ['Settlement or CFA', 'A settlement is final after 10 days unless repudiated (Secs. 416, 418); otherwise a Certificate to File Action (Sec. 412).'],
+]
 
 /**
  * The Lupon's docket.
@@ -57,14 +70,17 @@ const TONE = {
  * 15 days to mediate, and Sec. 412 turns the whole thing into a precondition
  * the courts will check.
  */
-export default function BlotterQueue({ profile, cases, incidents = [], residents = [], onChanged }) {
+export default function BlotterQueue({ profile, cases, incidents = [], residents = [], onChanged, filing, onFilingChange }) {
   const supabase = useMemo(() => createClient(), [])
   const [tab, setTab] = useState('open')
   const [search, setSearch] = useState('')
   const [working, setWorking] = useState(null)
   const [pending, setPending] = useState(null)   // { caseId, action }
   const [note, setNote] = useState('')
-  const [filing, setFiling] = useState(false)
+  // The filing form can be opened from the band (the page passes `filing`)
+  // or from the toolbar on phones.
+  const [filingLocal, setFilingLocal] = useState(false)
+  const [openId, setOpenId] = useState(null)       // the case whose record is open
   const [confirmation, setConfirmation] = useState(null)
 
   const counts = useMemo(() => {
@@ -93,7 +109,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
       })
   }, [cases, tab, search])
 
-  function resetFilters() { setSearch(''); setTab('all') }
+  function resetFilters() { setSearch('') }
 
   async function patch(kase, changes, message) {
     if (working) return false
@@ -162,8 +178,74 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
     runAction(kase, action)
   }
 
+  const filingOpen = filing ?? filingLocal
+  const setFilingOpen = v => (onFilingChange ? onFilingChange(v) : setFilingLocal(v))
+
+  /** Where a case stands against its clock, as a status line. */
+  function deadlineLine(kase) {
+    const d = stageDeadline(kase)
+    if (!isOpen(kase)) return { label: (CASE_STATUS[kase.status] || CASE_STATUS.filed).label, tone: 'quiet' }
+    if (d.level === 'breach') return { label: `Overdue ${Math.abs(d.daysLeft)} day${Math.abs(d.daysLeft) === 1 ? '' : 's'}`, tone: 'danger' }
+    if (!d.label) return { label: 'No clock running', tone: 'quiet' }
+    const left = d.daysLeft === 0 ? 'due today' : `${d.daysLeft} day${d.daysLeft === 1 ? '' : 's'} left`
+    return { label: kase.status === 'filed' ? `Summons ${left}` : left[0].toUpperCase() + left.slice(1), tone: d.level === 'due' ? 'warn' : 'quiet' }
+  }
+
+  const filedOn = at => new Date(at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+
+  // The case record and its actions, under the row it belongs to.
+  function detail(kase) {
+    const actions = availableActions(kase)
+    const busy = working === kase.id
+    const isPending = pending?.caseId === kase.id
+    const meta = isPending ? ACTION_META[pending.action] : null
+    const d = stageDeadline(kase)
+    return (
+      <div className="space-y-3 rounded-[12px] border border-line bg-surface-sunk px-4 py-3.5">
+        {kase.description && <p className="text-sm leading-relaxed text-body">{kase.description}</p>}
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {(CASE_STATUS[kase.status] || CASE_STATUS.filed).desc}.{d.label ? ` ${d.label}${d.dueAt ? `: ${filedOn(d.dueAt)}` : ''}${d.citation ? ` (${d.citation})` : ''}.` : ''}
+          {' '}Filed {filedOn(kase.filed_at)}.{kase.legal_basis ? ` ${kase.legal_basis}` : ''}
+        </p>
+        {kase.prohibited && <Notice tone="danger" title="This case must not be mediated.">RA 7160, Sec. 408 excludes it from the Lupon. Refer it onward.</Notice>}
+        {kase.settlement_terms && <Notice tone="ok" title="Settled">{kase.settlement_terms}</Notice>}
+        {kase.repudiation_reason && <Notice tone="warn" title="Repudiated">{kase.repudiation_reason}</Notice>}
+        {kase.cfa_reason && <Notice tone="danger" title="Certificate to File Action">{kase.cfa_reason}</Notice>}
+        {kase.referred_to && <p className="text-sm text-body"><strong className="text-ink">Referred to:</strong> {kase.referred_to}</p>}
+
+        {isPending ? (
+          <div className="space-y-2.5">
+            <Textarea value={note} onChange={e => setNote(e.target.value)} rows={2} aria-label={meta.label} placeholder={meta.prompt} />
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => { setPending(null); setNote('') }}>Cancel</Button>
+              <Button variant={meta.tone === 'danger' ? 'danger' : 'primary'} onClick={() => runAction(kase, pending.action)}
+                disabled={busy || (meta.required && !note.trim())} aria-busy={busy || undefined}>
+                {busy && <Loader2 className="animate-spin" aria-hidden="true" />}{meta.label}
+              </Button>
+            </div>
+          </div>
+        ) : actions.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {actions.map((action, i) => {
+              const m = ACTION_META[action]
+              const Icon = m.icon
+              return (
+                <Button key={action} size="sm" disabled={busy} onClick={() => startAction(kase, action)}
+                  variant={i === 0 && (m.tone === 'primary' || m.tone === 'good') ? 'primary' : m.tone === 'danger' ? 'danger' : 'secondary'}>
+                  <Icon aria-hidden="true" />{m.label}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const toggle = id => { setOpenId(o => (o === id ? null : id)); setPending(null); setNote('') }
+
   return (
-    <div className="space-y-4">
+    <div className="@container flex flex-col gap-3.5">
       <ConfirmDialog open={Boolean(confirmation)}
         onClose={() => setConfirmation(null)}
         title="Extend this case once?"
@@ -180,181 +262,123 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
           if (await runAction(current, confirmation.action)) setConfirmation(null)
         }} />
 
-      <div className="white-card p-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-            <Gavel size={18} className="text-white" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="font-bold text-gray-800">Katarungang Pambarangay</h3>
-            <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">
-              Sorted by deadline — the case closest to running out of time is at the top.
-            </p>
-            <div className="flex items-start gap-1.5 mt-2">
-              <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-              <p className="text-xs text-gray-500 leading-relaxed">
-                <strong style={{ color: 'var(--brand)' }}>RA 7160, Secs. 408–418</strong> — summon the
-                respondent by the <strong>next working day</strong>, mediate within{' '}
-                <strong>15 days</strong> of the first meeting, then the Pangkat has 15 more,
-                extendible once. Conciliation is a <strong>precondition to court</strong> (Sec. 412);
-                a settlement becomes final after 10 days unless repudiated (Secs. 416, 418).
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {counts.breach > 0 && (
-        <div className="rounded-2xl px-4 py-3 flex items-start gap-2.5"
-          style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-          <Clock size={15} className="flex-shrink-0 mt-0.5 text-red-600" />
-          <p className="text-xs text-red-800 leading-relaxed">
-            <strong>{counts.breach}</strong> case{counts.breach === 1 ? '' : 's'} past the period
-            RA 7160 allows. A lapsed period does not end the Lupon’s duty — it just means the
-            parties have been waiting longer than the law intends.
-          </p>
-        </div>
+        <Notice tone="danger" title={`${counts.breach} case${counts.breach === 1 ? ' is' : 's are'} past the period RA 7160 allows.`}>
+          A lapsed period does not end the Lupon&rsquo;s duty; it means the parties have waited longer than the law intends.
+        </Notice>
       )}
 
-      <RecordListToolbar search={search} onSearchChange={setSearch} searchLabel="Search blotter cases"
-        placeholder="Case number, party, or nature…" noun="Cases"
-        filters={[{ value: 'all', label: 'All', count: cases.length }, { value: 'open', label: 'Open', count: counts.open }, { value: 'closed', label: 'Closed', count: counts.closed }]}
-        value={tab} onFilterChange={setTab} shown={shown.length} total={cases.length} onReset={resetFilters}
-        sortHint={tab === 'open' ? 'Open cases: soonest deadline first.' : 'Most recently filed first.'}
-        actions={<AppButton onClick={() => setFiling(v => !v)} aria-expanded={filing}>{filing ? <X size={16} /> : <Plus size={16} />}{filing ? 'Close form' : 'Record a complaint'}</AppButton>} />
-
-      {filing && (
+      {filingOpen && (
         <FileComplaint
           profile={profile}
           incidents={incidents}
           residents={residents}
-          onDone={(created) => { setFiling(false); onChanged?.(created?.id, created, 'created') }}
+          onCancel={() => setFilingOpen(false)}
+          onDone={(created) => { setFilingOpen(false); onChanged?.(created?.id, created, 'created') }}
         />
       )}
 
-      {shown.length === 0 ? (
-        <RecordListEmpty total={cases.length} search={search} noun="cases" filterLabel={tab === 'open' ? 'Open' : tab === 'closed' ? 'Closed' : 'All'} icon={Gavel} onReset={resetFilters} description="Recorded cases will appear here. Use Record a complaint to add the first case." />
-      ) : (
-        <div className="space-y-2">
-          {shown.map(kase => {
-            const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
-            const deadline = stageDeadline(kase)
-            const dl = KP_DEADLINE_STYLE[deadline.level]
-            const actions = availableActions(kase)
-            const busy = working === kase.id
-            const isPending = pending?.caseId === kase.id
-            const meta = isPending ? ACTION_META[pending.action] : null
-
-            return (
-              <div key={kase.id} className="white-card p-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold" style={{ color: 'var(--brand)' }}>
-                        {kase.case_number}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                        style={{ background: st.bg, color: st.color }}>
-                        {st.label}
-                      </span>
-                      {deadline.label && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                          style={{ background: dl.bg, color: dl.color, border: `1px solid ${dl.border}` }}
-                          title={deadline.citation || undefined}>
-                          {deadline.label}
-                          {deadline.level === 'breach' && ` · ${Math.abs(deadline.daysLeft)}d over`}
-                          {deadline.level === 'due' && deadline.daysLeft >= 0 && ` · ${deadline.daysLeft}d left`}
-                        </span>
-                      )}
-                      {kase.prohibited && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                          style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
-                          ⛔ Must not be mediated
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="text-sm font-bold text-gray-800 mt-1.5">
-                      {kase.complainant_name} <span className="font-normal text-gray-500">vs</span> {kase.respondent_name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">{kase.nature}</p>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{kase.description}</p>
-
-                    <div className="flex items-start gap-1.5 mt-2">
-                      <Scale size={11} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                      <p className="text-xs text-gray-500 leading-relaxed">{kase.legal_basis}</p>
-                    </div>
-
-                    {kase.settlement_terms && (
-                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                        style={{ background: '#f0fdf4', color: '#166534' }}>
-                        <strong>Settled:</strong> {kase.settlement_terms}
-                      </p>
-                    )}
-                    {kase.repudiation_reason && (
-                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                        style={{ background: '#fffbeb', color: '#92400e' }}>
-                        <strong>Repudiated:</strong> {kase.repudiation_reason}
-                      </p>
-                    )}
-                    {kase.cfa_reason && (
-                      <p className="text-xs mt-1.5 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                        style={{ background: '#fef2f2', color: '#b91c1c' }}>
-                        <strong>CFA:</strong> {kase.cfa_reason}
-                      </p>
-                    )}
-                    {kase.referred_to && (
-                      <p className="text-xs text-gray-500 mt-1.5">
-                        <strong>Referred to:</strong> {kase.referred_to}
-                      </p>
-                    )}
-
-                    <p className="text-xs text-gray-500 mt-1.5" title={fullDate(kase.filed_at)}>
-                      Filed {timeAgo(kase.filed_at)}
-                    </p>
-                  </div>
-                </div>
-
-                {isPending ? (
-                  <div className="mt-3 space-y-2">
-                    <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
-                      aria-label={meta.label}
-                      placeholder={meta.prompt}
-                      className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800" />
-                    <div className="flex gap-2">
-                      <button onClick={() => runAction(kase, pending.action)}
-                        disabled={busy || (meta.required && !note.trim())}
-                        className="flex-1 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                        style={TONE[meta.tone]}>
-                        {busy ? <Loader2 size={13} className="animate-spin mx-auto" /> : `Confirm · ${meta.label}`}
-                      </button>
-                      <button onClick={() => { setPending(null); setNote('') }}
-                        className="px-4 py-2.5 rounded-2xl text-xs font-bold" style={TONE.muted}>
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : actions.length > 0 && (
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {actions.map(action => {
-                      const m = ACTION_META[action]
-                      const Icon = m.icon
-                      return (
-                        <button key={action} onClick={() => startAction(kase, action)} disabled={busy}
-                          className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-40"
-                          style={TONE[m.tone]}>
-                          <Icon size={13} /> {m.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+      <Card className="!overflow-visible">
+        <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-3 sm:px-[18px]">
+          <Segmented label="Filter by stage" value={tab} onChange={v => { setTab(v); setOpenId(null) }}
+            items={[{ value: 'open', label: 'Open', count: counts.open }, { value: 'closed', label: 'Closed' }, { value: 'all', label: 'All' }]} />
+          <SearchBox value={search} onChange={setSearch} label="Search blotter cases" placeholder="Search cases" className="min-w-48 flex-1 @5xl:max-w-64" />
+          {!filingOpen && (
+            <Button variant="secondary" className="h-9 desk:hidden" onClick={() => setFilingOpen(true)}>
+              <Plus aria-hidden="true" />File a complaint
+            </Button>
+          )}
         </div>
-      )}
+
+        {shown.length === 0 ? (
+          <div className="border-t border-line px-[18px] py-6">
+            <p className="text-sm font-bold text-ink">{cases.length === 0 ? 'No cases yet' : search ? 'Nothing matches' : tab === 'open' ? 'No open cases' : 'Nothing here'}</p>
+            <Muted className="mt-1">{cases.length === 0 ? 'Complaints the secretary records show up here, oldest deadline first.' : 'Try another tab or clear the search.'}</Muted>
+            {search && <Button variant="secondary" size="sm" className="mt-3" onClick={resetFilters}>Clear search</Button>}
+          </div>
+        ) : (
+          <>
+            {/* Wide: the docket as a table (O07); a row opens its record. */}
+            <table className="hidden w-full table-fixed border-collapse text-left @3xl:table">
+              <thead>
+                <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
+                  <th scope="col" className="w-[150px] py-2.5 pl-[18px] font-bold">Case</th>
+                  <th scope="col" className="px-3 py-2.5 font-bold">Parties</th>
+                  <th scope="col" className="w-[130px] px-3 py-2.5 font-bold">Stage</th>
+                  <th scope="col" className="w-[170px] px-3 py-2.5 font-bold">Deadline</th>
+                  <th scope="col" className="hidden w-[130px] px-3 py-2.5 font-bold @5xl:table-cell">Filed</th>
+                  <th scope="col" className="w-[96px] py-2.5 pr-[18px]"><span className="sr-only">Open</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(kase => {
+                  const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
+                  const line = deadlineLine(kase)
+                  const open = openId === kase.id
+                  return (
+                    <Fragment key={kase.id}>
+                      <tr onClick={() => toggle(kase.id)}
+                        className={`cursor-pointer border-t border-line transition-colors hover:bg-surface-sunk ${line.tone === 'danger' ? 'bg-[color-mix(in_srgb,var(--danger-soft)_60%,var(--surface))]' : ''}`}>
+                        <td className="py-3 pl-[18px] font-mono text-[13px] font-bold text-muted-foreground">{kase.case_number}</td>
+                        <td className="min-w-0 px-3 py-3">
+                          <p className="truncate text-sm font-bold text-ink">{kase.complainant_name} v. {kase.respondent_name}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">{kase.nature}</p>
+                        </td>
+                        <td className="px-3 py-3"><Tag tone={STAGE_TONE[kase.status] || 'quiet'}>{st.label}</Tag></td>
+                        <td className="px-3 py-3"><Status tone={line.tone} className="max-w-full">{line.label}</Status></td>
+                        <td className="hidden px-3 py-3 text-[13px] text-body @5xl:table-cell">{filedOn(kase.filed_at)}</td>
+                        <td className="py-3 pr-[18px] text-right">
+                          <Button size="sm" variant="secondary" aria-expanded={open} onClick={e => { e.stopPropagation(); toggle(kase.id) }}>
+                            {open ? 'Close' : 'Open'}
+                          </Button>
+                        </td>
+                      </tr>
+                      {open && <tr><td colSpan={6} className="px-[18px] pb-3.5">{detail(kase)}</td></tr>}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {/* Narrow: one row per case; tap to open its record. */}
+            <Rows className="border-t border-line @3xl:hidden">
+              {shown.map(kase => {
+                const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
+                const line = deadlineLine(kase)
+                const open = openId === kase.id
+                return (
+                  <Row key={kase.id} critical={line.tone === 'danger'} className="space-y-2.5">
+                    <button type="button" onClick={() => toggle(kase.id)} aria-expanded={open} className="block w-full text-left outline-none focus-visible:underline">
+                      <span className="block truncate text-sm font-bold text-ink">{kase.complainant_name} v. {kase.respondent_name}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{kase.case_number} · {kase.nature}</span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <Tag tone={STAGE_TONE[kase.status] || 'quiet'}>{st.label}</Tag>
+                        <Status tone={line.tone}>{line.label}</Status>
+                      </span>
+                    </button>
+                    {open && detail(kase)}
+                  </Row>
+                )
+              })}
+            </Rows>
+          </>
+        )}
+      </Card>
+
+      {/* The law the docket runs on (RA 7160, Secs. 410 to 418). */}
+      <Card>
+        <CardHead title="Katarungang Pambarangay timeline" action={<span className="text-xs text-muted-foreground">RA 7160, Secs. 410 to 418</span>} />
+        <ol className="grid border-t border-line sm:grid-cols-2 xl:grid-cols-4">
+          {KP_STEPS.map(([title, body], i) => (
+            <li key={title} className="border-line px-[18px] py-3 not-first:border-t sm:not-first:border-t-0 sm:[&:nth-child(n+3)]:border-t sm:even:border-l xl:[&:nth-child(n+3)]:border-t-0 xl:not-first:border-l">
+              <p className="flex items-center gap-2 text-[13px] font-extrabold text-brand-strong">
+                <span className="flex size-[22px] items-center justify-center rounded-full bg-brand-soft text-xs">{i + 1}</span>{title}
+              </p>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-body">{body}</p>
+            </li>
+          ))}
+        </ol>
+      </Card>
     </div>
   )
 }
@@ -368,7 +392,7 @@ export default function BlotterQueue({ profile, cases, incidents = [], residents
  * worth. The assessment updates live so the consequence of a tick is visible
  * before the case is filed.
  */
-function FileComplaint({ profile, incidents, residents, onDone }) {
+function FileComplaint({ profile, incidents, residents, onDone, onCancel }) {
   const supabase = useMemo(() => createClient(), [])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
@@ -445,18 +469,29 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
   }
 
   return (
-    <form onSubmit={submit} className="white-card p-5 space-y-4 fade-up">
-      <h4 className="font-bold text-gray-800 text-sm">Record a complaint</h4>
+    <form onSubmit={submit} className="space-y-4 rounded-[14px] border border-line bg-surface px-[18px] py-4 shadow-[var(--shadow-lift)]">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[15px] font-extrabold text-ink">File a complaint</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Take it down as the complainant tells it. The Sec. 408 checks decide whether the Lupon can hear it.</p>
+        </div>
+        {onCancel && (
+          <button type="button" onClick={onCancel} aria-label="Close the form"
+            className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-line text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-brand-strong">
+            <X size={18} />
+          </button>
+        )}
+      </div>
 
       {residents.length > 0 && (
         <div>
-          <label htmlFor="kp-complainant-account" className="text-xs font-bold text-gray-700">
+          <label htmlFor="kp-complainant-account" className="text-[13px] font-bold text-ink">
             Is the complainant a registered resident?{' '}
-            <span className="font-normal text-gray-500">(optional)</span>
+            <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
           <select id="kp-complainant-account" value={form.complainant_id}
             onChange={e => pickComplainant(e.target.value)}
-            className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5">
+            className="mt-2 h-[46px] w-full rounded-[10px] border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-brand-strong">
             <option value="">Not a registered account — record the name below</option>
             {residents.map(r => (
               <option key={r.id} value={r.id}>{r.full_name}{r.address ? ` · ${r.address}` : ''}</option>
@@ -464,7 +499,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
           </select>
           {/* Linking the account is what lets the complainant follow their own
               case from their dashboard — the read policy is scoped to it. */}
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1.5">
             Linking an account lets the complainant follow the case themselves.
           </p>
         </div>
@@ -472,12 +507,12 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
 
       {incidents.length > 0 && (
         <div>
-          <label htmlFor="kp-incident" className="text-xs font-bold text-gray-700">
-            Arising from a reported incident? <span className="font-normal text-gray-500">(optional)</span>
+          <label htmlFor="kp-incident" className="text-[13px] font-bold text-ink">
+            Arising from a reported incident? <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
           <select id="kp-incident" value={form.incident_id}
             onChange={e => pickIncident(e.target.value)}
-            className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5">
+            className="mt-2 h-[46px] w-full rounded-[10px] border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-brand-strong">
             <option value="">Not linked to an incident</option>
             {incidents.slice(0, 50).map(i => (
               <option key={i.id} value={i.id}>
@@ -486,10 +521,7 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
             ))}
           </select>
           {hint?.prompt && (
-            <p className="text-xs mt-1.5 px-2.5 py-2 rounded-lg leading-relaxed"
-              style={{ background: '#fffbeb', color: '#92400e' }}>
-              {hint.prompt}
-            </p>
+            <Notice tone="warn" className="mt-2">{hint.prompt}</Notice>
           )}
         </div>
       )}
@@ -506,44 +538,40 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
         <Field label="Complainant phone" value={form.complainant_phone}
           onChange={v => setForm(f => ({ ...f, complainant_phone: v }))} />
         <div>
-          <label htmlFor="kp-nature" className="text-xs font-bold text-gray-700">Nature of the dispute</label>
+          <label htmlFor="kp-nature" className="text-[13px] font-bold text-ink">Nature of the dispute</label>
           <select id="kp-nature" value={form.nature}
             onChange={e => setForm(f => ({ ...f, nature: e.target.value }))}
-            className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5">
+            className="mt-2 h-[46px] w-full rounded-[10px] border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-brand-strong">
             {NATURES.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
         </div>
       </div>
 
       <div>
-        <label htmlFor="kp-desc" className="text-xs font-bold text-gray-700">
-          What happened? <span className="text-red-500">*</span>
+        <label htmlFor="kp-desc" className="text-[13px] font-bold text-ink">
+          What happened?
         </label>
         <textarea id="kp-desc" rows={3} value={form.description}
           onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           placeholder="In the complainant’s own words where possible."
-          className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5" />
+          className="mt-2 w-full rounded-[10px] border border-line bg-surface px-3.5 py-3 text-[15px] leading-relaxed text-ink outline-none focus:border-brand-strong" />
       </div>
 
       <div>
-        <p className="text-xs font-bold text-gray-700">
-          Does any of these apply? <span className="font-normal text-gray-500">(RA 7160, Sec. 408)</span>
+        <p className="text-[13px] font-bold text-ink">
+          Does any of these apply? <span className="font-normal text-muted-foreground">(RA 7160, Sec. 408)</span>
         </p>
         <div className="space-y-1.5 mt-2">
           {Object.entries(KP_EXCLUSIONS).map(([key, x]) => {
             const on = exclusions.includes(key)
             return (
               <label key={key}
-                className="flex items-start gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                style={{
-                  background: on ? (x.prohibited ? '#fef2f2' : '#fffbeb') : 'var(--app-surface)',
-                  border: `1px solid ${on ? (x.prohibited ? '#fecaca' : '#fef3c7') : 'var(--brand-soft)'}`,
-                }}>
-                <input type="checkbox" checked={on} onChange={() => toggle(key)} className="mt-0.5" />
+                className={`flex cursor-pointer items-start gap-3 rounded-[10px] border px-3.5 py-2.5 transition-colors ${on ? (x.prohibited ? 'border-[color-mix(in_srgb,var(--danger)_35%,var(--line))] bg-danger-soft' : 'border-[color-mix(in_srgb,var(--warn)_35%,var(--line))] bg-warn-soft') : 'border-line bg-surface hover:border-line-strong'}`}>
+                <input type="checkbox" checked={on} onChange={() => toggle(key)} className="mt-0.5 size-4 accent-[var(--brand-strong)]" />
                 <span className="min-w-0">
-                  <span className="text-xs font-semibold text-gray-800 block">{x.label}</span>
-                  {x.help && <span className="text-xs text-gray-500 block mt-0.5">{x.help}</span>}
-                  <span className="text-xs font-bold block mt-0.5" style={{ color: 'var(--brand)' }}>{x.citation}</span>
+                  <span className="block text-sm font-bold text-ink">{x.label}</span>
+                  {x.help && <span className="mt-0.5 block text-xs text-body">{x.help}</span>}
+                  <span className="mt-0.5 block text-xs font-bold text-brand-strong">{x.citation}</span>
                 </span>
               </label>
             )
@@ -551,27 +579,21 @@ function FileComplaint({ profile, incidents, residents, onDone }) {
         </div>
       </div>
 
-      <div className="px-3.5 py-3 rounded-2xl"
-        style={{
-          background: assessment.prohibited ? '#fef2f2' : assessment.eligible ? '#f0fdf4' : '#fffbeb',
-          border: `1px solid ${assessment.prohibited ? '#fecaca' : assessment.eligible ? '#dcfce7' : '#fef3c7'}`,
-        }}>
-        <p className="text-xs font-bold"
-          style={{ color: assessment.prohibited ? '#b91c1c' : assessment.eligible ? '#166534' : '#92400e' }}>
-          {assessment.summary}
-        </p>
+      <Notice tone={assessment.prohibited ? 'danger' : assessment.eligible ? 'ok' : 'warn'} title={assessment.summary}>
         {assessment.blocking.map(b => (
-          <p key={b.key} className="text-xs text-gray-600 mt-1.5 leading-relaxed">
-            <strong>{b.citation}</strong> — {b.label}
-            {b.consequence && <span className="block mt-0.5">{b.consequence}</span>}
-          </p>
+          <span key={b.key} className="mt-1 block">
+            <strong>{b.citation}</strong>: {b.label}
+            {b.consequence && <span className="mt-0.5 block">{b.consequence}</span>}
+          </span>
         ))}
-      </div>
+      </Notice>
 
-      <button type="submit" disabled={!valid || saving}
-        className="btn-primary w-full py-3 rounded-2xl text-white text-sm font-bold disabled:opacity-40">
-        {saving ? 'Recording…' : assessment.eligible ? 'File with the Lupon' : 'Record and refer'}
-      </button>
+      <div className="flex flex-wrap gap-2.5">
+        {onCancel && <Button type="button" variant="secondary" size="lg" onClick={onCancel}>Cancel</Button>}
+        <Button type="submit" size="lg" className="flex-1" disabled={!valid || saving} aria-busy={saving || undefined}>
+          {saving ? 'Recording…' : assessment.eligible ? 'File with the Lupon' : 'Record and refer'}
+        </Button>
+      </div>
     </form>
   )
 }
@@ -580,11 +602,11 @@ function Field({ label, value, onChange, required }) {
   const id = `kp-${label.toLowerCase().replace(/\s+/g, '-')}`
   return (
     <div>
-      <label htmlFor={id} className="text-xs font-bold text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
+      <label htmlFor={id} className="text-[13px] font-bold text-ink">
+        {label}{!required && <span className="font-normal text-muted-foreground"> (optional)</span>}
       </label>
       <input id={id} value={value} onChange={e => onChange(e.target.value)}
-        className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5" />
+        className="mt-2 h-[46px] w-full rounded-[10px] border border-line bg-surface px-3.5 text-[15px] text-ink outline-none focus:border-brand-strong" />
     </div>
   )
 }

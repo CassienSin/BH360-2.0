@@ -130,6 +130,8 @@ function OfficialDashboard() {
   const [loading, setLoading] = useState(true)
   const [ticketSearch, setTicketSearch] = useState('')
   const [ticketFilter, setTicketFilter] = useState('all')
+  // The blotter's filing form, opened from the band's File a complaint.
+  const [blotterFiling, setBlotterFiling] = useState(false)
   const [userSearch, setUserSearch] = useState('')
   const [userRoleFilter, setUserRoleFilter] = useState('all')
   const [confirmDialog, setConfirmDialog] = useState(null) // { type, ...data }
@@ -807,7 +809,8 @@ function OfficialDashboard() {
       }
       case 'blotter': return {
         eyebrow: 'Blotter / Lupon', title: 'Barangay justice cases',
-        desc: `${plural(blotterCounts.open, 'case', 'cases')} before the Lupon.${blotterCounts.breach ? ` ${plural(blotterCounts.breach, 'is', 'are')} past the deadline.` : ''}`,
+        desc: `${plural(blotterCounts.open, 'case', 'cases')} before the Lupon.${blotterCounts.breach ? ` ${blotterCounts.breach} ${blotterCounts.breach === 1 ? 'is' : 'are'} past the deadline.` : ''}`,
+        actions: !blotterFiling && <Button variant="white" onClick={() => setBlotterFiling(true)}><Plus aria-hidden="true" />File a complaint</Button>,
       }
       case 'tanods': return {
         eyebrow: 'Tanod management', title: 'Your tanods',
@@ -1420,6 +1423,8 @@ function OfficialDashboard() {
                 incidents={incidents}
                 residents={users.filter(u => u.role === 'resident')}
                 onChanged={handleBlotterChanged}
+                filing={blotterFiling}
+                onFilingChange={setBlotterFiling}
               />
             </div>
           )}

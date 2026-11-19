@@ -125,7 +125,7 @@ export default function OfficialPreview({ initial }) {
         )}
         {section === 'documents' && <DocumentQueue profile={PROFILE} requests={DOCUMENTS} onUpdated={noop} />}
         {section === 'verifications' && <VerificationQueue profile={PROFILE} users={USERS} onUpdated={noop} />}
-        {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS} onChanged={noop} />}
+        {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS.filter(u => u.role === 'resident')} onChanged={noop} />}
         {!['dashboard', 'incidents', 'tickets', 'documents', 'verifications', 'blotter'].includes(section) && (
           <p className="text-sm text-muted-foreground">Not in the preview yet: {section}. ({TICKETS.length} tickets, {ANNOUNCEMENTS.length} announcements in the fixtures.)</p>
         )}
