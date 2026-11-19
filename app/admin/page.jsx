@@ -2,50 +2,33 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
-import { PageSkeleton } from '@/components/Skeletons'
+import { DashboardShellSkeleton } from '@/components/Skeletons'
+import { DASHBOARD_SKELETONS } from '@/lib/dashboardSkeletons'
 import ClientBoundary from '@/components/ClientBoundary'
-import NotificationBell from '@/components/NotificationBell'
+import DashboardFrame from '@/components/crafted/DashboardFrame'
+import DashboardSidebar from '@/components/DashboardSidebar'
+import DashboardHeader from '@/components/DashboardHeader'
+import { DashboardIcon, IncidentsIcon, ResidentIcon, UsersIcon, VerificationsIcon } from '@/components/icons/BhIcons'
+import { Button } from '@/components/ui/button'
+import { StatStrip } from '@/components/ui/stat-strip'
+import ApplicationsSection from '@/components/admin/ApplicationsSection'
+import { useSidebarState } from '@/lib/useSidebarState'
+import { isPhoneLayout } from '@/lib/layout'
 import { useNotifications } from '@/lib/useNotifications'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
-import { Shield, Inbox, CheckCircle, XCircle, Mail, Phone, MapPin, MessageSquare, Copy, Search, Users, Building2, Loader2, KeyRound, Sparkles, LogOut, RefreshCw, Bell, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
+import { XCircle, MapPin, Copy, Search, Users, Building2, Loader2, KeyRound, RefreshCw, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
 import { computeStanding, STANDING_STYLE } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
-import LiveClock from '@/components/LiveClock'
 import { SITE_URL } from '@/lib/siteUrl'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
 
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
 
 // Cryptographically secure invite code. Math.random() is predictable and
 // must never be used for codes that gate privileged roles.
@@ -139,6 +122,9 @@ function AdminPanel() {
   // New barangay applications, written by the database for super admins
   // (supabase/setup.sql Section 18).
   const notificationCenter = useNotifications(profile?.id)
+  const [sidebarOpen, setSidebarOpen] = useSidebarState()
+  // The admin belongs to no barangay: the sidebar and the context line say so.
+  const adminProfile = useMemo(() => profile && { ...profile, role: 'admin', barangays: { name: 'All barangays' } }, [profile])
   const [applications, setApplications] = useState([])
   const [barangayResults, setBarangayResults] = useState([])
   const [barangaySearch, setBarangaySearch] = useState('')
@@ -166,9 +152,7 @@ function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState('pending')
   const [search, setSearch] = useState('')
   const [reviewing, setReviewing] = useState(null)
-  const [emailMenuFor, setEmailMenuFor] = useState(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [processing, setProcessing] = useState(false) // guards against double-clicks
   const [approveConfirm, setApproveConfirm] = useState(null) // { app, officialCount }
@@ -504,10 +488,6 @@ function AdminPanel() {
     }
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    window.location.replace('/login')
-  }
 
   // Derived data memoized so keystrokes elsewhere don't refilter needlessly.
   const filteredApps = useMemo(() => {
@@ -654,384 +634,65 @@ function AdminPanel() {
   // The open tab eases in when you switch tabs, not on page load.
   const tabEnter = useSectionEntrance(activeTab, !loading) ? 'fade-up' : ''
 
-  if (loading) return <PageSkeleton cards={3} maxWidth={1168} tabs={5} />
+  if (loading) return <DashboardShellSkeleton path="/admin" kind={DASHBOARD_SKELETONS['/admin'].kinds[activeTab]} sidebarOpen={sidebarOpen} banner={null} />
+
+  // What the band says above each tab (A01–A05).
+  const HEADS = {
+    applications: {
+      eyebrow: 'Platform · Applications', title: 'Barangays asking to join',
+      desc: pendingCount
+        ? `${pendingCount} application${pendingCount === 1 ? ' is' : 's are'} waiting for review. Approving one gives the applicant an official invite code.`
+        : 'Nothing is waiting for review. New applications from barangays show up here.',
+    },
+    incidents: { eyebrow: 'Platform · Incidents', title: 'Every report, every barangay', desc: 'Watch for reports that sit too long. Dispatch stays with each barangay.' },
+    codes: { eyebrow: 'Platform · Invite codes', title: 'Invite officials and tanods', desc: 'Residents sign up on their own. Officials and tanods need a code.' },
+    barangays: { eyebrow: 'Platform · Barangays', title: 'Barangays on BarangayHub 360', desc: `${totalBarangaysWithUsers} barangay${totalBarangaysWithUsers === 1 ? '' : 's'} with people on the platform.` },
+    users: { eyebrow: 'Platform · Users', title: 'People across all barangays', desc: `${users.length}${users.length >= 100 ? '+' : ''} accounts, newest first.` },
+  }
+  const head = HEADS[activeTab]
+
+  // The platform's numbers (A02: on the band of Barangays).
+  const platformStats = [
+    { label: 'Applications waiting', value: pendingCount, note: `${approvedCount} approved in all`, onClick: () => setActiveTab('applications') },
+    { label: 'Barangays', value: totalBarangaysWithUsers, note: 'with people on the platform' },
+    { label: 'People', value: `${users.length}${users.length >= 100 ? '+' : ''}`, note: 'accounts' },
+    { label: 'Open reports', value: incidentStats.pending, tone: incidentStats.critical ? 'danger' : 'default', note: `across ${incidentStats.barangays} barangay${incidentStats.barangays === 1 ? '' : 's'}`, onClick: () => setActiveTab('incidents') },
+  ]
 
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-        <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-      </div>
-
-      {/* Premium Header */}
-      <header className="bg-white sticky top-0 z-30"
-        style={{ boxShadow: '0 2px 12px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}>
-        {/* Same width as <main> so the header lines up with the cards.
-            No back button: "/" sends a signed-in admin straight back here. */}
-        <div className="mx-auto w-full max-w-6xl px-4 py-3 flex items-center gap-3">
-
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="relative flex-shrink-0">
-            <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-              style={{
-                background: 'linear-gradient(135deg, #1f2937, #4b5563)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
-              }}>
-              <Shield size={18} className="text-white" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)' }}>
-              <Sparkles size={8} className="text-white" />
-            </div>
-          </div>
-
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.5px' }}>
-                Super Admin
-              </h1>
-              <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(135deg, #1f2937, #4b5563)' }}>
-                <Sparkles size={9} className="text-yellow-300" />
-                <span className="text-xs font-black text-white tracking-wider">ROOT</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-xs text-gray-500 truncate">{profile?.full_name} · Online</p>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT — Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-
-          <LiveClock />
-
-          <NotificationBell center={notificationCenter} sizeClass="w-11 h-11" />
-
-          {/* Refresh button */}
-          <button onClick={refreshData} disabled={refreshing} aria-label="Refresh data"
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors disabled:opacity-50"
-            title="Refresh data">
-            <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
-          </button>
-
-          {/* Pending count indicator */}
-          {pendingCount > 0 && (
-            <div className="relative">
-              <button onClick={() => setActiveTab('applications')}
-                aria-label={`${pendingCount} pending application${pendingCount === 1 ? '' : 's'}`}
-                className="w-11 h-11 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100"
-                title={`${pendingCount} pending applications`}>
-                <Bell size={15} className="text-gray-500" />
-                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
-                  style={{ background: '#ef4444', boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}>
-                  {pendingCount}
-                </span>
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 animate-ping opacity-75" />
-              </button>
-            </div>
-          )}
-
-          {/* Divider */}
-          <div className="h-9 w-px hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
-
-          {/* Logout button */}
-          <button onClick={() => setLogoutConfirm(true)} aria-label="Sign out"
-            className="flex items-center gap-1.5 px-3 min-h-11 rounded-xl text-xs font-bold transition-all hover:scale-105"
-            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}
-            title="Sign out">
-            <LogOut size={13} />
-            <span className="hidden sm:block">Sign Out</span>
-          </button>
-        </div>
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto w-full min-w-0 max-w-6xl overflow-x-hidden px-4 py-6 space-y-6">
-
-        {/* Stats Overview — a swipeable row on phones so the tabs stay
-            near the top; a grid from small tablets up. */}
-        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-px-4 -mx-4 px-4 pb-1 [scrollbar-width:none] rail-fade
-          [&>*]:shrink-0 [&>*]:w-[150px] [&>*]:snap-start
-          sm:grid sm:grid-cols-3 lg:grid-cols-5 sm:overflow-visible sm:mx-0 sm:px-0 sm:pb-0 sm:[&>*]:w-auto sm:[mask-image:none] sm:[-webkit-mask-image:none]"
-          aria-label="Platform totals">
-          <div className="white-card p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: '#fff7ed' }}>
-                <Inbox size={14} className="text-orange-500" />
-              </div>
-              <p className="text-xs text-gray-500">Pending</p>
-            </div>
-            <p className="text-2xl font-black" style={{ color: '#f97316' }}>{pendingCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Applications</p>
-          </div>
-
-          <div className="white-card p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: '#f0fdf4' }}>
-                <CheckCircle size={14} className="text-emerald-500" />
-              </div>
-              <p className="text-xs text-gray-500">Approved</p>
-            </div>
-            <p className="text-2xl font-black" style={{ color: '#22c55e' }}>{approvedCount}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Total approved</p>
-          </div>
-
-          <div className="white-card p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: 'var(--brand-soft)' }}>
-                <Building2 size={14} style={{ color: 'var(--brand)' }} />
-              </div>
-              <p className="text-xs text-gray-500">Active</p>
-            </div>
-            <p className="text-2xl font-black" style={{ color: 'var(--brand)' }}>{totalBarangaysWithUsers}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Barangays w/ users</p>
-          </div>
-
-          <div className="white-card p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: '#eff6ff' }}>
-                <Users size={14} className="text-blue-500" />
-              </div>
-              <p className="text-xs text-gray-500">Total Users</p>
-            </div>
-            <p className="text-2xl font-black" style={{ color: '#3b82f6' }}>{users.length}{users.length >= 100 ? '+' : ''}</p>
-            <p className="text-xs text-gray-500 mt-0.5">Registered</p>
-          </div>
-
-          {/* Platform-wide incidents — the super admin's actual job is
-              seeing across barangays, so this is a headline number, not
-              something buried inside a tab. */}
-          <button onClick={() => setActiveTab('incidents')}
-            className="white-card p-4 text-left transition-transform hover:scale-[1.02]">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-                style={{ background: '#fef2f2' }}>
-                <AlertTriangle size={14} className="text-red-500" />
-              </div>
-              <p className="text-xs text-gray-500">Incidents</p>
-            </div>
-            <p className="text-2xl font-black" style={{ color: '#ef4444' }}>
-              {incidentStats.pending}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Pending across {incidentStats.barangays} barangay{incidentStats.barangays === 1 ? '' : 's'}
-            </p>
-          </button>
-        </div>
-
-        {/* Tabs — scroll sideways when they don't fit (phones, 200% zoom). */}
-        <div className="flex gap-2 overflow-x-auto pb-1 rail-fade lg:[mask-image:none] lg:[-webkit-mask-image:none]">
-          {[
-            { value: 'applications', label: 'Applications', icon: Inbox, count: pendingCount },
-            { value: 'incidents', label: 'All Incidents', icon: AlertTriangle, count: incidentStats.critical, countLabel: 'critical open' },
-            { value: 'codes', label: 'Invite Codes', icon: KeyRound },
-            { value: 'barangays', label: 'Barangays', icon: Building2 },
-            { value: 'users', label: 'Users', icon: Users },
-          ].map(({ value, label, icon: Icon, count, countLabel }) => (
-            <button key={value} onClick={() => setActiveTab(value)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap"
-              style={{
-                background: activeTab === value ? 'white' : 'rgba(255,255,255,0.15)',
-                color: activeTab === value ? 'var(--brand)' : 'white',
-                boxShadow: activeTab === value ? '0 4px 16px rgba(91,84,232,0.15)' : 'none',
-              }}>
-              <Icon size={13} /> {label}
-              {count > 0 && (
-                <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full font-bold"
-                  style={{
-                    background: activeTab === value ? 'var(--brand)' : 'rgba(255,255,255,0.25)',
-                    color: 'white',
-                  }}>
-                  {count}{countLabel ? ` ${countLabel}` : ''}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+    <>
+    <DashboardFrame sidebarOpen={sidebarOpen}
+      sidebar={<DashboardSidebar profile={adminProfile} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+        activeSection={activeTab} setActiveSection={key => { setActiveTab(key); if (isPhoneLayout()) setSidebarOpen(false) }}
+        roleLabel="Platform admin"
+        navItems={[{ section: 'PLATFORM', items: [
+          { key: 'applications', label: 'Applications', icon: VerificationsIcon, count: pendingCount, hasNew: pendingCount > 0 },
+          { key: 'incidents', label: 'All incidents', icon: IncidentsIcon, ...(incidentStats.critical ? { count: incidentStats.critical, badge: 'CRITICAL' } : {}) },
+          { key: 'codes', label: 'Invite codes', icon: UsersIcon },
+          { key: 'barangays', label: 'Barangays', icon: DashboardIcon },
+          { key: 'users', label: 'Users', icon: ResidentIcon },
+        ]}]} />}
+      header={<DashboardHeader profile={adminProfile} columnClass="max-w-[100rem]"
+        sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
+        eyebrow={head.eyebrow} sectionTitle={head.title} sectionDesc={head.desc}
+        phoneTitle={{ applications: 'Applications', incidents: 'All incidents', codes: 'Invite codes', barangays: 'Barangays', users: 'Users' }[activeTab]}
+        actions={<Button variant="onband" onClick={refreshData} disabled={refreshing} aria-busy={refreshing || undefined}>
+          <RefreshCw className={refreshing ? 'animate-spin' : ''} aria-hidden="true" />Refresh
+        </Button>}
+        notificationCenter={notificationCenter}
+        searchData={{ incidents, tickets: [], announcements: [] }}
+        onSearchResultClick={() => setActiveTab('incidents')}>
+        {activeTab === 'barangays' && <div className="band-slot"><StatStrip stats={platformStats} /></div>}
+      </DashboardHeader>}>
+      <div className="mx-auto w-full min-w-0 max-w-[100rem] space-y-3.5">
 
         {/* APPLICATIONS TAB */}
         {activeTab === 'applications' && (
-          <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
-            {/* Filters */}
-            <div className="white-card w-full min-w-0 overflow-hidden p-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input value={search} onChange={e => setSearch(e.target.value)}
-                    placeholder="Search by name, email, or barangay..."
-                    className="input-field w-full rounded-2xl pl-10 pr-4 py-2.5 text-sm text-gray-800" />
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { value: 'all', label: 'All', color: '#5B54E8' },
-                    { value: 'pending', label: 'Pending', color: '#f97316' },
-                    { value: 'approved', label: 'Approved', color: '#22c55e' },
-                    { value: 'rejected', label: 'Rejected', color: '#ef4444' },
-                  ].map(f => (
-                    <button key={f.value} onClick={() => setStatusFilter(f.value)}
-                      className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                      style={{
-                        background: statusFilter === f.value ? f.color : 'var(--app-surface)',
-                        color: statusFilter === f.value ? 'white' : '#6b7280',
-                        border: statusFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
-                      }}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Applications List */}
-            {filteredApps.length === 0 ? (
-              <div className="white-card p-12 text-center">
-                <Inbox size={36} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-500 text-sm">No applications match your filters</p>
-              </div>
-            ) : (
-              filteredApps.map(app => (
-                <div key={app.id} className="white-card w-full min-w-0 overflow-hidden p-5">
-                  <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-                        {app.full_name?.[0]?.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-gray-800">{app.full_name}</h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                            app.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                            app.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :
-                            'bg-red-100 text-red-700'
-                          }`}>
-                            {app.status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-0.5">{app.position}</p>
-                        <p className="text-xs text-gray-500 mt-1" title={fullDate(app.created_at)}>
-                          Applied {timeAgo(app.created_at)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-                      <Mail size={12} className="text-gray-500 flex-shrink-0" />
-                      <span className="text-gray-700 truncate">{app.email}</span>
-                    </div>
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-                      <Phone size={12} className="text-gray-500 flex-shrink-0" />
-                      <span className="text-gray-700 truncate">{app.phone}</span>
-                    </div>
-                    <div className="sm:col-span-2 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
-                      style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-                      <MapPin size={12} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />
-                      <span className="min-w-0 break-words font-semibold" style={{ color: 'var(--brand)' }}>
-                        {app.barangays?.name}, {app.barangays?.city}, {app.barangays?.province}
-                      </span>
-                    </div>
-                  </div>
-
-                  {app.message && (
-                    <div className="p-3 rounded-xl mb-3" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-                      <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-                        <MessageSquare size={10} /> Message
-                      </p>
-                      <p className="text-xs text-gray-700 italic">&quot;{app.message}&quot;</p>
-                    </div>
-                  )}
-
-                  {app.status === 'approved' && app.generated_code && (
-                    <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl mb-3"
-                      style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                      <CheckCircle size={14} className="text-emerald-600 flex-shrink-0" />
-                      <div className="flex-1 min-w-[150px]">
-                        <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Invite code</p>
-                        <p className="font-mono text-sm font-bold text-emerald-900 whitespace-nowrap">{app.generated_code}</p>
-                      </div>
-                      <button onClick={() => copyToClipboard(app.generated_code)} aria-label="Copy code"
-                        className="w-10 h-10 rounded-lg flex items-center justify-center hover:bg-emerald-100 transition-colors">
-                        <Copy size={14} className="text-emerald-700" />
-                      </button>
-                      <button onClick={() => setEmailMenuFor(id => id === app.id ? null : app.id)}
-                        aria-expanded={emailMenuFor === app.id}
-                        className="flex items-center gap-1.5 px-3 min-h-10 rounded-lg text-xs font-bold text-white transition-colors"
-                        style={{ background: '#047857' }}>
-                        <Mail size={13} aria-hidden="true" /> Email code
-                      </button>
-                      <p className="w-full text-xs text-emerald-900 leading-relaxed">
-                        This code is for the applicant only. Once they sign in, they create
-                        <strong> tanod</strong> and <strong>official</strong> codes for their team under
-                        <strong> Users</strong>. Need one now? Use <strong>Invite Codes</strong> above.
-                      </p>
-                      {emailMenuFor === app.id && (() => {
-                        const links = emailLinks(app)
-                        const item = 'flex items-center justify-center gap-1.5 px-3 min-h-10 rounded-lg text-xs font-bold transition-colors bg-white hover:bg-emerald-100'
-                        return (
-                          <div className="w-full pt-2 mt-1 border-t border-emerald-200">
-                            <p className="text-xs text-emerald-900 mb-2">Send it from:</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                              <a href={links.gmail} target="_blank" rel="noopener noreferrer" className={item}
-                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Gmail</a>
-                              <a href={links.outlook} target="_blank" rel="noopener noreferrer" className={item}
-                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Outlook</a>
-                              <a href={links.mailto} className={item}
-                                style={{ color: '#047857', border: '1px solid #bbf7d0' }}>Mail app</a>
-                              <button onClick={() => { const m = inviteEmail(app); copyToClipboard(`To: ${m.to}\nSubject: ${m.subject}\n\n${m.body}`) }}
-                                className={item} style={{ color: '#047857', border: '1px solid #bbf7d0' }}>
-                                <Copy size={12} aria-hidden="true" /> Copy message
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  )}
-
-                  {app.status === 'rejected' && app.rejection_reason && (
-                    <div className="flex items-start gap-2 p-3 rounded-xl mb-3"
-                      style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-                      <XCircle size={14} className="text-red-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wider text-red-700">Rejection Reason</p>
-                        <p className="text-xs text-red-900 mt-0.5">{app.rejection_reason}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {app.status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleApprove(app)} disabled={processing}
-                        className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                        style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 12px rgba(34,197,94,0.3)' }}>
-                        {processing
-                          ? <Loader2 size={12} className="animate-spin" />
-                          : <CheckCircle size={12} />} Approve & Generate Code
-                      </button>
-                      <button onClick={() => setReviewing(app)} disabled={processing}
-                        className="px-4 py-2.5 rounded-xl text-xs font-bold transition-colors hover:bg-red-100 disabled:opacity-60"
-                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-                        <XCircle size={12} className="inline" /> Reject
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+          <div className={tabEnter}>
+            <ApplicationsSection apps={filteredApps} counts={{ pending: pendingCount }}
+              filter={statusFilter} onFilter={setStatusFilter} search={search} onSearch={setSearch}
+              processing={processing} onApprove={handleApprove} onReject={app => setReviewing(app)}
+              onCopy={copyToClipboard} emailLinks={emailLinks} inviteEmail={inviteEmail} />
           </div>
         )}
 
@@ -1614,7 +1275,8 @@ function AdminPanel() {
           </div>
         )}
 
-      </main>
+      </div>
+    </DashboardFrame>
 
       {/* Rejection Modal */}
       {reviewing && (
@@ -1679,29 +1341,18 @@ function AdminPanel() {
         variant="warning"
       />
 
-      {/* Logout Confirmation */}
-      <ConfirmDialog
-        open={logoutConfirm}
-        onClose={() => setLogoutConfirm(false)}
-        onConfirm={handleLogout}
-        title="Sign out of Super Admin?"
-        message="Are you sure you want to sign out? You'll need to log in again to access the admin panel."
-        confirmText="Yes, Sign Out"
-        cancelText="Stay Signed In"
-        variant="logout"
-      />
-    </div>
+    </>
   )
 }
 
 /**
  * The tab lives in the URL (?tab=…), read with useSearchParams — see
- * components/ClientBoundary.jsx. The fallback matches the page's own
- * loading skeleton, so a refresh shows one skeleton throughout.
+ * components/ClientBoundary.jsx. The fallback is the dashboard frame's
+ * skeleton (lib/dashboardSkeletons.js), as the page's own loading state.
  */
 export default function AdminPage() {
   return (
-    <ClientBoundary fallback={<PageSkeleton cards={3} maxWidth={1168} tabs={5} />}>
+    <ClientBoundary fallback={<DashboardShellSkeleton path="/admin" banner={null} />}>
       <AdminPanel />
     </ClientBoundary>
   )

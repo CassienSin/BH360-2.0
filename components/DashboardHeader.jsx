@@ -34,6 +34,7 @@ const roleConfig = {
   resident: { label: 'Resident', color: 'var(--brand-strong)' },
   official: { label: 'Barangay Official', color: '#F97316' },
   tanod: { label: 'Tanod', color: 'var(--ok)' },
+  admin: { label: 'Platform admin', color: 'var(--ink)' },
 }
 
 // One search result. A component (not a helper called during render), so

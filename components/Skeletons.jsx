@@ -277,6 +277,17 @@ export function SectionSkeleton({ kind = 'records', path }) {
     }
     if (kind === 'records') return <RowsCard rows={3} lift lines={1} />
   }
+  if (path === '/admin') {
+    if (kind === 'table') {
+      return (
+        <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <ListCardSkeleton rows={5} />
+          <RowsCard rows={3} label />
+        </div>
+      )
+    }
+    return <ListCardSkeleton rows={5} />
+  }
   if (path === '/official') {
     if (kind === 'overview') return <OfficialHomeSkeleton />
     if (kind === 'records') return <ListCardSkeleton rows={5} />
@@ -330,7 +341,7 @@ function DutySkeleton({ column }) {
    ---------------------------------------------------------------------- */
 
 // Nav items per group, as each dashboard's sidebar draws them.
-const NAV_GROUPS = { '/official': [3, 6, 3], '/resident': [2, 4, 1], '/tanod': [4] }
+const NAV_GROUPS = { '/official': [3, 6, 3], '/resident': [2, 4, 1], '/tanod': [4], '/admin': [5] }
 const TAB_ROLE = { '/resident': 'resident', '/tanod': 'tanod' }
 
 /** Mirrors components/DashboardSidebar.jsx, open and collapsed. Which one
@@ -541,7 +552,7 @@ export function DashboardShellSkeleton({ path, kind, section, sidebarOpen, banne
   const { lead, fallback, kinds: kindMap } = DASHBOARD_SKELETONS[path]
   const kinds = kind ? [kind] : dashboardKinds(path)
   const role = TAB_ROLE[path]
-  const headerColumn = path === '/official' ? 'max-w-[100rem]' : dashboardColumn(path, kind || kindMap[fallback]) || 'max-w-2xl'
+  const headerColumn = path === '/official' || path === '/admin' ? 'max-w-[100rem]' : dashboardColumn(path, kind || kindMap[fallback]) || 'max-w-2xl'
   return (
     <>
       <DashboardFrame
