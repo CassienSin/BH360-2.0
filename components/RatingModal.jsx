@@ -1,6 +1,9 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Star, X, MessageSquare, Loader2 } from 'lucide-react'
+import { Star, X, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Field } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import toast from 'react-hot-toast'
 
 // Hoisted to module scope — this was being recreated on every render,
@@ -77,8 +80,7 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
   const current = RATING_LABELS[displayRating]
 
   return (
-    <div className="fixed inset-0 z-50 sheet-overlay"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+    <div className="fixed inset-0 z-50 sheet-overlay bg-[var(--scrim)] [animation:sheetFade_.2s_ease_both]"
       onClick={() => { if (!submitting) onClose() }}>
 
       <div
@@ -87,114 +89,70 @@ export default function RatingModal({ open, onClose, onSubmit, incident }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="rating-modal-title"
-        className="sheet-panel max-w-md overflow-hidden fade-up-1 flex flex-col outline-none"
-        style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
+        className="sheet-panel relative flex max-w-md flex-col overflow-hidden bg-surface shadow-[var(--shadow-float)] outline-none [animation:sheetUp_.32s_var(--ease-sheet)_both] sm:border sm:border-line"
         onClick={e => e.stopPropagation()}>
 
-        <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-3 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 8px 24px rgba(251,191,36,0.4)' }}>
-              <Star size={22} className="text-white fill-white" />
-            </div>
-            <div>
-              <h2 id="rating-modal-title" className="text-lg font-bold text-gray-800">Rate the Service</h2>
-              <p className="text-xs text-gray-500">Help us improve barangay response</p>
-            </div>
+        <span aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
+        <div className="flex items-start gap-3 px-[18px] pt-3.5 pb-1 sm:pt-[18px]">
+          <div className="min-w-0 flex-1">
+            <h2 id="rating-modal-title" className="text-[17px] font-extrabold text-ink">Rate the response</h2>
+            <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{incident?.title}{incident?.location ? ` · ${incident.location}` : ''}</p>
           </div>
           <button onClick={onClose} disabled={submitting} aria-label="Close"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0 disabled:opacity-50">
-            <X size={16} />
+            className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong disabled:opacity-50">
+            <X size={18} strokeWidth={1.9} />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-6 space-y-5">
-          {/* Incident summary */}
-          <div className="p-3 rounded-2xl" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Resolved Incident</p>
-            <p className="text-sm font-bold text-gray-800">{incident?.title}</p>
-            <p className="text-xs text-gray-500 mt-0.5">📍 {incident?.location}</p>
-          </div>
-
+        <div className="space-y-4 overflow-y-auto px-[18px] py-4">
           {/* Star Rating */}
-          <div className="text-center">
-            <p id="rating-group-label" className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 block">
-              How was the response?
+          <div>
+            <p id="rating-group-label" className="mb-2 text-[13px] font-bold text-ink">How was the response?</p>
+            <div className="flex gap-2" role="radiogroup" aria-labelledby="rating-group-label">
+              {[1, 2, 3, 4, 5].map(star => {
+                const on = displayRating >= star
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    role="radio"
+                    aria-checked={rating === star}
+                    aria-label={`${star} star${star === 1 ? '' : 's'}: ${RATING_LABELS[star].label}`}
+                    disabled={submitting}
+                    onMouseEnter={() => setHoverRating(star)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    onFocus={() => setHoverRating(star)}
+                    onBlur={() => setHoverRating(0)}
+                    onClick={() => setRating(star)}
+                    className={`flex size-12 items-center justify-center rounded-[10px] border transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong disabled:pointer-events-none ${on ? 'border-[color-mix(in_srgb,var(--warn)_35%,var(--line))] bg-warn-soft' : 'border-line bg-surface'}`}>
+                    <Star size={24} strokeWidth={1.75} fill={on ? 'var(--warn)' : 'none'} color={on ? 'var(--warn)' : 'var(--line-strong)'} />
+                  </button>
+                )
+              })}
+            </div>
+            {/* Fixed height so the sheet doesn't jump */}
+            <p className="mt-2 h-10 text-[13px] leading-snug" aria-live="polite">
+              {displayRating > 0
+                ? <><strong className="text-ink">{current.label}.</strong> <span className="text-muted-foreground">{current.desc}</span></>
+                : <span className="text-muted-foreground">Tap a star to rate.</span>}
             </p>
-
-            <div className="flex justify-center gap-2 mb-4" role="radiogroup" aria-labelledby="rating-group-label">
-              {[1, 2, 3, 4, 5].map(star => (
-                <button
-                  key={star}
-                  type="button"
-                  role="radio"
-                  aria-checked={rating === star}
-                  aria-label={`${star} star${star === 1 ? '' : 's'} — ${RATING_LABELS[star].label}`}
-                  disabled={submitting}
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(0)}
-                  onFocus={() => setHoverRating(star)}
-                  onBlur={() => setHoverRating(0)}
-                  onClick={() => setRating(star)}
-                  className="transition-all hover:scale-110 active:scale-95 disabled:pointer-events-none"
-                  style={{ filter: displayRating >= star ? 'none' : 'grayscale(100%) opacity(0.3)' }}>
-                  <Star
-                    size={36}
-                    fill={displayRating >= star ? '#fbbf24' : 'none'}
-                    color={displayRating >= star ? '#f59e0b' : '#d1d5db'}
-                    strokeWidth={1.5}
-                  />
-                </button>
-              ))}
-            </div>
-
-            {/* Fixed-height container to prevent layout shift */}
-            <div className="h-20 flex items-center justify-center" aria-live="polite">
-              {displayRating > 0 ? (
-                <div className="text-center">
-                  <p className="text-2xl mb-1 leading-none">{current.emoji}</p>
-                  <p className="text-base font-bold" style={{ color: current.color }}>{current.label}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{current.desc}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500">Tap the stars to rate</p>
-              )}
-            </div>
           </div>
 
-          {/* Feedback */}
-          <div>
-            <label htmlFor="rating-feedback"
-              className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <MessageSquare size={11} /> Feedback <span className="text-gray-500 font-normal">(Optional)</span>
-            </label>
-            <textarea
-              id="rating-feedback"
+          <Field id="rating-feedback" label="Anything to add?" optional hint={`${feedback.length} of 300`}>
+            <Textarea
               value={feedback}
               onChange={e => setFeedback(e.target.value)}
               rows={3} maxLength={300}
               disabled={submitting}
-              placeholder="Share your experience with the response..."
-              className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none disabled:opacity-60" />
-            <p className="text-xs text-gray-500 text-right mt-1">{feedback.length}/300</p>
-          </div>
+              placeholder="What went well, or what could be better" />
+          </Field>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-          <button onClick={onClose} disabled={submitting}
-            className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-gray-50 disabled:opacity-50"
-            style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-            Skip
-          </button>
-          <button onClick={handleSubmit} disabled={submitting || rating === 0}
-            className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 8px 32px rgba(251,191,36,0.4)' }}>
-            {submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Submitting...
-              </span>
-            ) : '⭐ Submit Rating'}
-          </button>
+        <div className="flex gap-2.5 border-t border-line px-[18px] py-3">
+          <Button variant="secondary" size="lg" onClick={onClose} disabled={submitting}>Skip</Button>
+          <Button size="lg" className="flex-1" onClick={handleSubmit} disabled={submitting || rating === 0} aria-busy={submitting || undefined}>
+            {submitting ? <><Loader2 className="animate-spin" aria-hidden="true" />Sending…</> : 'Send rating'}
+          </Button>
         </div>
       </div>
     </div>

@@ -1,45 +1,28 @@
 'use client'
-import { PageHeader } from '@/components/AppUI'
-import desktop from '@/components/desktop-pages.module.css'
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { FileText, Scale, Clock, Loader2, CheckCircle, ShieldAlert, Send, ListChecks, Coins } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   DOCUMENT_TYPE_LIST, DOCUMENT_TYPES, CLASSIFICATION_LABEL,
   documentLegalBasis, workingDeadline, formatDeadline,
 } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason } from '@/lib/verification'
+import PageShell from '@/components/crafted/PageShell'
+import { PageSkeleton } from '@/components/Skeletons'
+import { Card, CardHead } from '@/components/ui/card'
+import { Field } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
 
 const PURPOSE_MIN = 5
 const PURPOSE_MAX = 200
 const NOTES_MAX = 500
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`, height: `${dot.size}px`,
-        borderRadius: '50%', background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`, top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`, filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
 
 export default function NewDocumentRequest() {
   const router = useRouter()
@@ -132,241 +115,117 @@ export default function NewDocumentRequest() {
     toast.success('Request filed')
   }
 
-  if (loadingProfile) {
+  if (loadingProfile) return <PageSkeleton cards={3} maxWidth={640} />
+
+  const days = n => `${n} working day${n === 1 ? '' : 's'}`
+
+  if (created) {
     return (
-      <div className="min-h-dvh bg-brand flex items-center justify-center">
-        <Loader2 size={30} className="animate-spin text-white" />
-      </div>
+      <PageShell title="Request filed" sub={`${profile?.barangays?.name || 'Your barangay'} · Citizen’s Charter`}
+        onBack={() => router.push('/resident?section=documents')} backLabel="Back to my documents"
+        footer={
+          <div className="flex gap-2.5">
+            <Button variant="secondary" size="lg" onClick={() => { setCreated(null); setForm({ document_type: '', purpose: '', notes: '' }) }}>Request another</Button>
+            <Button size="lg" className="flex-1" onClick={() => router.push('/resident?section=documents')}>See my documents</Button>
+          </div>
+        }>
+        <Card lift className="px-[18px] py-4">
+          <p className="text-xs font-bold tracking-[0.06em] text-muted-foreground uppercase">Your reference</p>
+          <p className="mt-1 font-mono text-[22px] font-extrabold text-brand-strong">{created.reference_code}</p>
+          <p className="mt-2 text-[13px] leading-[1.55] text-body">
+            Keep it. Under RA 11032 Sec. 10, once the deadline passes, the acknowledgement of your request carries the same force as the document itself.
+          </p>
+        </Card>
+        <Notice tone="info" title={`The barangay must act by ${formatDeadline(created.due_at)}.`}>
+          {days(created.processing_days)}, weekends and Philippine holidays not counted.
+        </Notice>
+      </PageShell>
     )
   }
 
   return (
-    <div className="min-h-dvh bg-brand relative overflow-hidden">
-      <AnimatedDots />
+    <PageShell
+      title="Request a document"
+      sub="Choose a document and tell us why"
+      onBack={() => goBack(router, '/resident?section=documents')}
+      footer={
+        <Button type="submit" form="document-form" size="lg" full disabled={!formValid || submitting || !allowed} aria-busy={submitting || undefined}>
+          {submitting ? <><Loader2 className="animate-spin" aria-hidden="true" />Filing…</> : 'Submit request'}
+        </Button>
+      }>
 
-      <PageHeader
-        title="Request a Document"
-        description={`${profile?.barangays?.name || 'Your barangay'} · Citizen’s Charter`}
-        icon={FileText}
-        onBack={() => goBack(router, '/resident?section=documents')}
-      />
+      {/* ── Verification gate ──────────────────────────────────── */}
+      {!allowed && (
+        <Notice tone="warn" title="Your account isn’t verified yet.">
+          {blockReason} A barangay certification is an official statement about who you are and where you live, so the barangay checks that first (RA 7160, Sec. 394). Reporting an incident never waits on this.
+          <button onClick={() => router.push('/resident/report')} className="mt-1.5 block text-xs font-bold text-brand-strong hover:text-brand-deep">Report an incident instead</button>
+        </Notice>
+      )}
 
-      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.documentPage}`}>
+      {/* ── The Citizen's Charter (RA 11032 Sec. 6) ────────────── */}
+      <form id="document-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <fieldset className="flex flex-col gap-2" disabled={!allowed}>
+          <legend className="sr-only">What do you need?</legend>
+          {DOCUMENT_TYPE_LIST.map((d, i) => {
+            const active = form.document_type === d.value
+            return (
+              <label key={d.value}
+                className={`flex cursor-pointer items-center gap-3 rounded-[12px] bg-surface transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-strong has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 ${active ? 'border-2 border-brand-strong px-[13px] py-[11px]' : 'border border-line px-3.5 py-3 hover:border-line-strong'} ${i === 0 ? 'shadow-[var(--shadow-lift)]' : ''}`}>
+                <input type="radio" name="document_type" value={d.value} checked={active}
+                  onChange={() => setForm(f => ({ ...f, document_type: d.value }))} className="sr-only" />
+                <span aria-hidden="true" className={`flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${active ? 'border-brand-strong' : 'border-line-strong'}`}>
+                  {active && <span className="size-2.5 rounded-full bg-brand-strong" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-extrabold text-ink">{d.label}</span>
+                  <span className="block text-[13px] leading-snug text-muted-foreground">{d.blurb}</span>
+                </span>
+                <span className="shrink-0 text-right leading-tight">
+                  <span className="block text-[15px] font-extrabold text-ink tabular-nums">{d.days}</span>
+                  <span className="block text-[11px] text-muted-foreground">working day{d.days === 1 ? '' : 's'}</span>
+                </span>
+              </label>
+            )
+          })}
+        </fieldset>
+        <Muted className="text-xs -mt-1">Each service lists its own processing time, as RA 11032 Sec. 6 requires. Fees follow your barangay’s ordinance.</Muted>
 
-        {/* ── Filed successfully ─────────────────────────────────────── */}
-        {created ? (
-          <div className="white-card p-6 fade-up text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center"
-              style={{ background: '#f0fdf4' }}>
-              <CheckCircle size={30} className="text-emerald-500" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-800">Request filed</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Keep this reference — under RA 11032 Sec. 10 the acknowledgement of your request
-              carries the same force as the document itself once the deadline passes.
-            </p>
-
-            <p className="font-mono text-lg font-black mt-4" style={{ color: 'var(--brand)' }}>
-              {created.reference_code}
-            </p>
-
-            <div className="mt-4 px-4 py-3 rounded-2xl text-left"
-              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-              <div className="flex items-start gap-2">
-                <Clock size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                <div>
-                  <p className="text-xs font-bold text-gray-800">
-                    The barangay must act by {formatDeadline(created.due_at)}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                    {created.processing_days} working day{created.processing_days === 1 ? '' : 's'},
-                    weekends and Philippine holidays excluded.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => router.push('/resident?section=documents')}
-                className="btn-primary flex-1 py-3 rounded-2xl text-white text-sm font-bold">
-                Back to dashboard
-              </button>
-              <button onClick={() => { setCreated(null); setForm({ document_type: '', purpose: '', notes: '' }) }}
-                className="px-5 py-3 rounded-2xl text-sm font-bold"
-                style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-soft)' }}>
-                Request another
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* ── Verification gate ──────────────────────────────────── */}
-            {!allowed && (
-              <div className="white-card p-5 fade-up">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: '#fffbeb' }}>
-                    <ShieldAlert size={18} className="text-amber-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="font-bold text-gray-800">Your account isn’t verified yet</h2>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{blockReason}</p>
-                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-                      A barangay certification is an official statement about who you are and where
-                      you live, so the barangay checks that first (RA 7160, Sec. 394). Reporting an
-                      incident never waits on this.
-                    </p>
-                    <button onClick={() => router.push('/resident/report')}
-                      className="mt-3 text-xs font-bold" style={{ color: 'var(--brand)' }}>
-                      Report an incident instead →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── The Citizen's Charter (RA 11032 Sec. 6) ────────────── */}
-            <form onSubmit={handleSubmit} className={`space-y-4 ${desktop.documentForm}`}>
-              <div className={`white-card p-5 fade-up ${desktop.documentTypes}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText size={15} style={{ color: 'var(--brand)' }} />
-                  <h2 className="font-bold text-gray-800 text-sm">What do you need?</h2>
-                </div>
-                <p className="text-xs text-gray-500 mb-4">
-                  Every service below lists its own processing time, as RA 11032 Sec. 6 requires.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {DOCUMENT_TYPE_LIST.map(d => {
-                    const active = form.document_type === d.value
-                    return (
-                      <button key={d.value} type="button" disabled={!allowed}
-                        onClick={() => setForm(f => ({ ...f, document_type: d.value }))}
-                        aria-pressed={active}
-                        className="text-left px-3.5 py-3 rounded-2xl transition-all disabled:opacity-40"
-                        style={{
-                          background: active ? d.bg : 'var(--app-surface)',
-                          border: `1.5px solid ${active ? d.color : 'var(--brand-soft)'}`,
-                        }}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg" aria-hidden="true">{d.icon}</span>
-                          <span className="text-xs font-bold" style={{ color: active ? d.color : '#374151' }}>
-                            {d.label}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1 leading-snug">{d.blurb}</p>
-                        <p className="text-xs font-bold mt-1.5" style={{ color: d.color }}>
-                          {d.days} working day{d.days === 1 ? '' : 's'}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* ── What the law promises for this document ──────────── */}
-              {doc && (
-                <div className={`rounded-2xl overflow-hidden fade-up ${desktop.documentGuidance}`}
-                  style={{ border: `2px solid ${doc.color}30` }} role="status" aria-live="polite">
-                  <div className="px-4 py-3 flex items-center gap-3" style={{ background: doc.bg }}>
-                    <Clock size={20} style={{ color: doc.color }} aria-hidden="true" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: doc.color }}>
-                        {CLASSIFICATION_LABEL[doc.classification]}
-                      </p>
-                      <p className="text-base font-black leading-tight" style={{ color: doc.color }}>
-                        {doc.days} working day{doc.days === 1 ? '' : 's'} maximum
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="px-4 py-3 bg-white space-y-2.5">
-                    <div className="flex items-start gap-2">
-                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-700 leading-relaxed">
-                          <strong style={{ color: 'var(--brand)' }}>{doc.law}, {doc.sections}</strong>
-                          {' — '}{doc.lawTitle}
-                        </p>
-                        {doc.alsoCited && (
-                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{doc.alsoCited}</p>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                          If the barangay neither issues nor denies this by the deadline, RA 11032
-                          Sec. 10 <strong>deems it approved</strong> — your acknowledgement receipt
-                          then has the same force as the document.
-                        </p>
-                      </div>
-                    </div>
-
-                    {previewDue && (
-                      <div className="px-3 py-2 rounded-xl flex items-start gap-2"
-                        style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-                        <Clock size={12} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                        <p className="text-xs text-gray-700 leading-relaxed">
-                          File this now and the deadline is <strong>{formatDeadline(previewDue)}</strong>
-                          {' '}— weekends and Philippine holidays are not counted.
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="flex items-start gap-2">
-                      <ListChecks size={13} className="flex-shrink-0 mt-0.5 text-gray-500" />
-                      <div>
-                        <p className="text-xs font-bold text-gray-600">Bring with you</p>
-                        <ul className="mt-0.5 space-y-0.5">
-                          {doc.requirements.map(r => (
-                            <li key={r} className="text-xs text-gray-500">• {r}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2">
-                      <Coins size={13} className="flex-shrink-0 mt-0.5 text-gray-500" />
-                      <p className="text-xs text-gray-500 leading-relaxed">{doc.feeNote}</p>
-                    </div>
-                  </div>
-                </div>
+        {/* ── What the law promises for this document ──────────── */}
+        {doc && (
+          <Card role="status" aria-live="polite">
+            <CardHead title={`${days(doc.days)} at most`} sub={CLASSIFICATION_LABEL[doc.classification]} />
+            <div className="border-t border-line px-[18px] py-3.5 space-y-2.5 text-[13px] leading-[1.55] text-body">
+              {previewDue && (
+                <p>File this now and the deadline is <strong className="text-ink">{formatDeadline(previewDue)}</strong>. Weekends and Philippine holidays are not counted.</p>
               )}
-
-              <div className={`white-card p-5 space-y-4 fade-up ${desktop.documentFields}`}>
-                <div>
-                  <label htmlFor="purpose" className="text-xs font-bold text-gray-700">
-                    What is it for? <span className="text-red-500">*</span>
-                  </label>
-                  <input id="purpose" value={form.purpose} disabled={!allowed}
-                    onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
-                    maxLength={PURPOSE_MAX}
-                    placeholder="e.g. Employment requirement at ABC Company"
-                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5 disabled:opacity-40" />
-                  <p className="text-xs text-gray-500 mt-1">
-                    {purpose.length}/{PURPOSE_MAX}
-                    {purpose.length > 0 && purpose.length < PURPOSE_MIN && ' · a little more detail, please'}
-                  </p>
-                </div>
-
-                <div>
-                  <label htmlFor="notes" className="text-xs font-bold text-gray-700">
-                    Anything else the barangay should know?
-                  </label>
-                  <textarea id="notes" value={form.notes} disabled={!allowed} rows={3}
-                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                    maxLength={NOTES_MAX}
-                    placeholder="Optional"
-                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800 mt-1.5 disabled:opacity-40" />
-                </div>
-
-                <button type="submit" disabled={!formValid || submitting || !allowed}
-                  className="btn-primary w-full py-3.5 rounded-2xl text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40">
-                  {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-                  {submitting ? 'Filing…' : 'File this request'}
-                </button>
+              <p>
+                <strong className="text-brand-strong">{doc.law}, {doc.sections}</strong> · {doc.lawTitle}.{' '}
+                If the barangay neither issues nor denies this by the deadline, RA 11032 Sec. 10 deems it approved: your acknowledgement receipt then has the same force as the document.
+              </p>
+              {doc.alsoCited && <p className="text-muted-foreground">{doc.alsoCited}</p>}
+              <div>
+                <p className="font-bold text-ink">Bring with you</p>
+                <ul className="mt-0.5 list-disc pl-5">
+                  {doc.requirements.map(r => <li key={r}>{r}</li>)}
+                </ul>
               </div>
-            </form>
-          </>
+              <p className="text-muted-foreground">{doc.feeNote}</p>
+            </div>
+          </Card>
         )}
-      </main>
-    </div>
+
+        <Field id="purpose" label="Purpose" value={form.purpose} disabled={!allowed}
+          onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
+          maxLength={PURPOSE_MAX} placeholder="e.g. Employment requirement"
+          error={purpose.length > 0 && purpose.length < PURPOSE_MIN ? 'A little more detail, please.' : undefined}
+          hint={`${purpose.length} of ${PURPOSE_MAX}`} />
+
+        <Field id="notes" label="Anything else the barangay should know?" optional>
+          <Textarea value={form.notes} disabled={!allowed} rows={3}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+            maxLength={NOTES_MAX} />
+        </Field>
+      </form>
+    </PageShell>
   )
 }

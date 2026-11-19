@@ -132,30 +132,6 @@ function RecordListSkeleton({ rows = 4 }) {
   )
 }
 
-/** A resident list (incidents, tickets, documents, blotter): the count and
- *  the section's action button, a group label, then cards. */
-function ResidentRecordListSkeleton({ rows = 3 }) {
-  // Same elements and classes as the resident sections and RecordGroup,
-  // with placeholders in place of the text, so the spacing is identical.
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between mb-2">
-        <Skeleton className="h-3 w-16 rounded-md my-0.5" />
-        <div className="h-10 w-40 rounded-[10px] bg-surface border border-line" />
-      </div>
-      <div className="flex items-center gap-2.5 mt-2 mb-0.5 px-0.5">
-        <Skeleton className="h-3 w-24 rounded-md my-0.5" />
-        <span className="flex-1 h-px bg-line" aria-hidden="true" />
-      </div>
-      <div className="@container">
-        <div className="grid gap-3 @5xl:grid-cols-2">
-          {[...Array(rows)].map((_, i) => <RecordCardSkeleton key={i} />)}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /** Announcement feed: a header card, then posts. */
 function AnnouncementsSkeleton({ rows = 2 }) {
   return (
@@ -282,6 +258,13 @@ const OVERVIEW_TILES = { '/official': 6 }
  * kind: overview | records | announcements | table | analytics | launcher | chat
  */
 export function SectionSkeleton({ kind = 'records', path }) {
+  // The resident dashboard is on the Crafted rows (components/resident).
+  if (path === '/resident') {
+    if (kind === 'overview') return <ResidentHomeSkeleton />
+    if (kind === 'records') return <RowsCard rows={4} lift progress />
+    if (kind === 'announcements') return <RowsCard rows={3} lift lines={3} />
+    if (kind === 'launcher') return <RowsCard rows={1} lift lines={3} />
+  }
   switch (kind) {
     case 'overview': return <OverviewSkeleton tiles={OVERVIEW_TILES[path] || 4} />
     case 'announcements': return <AnnouncementsSkeleton />
@@ -289,7 +272,7 @@ export function SectionSkeleton({ kind = 'records', path }) {
     case 'analytics': return <AnalyticsSkeleton />
     case 'launcher': return <LauncherSkeleton />
     case 'chat': return <ChatSkeleton />
-    default: return path === '/resident' ? <ResidentRecordListSkeleton /> : <RecordListSkeleton />
+    default: return <RecordListSkeleton />
   }
 }
 
@@ -374,7 +357,34 @@ function SidebarSkeleton({ groups }) {
 
 /** Mirrors components/DashboardHeader.jsx on its band: the same classes, so
  *  the heights match; placeholder bars where text depends on data. */
-function DashboardHeaderSkeleton({ column = '' }) {
+/** What sits on the resident band under the title, per section kind:
+ *  Home has the greeting and the first card; the record lists a switch. */
+function ResidentBandSlot({ kind }) {
+  if (kind === 'overview') {
+    return (
+      <>
+        <div className={header.customHeading}>
+          <Skeleton tone="brand" className="h-3 w-36" />
+          <Skeleton tone="brand" className="h-[30px] w-64 max-w-full mt-2 rounded-lg" />
+        </div>
+        <div className="band-slot">
+          <div className="white-card shadow-[var(--shadow-lift)] px-[18px] py-3.5 space-y-2">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-4 w-56 max-w-full" />
+            <Skeleton className="h-1 w-full mt-3" />
+          </div>
+        </div>
+      </>
+    )
+  }
+  if (kind === 'records') return <div className="band-slot"><div className="h-[42px] rounded-xl bg-[var(--onband)]" /></div>
+  return null
+}
+
+/** Mirrors components/DashboardHeader.jsx on its band: the same classes, so
+ *  the heights match; placeholder bars where text depends on data. */
+function DashboardHeaderSkeleton({ column = '', path, kind, kinds = [] }) {
+  const resident = path === '/resident'
   return (
     <header className={header.header} aria-hidden="true">
       <Band seed={2} />
@@ -388,12 +398,21 @@ function DashboardHeaderSkeleton({ column = '' }) {
           <span className={header.onband}><Bell size={16} /></span>
           <span className={`${header.deskOnly} w-[38px] h-[38px] rounded-[10px] bg-[var(--onband)]`} />
         </div>
-        <div className={header.heading}>
-          <div className="min-w-0 flex-1">
-            <Skeleton tone="brand" className="h-[30px] w-64 max-w-full rounded-lg" />
-            <Skeleton tone="brand" className="h-3.5 w-80 max-w-full mt-2.5" />
+        {!(resident && kind === 'overview') && (
+          <div className={header.heading}>
+            <div className="min-w-0 flex-1">
+              <Skeleton tone="brand" className="h-[30px] w-64 max-w-full rounded-lg" />
+              <Skeleton tone="brand" className="h-3.5 w-80 max-w-full mt-2.5" />
+            </div>
           </div>
-        </div>
+        )}
+        {resident && (kind
+          ? <ResidentBandSlot kind={kind} />
+          : kinds.map((k, i) => (
+            <div key={k} className="dash-shell-variant" data-kind={k} data-default={i === 0 ? '' : undefined}>
+              <ResidentBandSlot kind={k} />
+            </div>
+          )))}
       </div>
     </header>
   )
@@ -436,7 +455,7 @@ export function DashboardShellSkeleton({ path, kind, section, sidebarOpen, banne
         sidebarOpen={sidebarOpen}
         role="status" aria-label="Loading" aria-busy="true"
         sidebar={<SidebarSkeleton groups={NAV_GROUPS[path] || [3, 3]} />}
-        header={<DashboardHeaderSkeleton column={headerColumn} />}
+        header={<DashboardHeaderSkeleton column={headerColumn} path={path} kind={kind} kinds={kinds} />}
         tabBar={role ? <TabBar role={role} activeSection={section} /> : null}>
         <div className="mx-auto w-full max-w-[100rem]">
         {kinds.map((k, i) => (
@@ -523,13 +542,16 @@ function CardLines({ title = 'w-1/3', lines = 2, className = '' }) {
 
 /* ---- Account pages on PageShell (profile, help, settings) ---- */
 
-/** A row of placeholder text in a card: a title bar and a shorter sub bar. */
-function RowLines({ title = 'w-2/5', sub = 'w-3/5', trailing }) {
+/** A row of placeholder text in a card: a title bar and a shorter sub bar;
+ *  `lines` adds body lines, `progress` the 4-step bar of a live report. */
+function RowLines({ title = 'w-2/5', sub = 'w-3/5', trailing, lines = 0, progress = false }) {
   return (
-    <div className="flex items-center gap-3 px-3.5 sm:px-[18px] py-3">
+    <div className="flex items-start gap-3 px-3.5 sm:px-[18px] py-3">
       <div className="flex-1 space-y-2">
         <Skeleton className={`h-3.5 ${title}`} />
         {sub && <Skeleton className={`h-3 ${sub}`} />}
+        {[...Array(lines)].map((_, i) => <Skeleton key={i} className={`h-3 ${i % 2 ? 'w-4/5' : 'w-full'}`} />)}
+        {progress && <Skeleton className="h-1 w-full max-w-[268px] !mt-3" />}
       </div>
       {trailing}
     </div>
@@ -537,12 +559,32 @@ function RowLines({ title = 'w-2/5', sub = 'w-3/5', trailing }) {
 }
 
 /** A white card of rows divided by hairlines; `lift` for the first card on the band. */
-function RowsCard({ rows, lift = false, label = false, trailing }) {
+function RowsCard({ rows, lift = false, label = false, trailing, lines = 0, progress = false }) {
   return (
     <div className={`white-card overflow-hidden ${lift ? 'shadow-[var(--shadow-lift)]' : ''}`}>
       {label && <Skeleton className="h-2.5 w-24 mx-[18px] mt-4 mb-1.5" />}
       <div className="divide-y divide-line">
-        {[...Array(rows)].map((_, i) => <RowLines key={i} trailing={trailing} />)}
+        {[...Array(rows)].map((_, i) => <RowLines key={i} trailing={trailing} lines={lines} progress={progress} />)}
+      </div>
+    </div>
+  )
+}
+
+/** The resident Home body: the links card, then the hotlines grid. */
+function ResidentHomeSkeleton() {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <RowsCard rows={4} trailing={<Skeleton className="size-4" />} />
+      <div>
+        <Skeleton className="h-2.5 w-36 mb-2.5" />
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-line bg-line">
+          {[0, 1, 2].map(i => (
+            <div key={i} className={`bg-surface px-3.5 py-3 space-y-2 ${i === 2 ? 'col-span-2' : ''}`}>
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -708,27 +750,16 @@ function FactsCardSkeleton({ lines = 4 }) {
  */
 export function IncidentDetailSkeleton({ variant = 'official' }) {
   if (variant === 'resident') {
+    // app/resident/incident/[id] on the Crafted PageShell: the map on the
+    // band, the status, then the progress card.
     return (
-      <div className="min-h-dvh relative overflow-clip bg-brand" role="status" aria-label="Loading" aria-busy="true">
-        <DetailHeaderSkeleton pills={false} />
-        <main className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
-          <div className={`rounded-[10px] px-4 py-4 flex items-start gap-3 bg-white/85 ${desktop.wide}`}>
-            <Skeleton className="w-10 h-10 rounded-[10px] flex-shrink-0" />
-            <div className="flex-1 space-y-2 pt-0.5">
-              <Skeleton className="h-3.5 w-48" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-2/3 sm:hidden" />
-            </div>
-          </div>
-          <div className={`space-y-4 ${desktop.incidentMain}`}>
-            <ReportCardSkeleton />
-            <LocationCardSkeleton />
-          </div>
-          <div className={`space-y-4 ${desktop.incidentSide}`}>
-            <FactsCardSkeleton lines={5} />
-            <FactsCardSkeleton lines={3} />
-          </div>
-        </main>
+      <div role="status" aria-label="Loading" aria-busy="true">
+        <PageShell title={<Skeleton tone="brand" className="h-4 w-48 max-w-full" />} onBack={true}
+          bandContent={<div className="white-card shadow-[var(--shadow-lift)] h-[clamp(180px,26dvh,300px)]" />}>
+          <Skeleton className="h-[62px] w-full rounded-[10px]" />
+          <RowsCard rows={4} />
+          <RowsCard rows={1} lines={2} />
+        </PageShell>
         <div id="page-shell-end" hidden />
       </div>
     )
@@ -760,7 +791,34 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
 /** Ticket conversation, matching the official and resident ticket pages: the chat header (back,
  *  avatar, title and status), the message column, the composer at the
  *  bottom of the screen. */
-export function TicketDetailSkeleton() {
+export function TicketDetailSkeleton({ variant = 'official' }) {
+  if (variant === 'resident') {
+    // app/resident/ticket/[id]: the band header, the thread, the composer.
+    const runs = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5']]
+    return (
+      <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page" role="status" aria-label="Loading" aria-busy="true">
+        <div className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3" aria-hidden="true">
+          <Band extend={0} fade={56} dots={10} seed={4} />
+          <div className="relative z-[1] mx-auto flex max-w-2xl items-center gap-2.5">
+            <span className="flex size-10 items-center justify-center rounded-[10px] bg-[var(--onband)] text-white"><ArrowLeft size={18} strokeWidth={1.9} /></span>
+            <div className="flex-1 space-y-2"><Skeleton tone="brand" className="h-4 w-48 max-w-full" /><Skeleton tone="brand" className="h-3 w-36" /></div>
+          </div>
+        </div>
+        <div className="relative z-[1] mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 overflow-hidden px-4 pt-2">
+          {runs.map(([side, w], i) => (
+            <div key={i} className={`flex ${side === 'right' ? 'justify-end' : 'items-end gap-2'}`}>
+              {side === 'left' && <Skeleton className="size-8 rounded-lg flex-shrink-0" />}
+              <div className={`${w} h-14 rounded-[16px] ${side === 'right' ? 'bg-[var(--brand-soft)]' : 'border border-line bg-surface'}`} />
+            </div>
+          ))}
+        </div>
+        <div className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
+          <div className="mx-auto flex max-w-2xl gap-2"><Skeleton className="h-11 flex-1 rounded-[10px]" /><Skeleton className="size-11 rounded-[10px]" /></div>
+        </div>
+        <div id="page-shell-end" hidden />
+      </div>
+    )
+  }
   const bubbles = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5'], ['left', 'w-1/2']]
   return (
     <div className="h-dvh flex flex-col relative overflow-hidden bg-brand" role="status" aria-label="Loading" aria-busy="true">
