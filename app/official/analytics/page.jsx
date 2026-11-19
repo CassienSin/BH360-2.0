@@ -327,7 +327,7 @@ export default function AIAnalytics() {
         </Button>
       }
       band={<StatStrip stats={[
-        { label: 'Reports', value: stats.totalIncidents, note: `${stats.thisWeek} this week, ${stats.lastWeek} the week before` },
+        { label: 'Reports', value: stats.totalIncidents, note: `${stats.thisWeek} this week, ${stats.lastWeek} last week` },
         { label: 'Avg. response', value: formatHours(stats.avgResponseHours), note: 'to the first response' },
         { label: 'Resolved', value: stats.resolvedIncidents, tone: stats.resolvedIncidents ? 'ok' : 'default', note: stats.totalIncidents ? `${stats.resolutionRate}% of reports` : 'no reports yet' },
         { label: 'Rating', value: stats.avgRating ? `${stats.avgRating} / 5` : '—', note: 'from residents' },
@@ -393,10 +393,10 @@ export default function AIAnalytics() {
                 return (
                   <div
                     key={t.id}
-                    className="flex items-center gap-3 px-3 py-3 rounded-[12px] transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-2.5 px-3 py-3 rounded-[12px] transition-colors hover:bg-gray-50 sm:gap-3"
                     style={{ background: idx < 3 ? `linear-gradient(90deg, ${['#fff7ed', 'var(--brand-soft)', '#fffbeb'][idx]}, transparent)` : '#fafafa' }}
                   >
-                    <div className="flex items-center gap-2 flex-shrink-0 w-12">
+                    <div className="flex items-center gap-2 flex-shrink-0 w-7 sm:w-12">
                       {medal ? <span className="text-2xl" aria-hidden="true">{medal}</span> : <span className="text-sm font-bold text-muted-foreground">#{idx + 1}</span>}
                     </div>
 
@@ -412,9 +412,9 @@ export default function AIAnalytics() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-ink truncate">{t.name}</p>
-                      <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className="text-muted-foreground">{t.resolved}/{t.assigned} resolved</span>
+                      <p className="line-clamp-2 text-sm font-bold text-ink sm:truncate">{t.name}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs">
+                        <span className="whitespace-nowrap text-muted-foreground">{t.resolved}/{t.assigned} resolved</span>
                         {t.avgRating > 0 && (
                           <span className="flex items-center gap-0.5 text-amber-600 font-semibold">
                             <Star size={10} fill="#f59e0b" /> {t.avgRating.toFixed(1)}
