@@ -26,6 +26,7 @@ import header from '@/components/dashboard-header.module.css'
 import Band from '@/components/crafted/Band'
 import DashboardFrame from '@/components/crafted/DashboardFrame'
 import TabBar from '@/components/crafted/TabBar'
+import PageShell from '@/components/crafted/PageShell'
 
 /** One shimmering block. tone="brand" for use on the purple background. */
 export function Skeleton({ className = '', style, tone }) {
@@ -520,67 +521,88 @@ function CardLines({ title = 'w-1/3', lines = 2, className = '' }) {
   )
 }
 
-/** app/profile: the profile card, the tab row, the open tab's card. */
-function ProfileBody() {
+/* ---- Account pages on PageShell (profile, help, settings) ---- */
+
+/** A row of placeholder text in a card: a title bar and a shorter sub bar. */
+function RowLines({ title = 'w-2/5', sub = 'w-3/5', trailing }) {
   return (
-    <main className={`relative z-10 max-w-3xl mx-auto px-4 py-8 space-y-6 ${desktop.profilePage}`}>
-      <div className={`white-card overflow-hidden ${desktop.profileCard}`}>
-        <Skeleton className="h-24 w-full rounded-none" />
-        <div className="px-6 pb-6 -mt-12 relative">
-          <div className="w-20 h-20 rounded-[14px] bg-white p-1"><Skeleton className="w-full h-full rounded-[20px]" /></div>
-          <Skeleton className="h-6 w-48 mt-4" />
-          <Skeleton className="h-5 w-28 mt-2 rounded-full" />
-          <Skeleton className="h-3 w-full mt-4" />
-          <Skeleton className="h-3 w-2/3 mt-2" />
-        </div>
+    <div className="flex items-center gap-3 px-3.5 sm:px-[18px] py-3">
+      <div className="flex-1 space-y-2">
+        <Skeleton className={`h-3.5 ${title}`} />
+        {sub && <Skeleton className={`h-3 ${sub}`} />}
       </div>
-      <div className={`flex gap-2 pb-1 ${desktop.profileTabs}`}>
-        {[78, 102, 105].map((w, i) => <Skeleton key={i} tone="brand" className="h-9 rounded-[10px]" style={{ width: w }} />)}
-      </div>
-      <CardLines title="w-40" lines={4} />
-    </main>
+      {trailing}
+    </div>
   )
 }
 
-/** app/help: hero, the tab list, the FAQ. */
-function HelpBody() {
+/** A white card of rows divided by hairlines; `lift` for the first card on the band. */
+function RowsCard({ rows, lift = false, label = false, trailing }) {
   return (
-    <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.helpPage}`}>
-      <div className={`glass-card p-5 flex items-center gap-3 ${desktop.wide}`}>
-        <Skeleton tone="brand" className="w-12 h-12 rounded-[10px] flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <Skeleton tone="brand" className="h-4 w-44" />
-          <Skeleton tone="brand" className="h-3 w-64 max-w-full" />
-        </div>
+    <div className={`white-card overflow-hidden ${lift ? 'shadow-[var(--shadow-lift)]' : ''}`}>
+      {label && <Skeleton className="h-2.5 w-24 mx-[18px] mt-4 mb-1.5" />}
+      <div className="divide-y divide-line">
+        {[...Array(rows)].map((_, i) => <RowLines key={i} trailing={trailing} />)}
       </div>
-      <div className={`white-card p-2 ${desktop.helpTabs}`}>
-        <div className="grid grid-cols-4 lg:grid-cols-1 gap-1 lg:gap-1.5">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-[60px] lg:h-[44px] rounded-xl" />)}
-        </div>
-      </div>
-      <div className="space-y-3">
-        <div className="white-card p-4 h-[76px] flex items-center"><Skeleton className="h-11 w-full rounded-[10px]" /></div>
-        <div className={`space-y-2 ${desktop.faqGrid}`}>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="white-card px-4 h-[52px] flex items-center"><Skeleton className="h-3.5 w-3/4" /></div>
-          ))}
-        </div>
-      </div>
-    </main>
+    </div>
   )
 }
 
-/** app/settings: five setting cards (three columns on desktop). */
-function SettingsBody() {
+/** The segmented control on the band (three or four items). */
+function BandSegmented({ items }) {
   return (
-    <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
-      <CardLines title="w-28" lines={8} />
-      <CardLines title="w-24" lines={3} />
-      <CardLines title="w-28" lines={1} />
-      <CardLines title="w-24" lines={3} />
-      <CardLines title="w-36" lines={5} />
-      <div className="h-[88px]" />
-    </main>
+    <div className="flex gap-1 rounded-xl bg-[var(--onband)] p-1">
+      {[...Array(items)].map((_, i) => <div key={i} className={`h-8 flex-1 rounded-[9px] ${i === 0 ? 'bg-white' : ''}`} />)}
+    </div>
+  )
+}
+
+/** app/profile: avatar, name and tag on the band, the sections, the details card and links. */
+function ProfileShellSkeleton({ header }) {
+  return (
+    <PageShell title={header.title} onBack={true}
+      bandContent={
+        <>
+          <div className="flex items-center gap-3.5">
+            <div className="size-16 rounded-[14px] bg-white" />
+            <div className="space-y-2">
+              <Skeleton tone="brand" className="h-5 w-44" />
+              <Skeleton tone="brand" className="h-[22px] w-28" />
+            </div>
+          </div>
+          <BandSegmented items={3} />
+        </>
+      }>
+      <RowsCard rows={5} lift />
+      <RowsCard rows={3} trailing={<Skeleton className="size-4" />} />
+    </PageShell>
+  )
+}
+
+/** app/help: the sections on the band, search, the questions, "Still stuck?". */
+function HelpShellSkeleton({ header }) {
+  return (
+    <PageShell title={header.title} sub={header.description} subOnDesktop onBack={true} bandContent={<BandSegmented items={4} />}>
+      <div className="h-[48px] rounded-[10px] border border-line bg-surface shadow-[var(--shadow-lift)]" />
+      <RowsCard rows={5} label trailing={<Skeleton className="size-4" />} />
+      <RowsCard rows={3} />
+    </PageShell>
+  )
+}
+
+/** app/settings: notifications with toggles, appearance, install, account. */
+function SettingsShellSkeleton({ header }) {
+  return (
+    <PageShell title={header.title} sub={header.description} subOnDesktop onBack={true}
+      actions={<div className="h-[34px] w-16 rounded-[10px] bg-white" />}>
+      <RowsCard rows={4} lift label trailing={<Skeleton className="h-[26px] w-11 rounded-full" />} />
+      <div className="white-card px-[18px] py-4 space-y-3">
+        <Skeleton className="h-2.5 w-24" />
+        <Skeleton className="h-3.5 w-20" />
+        <Skeleton className="h-10 w-full rounded-xl" />
+      </div>
+      <RowsCard rows={3} label />
+    </PageShell>
   )
 }
 
@@ -591,11 +613,19 @@ function SettingsBody() {
  * of cards (optionally under a row of `tabs`).
  */
 export function PageSkeleton({ header = {}, layout, cards = 3, maxWidth = 768, tabs = 0 }) {
-  let body
-  if (layout === 'profile') body = <ProfileBody />
-  else if (layout === 'help') body = <HelpBody />
-  else if (layout === 'settings') body = <SettingsBody />
-  else body = (
+  // The account pages are on the Crafted PageShell: their skeletons are too.
+  const Shell = { profile: ProfileShellSkeleton, help: HelpShellSkeleton, settings: SettingsShellSkeleton }[layout]
+  if (Shell) {
+    return (
+      <div role="status" aria-label="Loading" aria-busy="true">
+        <Shell header={header} />
+        {/* End of the static skeleton: the boot script holds the first paint
+            until the browser has parsed this far (lib/dashboardSkeletons.js). */}
+        <div id="page-shell-end" hidden />
+      </div>
+    )
+  }
+  const body = (
     <div className="mx-auto p-4 sm:p-6 space-y-4" style={{ maxWidth }}>
       {tabs > 0 && (
         <div className="flex gap-2">

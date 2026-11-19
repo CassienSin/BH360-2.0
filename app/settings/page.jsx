@@ -1,65 +1,24 @@
 'use client'
 import { PageSkeleton } from '@/components/Skeletons'
 import { PAGE_HEADERS } from '@/lib/pageHeaders'
-import { PageHeader, AppButton } from '@/components/AppUI'
-import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Bell, Globe, Shield, Download, Smartphone, CheckCircle, AlertTriangle, Save, Loader2, Lock } from 'lucide-react'
-import Image from 'next/image'
+import { Download, Loader2, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { isSupported, getPermission, requestPermission } from '@/lib/notifications'
 import { pushSupport, isSubscribed, subscribeToPush } from '@/lib/push'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
-
-// Hoisted out of the page component and given switch semantics so screen
-// readers announce it as an on/off control rather than a plain button.
-const Toggle = ({ enabled, onChange, label, desc }) => (
-  <button onClick={() => onChange(!enabled)}
-    role="switch"
-    aria-checked={enabled}
-    className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
-    <div className="flex-1 text-left min-w-0">
-      <p className="text-sm font-bold text-gray-800">{label}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
-    </div>
-    <div className="w-10 h-6 rounded-full relative flex-shrink-0 transition-colors"
-      style={{ background: enabled ? 'var(--brand)' : '#e5e7eb' }}>
-      <div className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
-        style={{ left: enabled ? '20px' : '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }} />
-    </div>
-  </button>
-)
+import PageShell from '@/components/crafted/PageShell'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Toggle } from '@/components/ui/toggle'
+import { Segmented } from '@/components/ui/segmented'
+import { Button } from '@/components/ui/button'
+import { Notice } from '@/components/ui/notice'
+import { SectionLabel, Muted } from '@/components/ui/text'
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -256,243 +215,105 @@ export default function SettingsPage() {
 
   if (loading) return <PageSkeleton layout="settings" header={{ ...PAGE_HEADERS.settings, actions: true }} />
 
+  const permission = notificationPermission === 'granted'
+    ? { tone: 'ok', title: 'Notifications are on for this device.', text: 'Alerts reach you even with the app closed.' }
+    : notificationPermission === 'denied'
+      ? { tone: 'danger', title: 'Notifications are blocked.', text: 'Allow them for this site in your browser settings.' }
+      : { tone: 'warn', title: 'Notifications are off for this device.', text: 'Turn them on to hear about your reports right away.' }
+
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-      </div>
+    <PageShell
+      title={PAGE_HEADERS.settings.title}
+      sub={PAGE_HEADERS.settings.description}
+      subOnDesktop
+      onBack={() => goBack(router, '/')}
+      actions={(
+        <Button variant="white" size="sm" onClick={saveSettings} disabled={!dirty || saving} aria-busy={saving || undefined}>
+          {saving ? <><Loader2 className="animate-spin" aria-hidden="true" />Saving…</> : dirty ? 'Save' : 'Saved'}
+        </Button>
+      )}>
 
-      <PageHeader
-        {...PAGE_HEADERS.settings}
-        onBack={() => goBack(router, '/')}
-        actions={(
-          <AppButton onClick={saveSettings} disabled={!dirty} busy={saving} busyLabel="Saving…">
-            <Save size={15} aria-hidden="true" />
-            {dirty ? 'Save changes' : 'Saved'}
-          </AppButton>
-        )}
-      />
-
-      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.settingsPage}`}>
-
-        {/* Notifications */}
-        <div className="white-card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'var(--brand-soft)' }}>
-              <Bell size={20} style={{ color: 'var(--brand)' }} />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-800">Notifications</h3>
-              <p className="text-xs text-gray-500">Choose what you want to be notified about</p>
-            </div>
-          </div>
-
-          {/* Browser permission status */}
-          <div className="p-3 rounded-2xl mb-3"
-            style={{
-              background: notificationPermission === 'granted' ? '#f0fdf4' : notificationPermission === 'denied' ? '#fef2f2' : '#fffbeb',
-              border: `1px solid ${notificationPermission === 'granted' ? '#dcfce7' : notificationPermission === 'denied' ? '#fecaca' : '#fef3c7'}`,
-            }}>
-            <div className="flex items-start gap-2">
-              {notificationPermission === 'granted' ? (
-                <CheckCircle size={14} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-              ) : (
-                <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
-              )}
+      {/* Notifications */}
+      <Card lift>
+        <SectionLabel as="h2" className="px-[18px] pt-3.5 mb-1">Notifications</SectionLabel>
+        <Notice tone={permission.tone} title={permission.title} className="mx-[18px] mt-1 mb-2">
+          {permission.text}
+          {notificationPermission === 'default' && (
+            <span className="block mt-2"><Button size="sm" onClick={enableNotifications}>Turn on notifications</Button></span>
+          )}
+          {notificationPermission === 'granted' && pushReady && (
+            <span className="block mt-2">
+              <Button size="sm" variant="secondary" onClick={sendTestPush} disabled={testing} aria-busy={testing || undefined}>
+                {testing ? 'Sending…' : 'Send a test notification'}
+              </Button>
+            </span>
+          )}
+        </Notice>
+        <Rows>
+          {[
+            { key: 'incidents', label: 'Report updates', desc: 'New reports, assignments and status changes' },
+            { key: 'tickets', label: 'Ticket replies', desc: 'When someone answers your ticket' },
+            { key: 'announcements', label: 'Announcements', desc: 'News and events from the barangay' },
+            { key: 'sounds', label: 'Sounds', desc: 'Play a sound for important alerts' },
+          ].map(row => (
+            <Row key={row.key} className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold"
-                  style={{ color: notificationPermission === 'granted' ? '#16a34a' : notificationPermission === 'denied' ? '#dc2626' : '#d97706' }}>
-                  Browser Notifications: {notificationPermission === 'granted' ? 'Enabled' : notificationPermission === 'denied' ? 'Blocked' : 'Not enabled'}
-                </p>
-                <p className="text-xs mt-0.5"
-                  style={{ color: notificationPermission === 'granted' ? '#15803d' : notificationPermission === 'denied' ? '#991b1b' : '#92400e' }}>
-                  {notificationPermission === 'granted' ? "You'll receive push notifications" :
-                    notificationPermission === 'denied' ? 'Enable in browser settings' :
-                      'Click to allow notifications'}
-                </p>
-                {notificationPermission === 'default' && (
-                  <button onClick={enableNotifications}
-                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg text-white"
-                    style={{ background: 'var(--brand)' }}>
-                    Enable Notifications
-                  </button>
-                )}
-                {notificationPermission === 'granted' && pushReady && (
-                  <button onClick={sendTestPush} disabled={testing}
-                    className="mt-2 text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-60"
-                    style={{ background: 'white', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                    {testing ? 'Sending…' : 'Send test notification'}
-                  </button>
-                )}
+                <p className="text-sm font-bold text-ink">{row.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{row.desc}</p>
               </div>
-            </div>
-          </div>
+              <Toggle label={row.label} checked={!!prefs[row.key]} onCheckedChange={v => updatePrefs({ ...prefs, [row.key]: v })} />
+            </Row>
+          ))}
+        </Rows>
+      </Card>
 
-          <div className="space-y-1">
-            <Toggle
-              enabled={prefs.incidents}
-              onChange={v => updatePrefs({ ...prefs, incidents: v })}
-              label="Incident Updates"
-              desc="New incidents, assignments, and status changes"
-            />
-            <Toggle
-              enabled={prefs.tickets}
-              onChange={v => updatePrefs({ ...prefs, tickets: v })}
-              label="Ticket Messages"
-              desc="New replies and status updates on tickets"
-            />
-            <Toggle
-              enabled={prefs.announcements}
-              onChange={v => updatePrefs({ ...prefs, announcements: v })}
-              label="Announcements"
-              desc="New community broadcasts"
-            />
-            <Toggle
-              enabled={prefs.sounds}
-              onChange={v => updatePrefs({ ...prefs, sounds: v })}
-              label="Sound Effects"
-              desc="Play sounds for important alerts"
-            />
-          </div>
-        </div>
+      {/* Appearance: language (the theme choice comes with the dark-mode pass) */}
+      <Card className="px-[18px] py-3.5">
+        <SectionLabel as="h2">Appearance</SectionLabel>
+        <p id="language-label" className="text-sm font-bold text-ink mb-2">Language</p>
+        <Segmented label="Language" full value={language} onChange={updateLanguage}
+          items={[{ value: 'en', label: 'English' }, { value: 'tl', label: 'Tagalog' }]} />
+        <p className="text-xs text-muted-foreground mt-2">Your choice is saved. The app shows English for now.</p>
+      </Card>
 
-        {/* Language */}
-        <div className="white-card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#f0fdf4' }}>
-              <Globe size={20} className="text-emerald-500" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-800">Language</h3>
-              <p className="text-xs text-gray-500">Choose your preferred language</p>
-            </div>
-          </div>
+      {/* Install */}
+      <Card className="px-[18px] py-3.5">
+        <SectionLabel as="h2">Install as an app</SectionLabel>
+        <ul className="space-y-1.5 text-[13px] leading-[1.55] text-body">
+          <li><strong className="text-ink">iPhone:</strong> tap Share, then “Add to Home Screen”.</li>
+          <li><strong className="text-ink">Android:</strong> tap the menu (⋮), then “Install app”.</li>
+          <li><strong className="text-ink">Computer:</strong> use the install icon in the address bar.</li>
+        </ul>
+      </Card>
 
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { value: 'en', label: 'English', flag: '🇺🇸' },
-              { value: 'tl', label: 'Tagalog', flag: '🇵🇭' },
-            ].map(lang => (
-              <button key={lang.value} onClick={() => updateLanguage(lang.value)}
-                aria-pressed={language === lang.value}
-                className="p-3 rounded-2xl transition-all hover:scale-[1.02]"
-                style={{
-                  background: language === lang.value ? 'var(--brand-soft)' : 'var(--app-surface)',
-                  border: `2px solid ${language === lang.value ? 'var(--brand)' : 'var(--brand-soft)'}`,
-                }}>
-                <p className="text-2xl mb-1" aria-hidden="true">{lang.flag}</p>
-                <p className="text-sm font-bold" style={{ color: language === lang.value ? 'var(--brand)' : '#374151' }}>
-                  {lang.label}
-                </p>
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
-            <AlertTriangle size={11} /> Language switching coming soon — your preference is saved
-          </p>
-        </div>
-
-        {/* PWA Install */}
-        <div className="white-card p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#fff7ed' }}>
-              <Smartphone size={20} className="text-orange-500" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-gray-800">Install as App</h3>
-              <p className="text-xs text-gray-500">Add BarangayHub 360 to your home screen</p>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 leading-relaxed">
-            On <strong>iPhone</strong>: Tap Share → &quot;Add to Home Screen&quot;<br />
-            On <strong>Android</strong>: Tap menu (⋮) → &quot;Install app&quot;<br />
-            On <strong>Desktop</strong>: Look for the install icon in your address bar
-          </p>
-        </div>
-
-        {/* Privacy & Data */}
-        <div className="white-card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#eff6ff' }}>
-              <Shield size={20} className="text-blue-500" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-gray-800">Privacy & Data</h3>
-              <p className="text-xs text-gray-500">Manage your personal data</p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <button onClick={downloadMyData} disabled={exporting}
-              className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50 disabled:opacity-60">
-              <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                {exporting
-                  ? <Loader2 size={16} className="text-blue-500 flex-shrink-0 animate-spin" />
-                  : <Download size={16} className="text-blue-500 flex-shrink-0" />}
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Download My Data</p>
-                  <p className="text-xs text-gray-500">Export all your data as JSON</p>
-                </div>
-              </div>
-            </button>
-
-            <button onClick={() => router.push('/profile')}
-              className="w-full flex items-center justify-between gap-3 p-3 rounded-2xl transition-all hover:bg-gray-50">
-              <div className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                <Lock size={16} className="text-gray-500 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-bold text-gray-800">Change Password</p>
-                  <p className="text-xs text-gray-500">Update via your profile page</p>
-                </div>
-              </div>
-              <ArrowLeft size={14} className="text-gray-500 rotate-180" />
-            </button>
-          </div>
-        </div>
-
-        {/* Account Status / Deactivation */}
-        <div className="rounded-3xl p-5"
-          style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#fef3c7' }}>
-              <AlertTriangle size={20} className="text-amber-600" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-amber-900">Account Management</h3>
-              <p className="text-xs text-amber-700">Pause or deactivate your account</p>
-            </div>
-          </div>
-
-          <div className="p-3 rounded-2xl mb-3" style={{ background: 'rgba(255,255,255,0.6)' }}>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              <strong>What deactivation means:</strong> Your account will be marked as inactive. You won&apos;t be able to sign in, and your profile won&apos;t appear in user lists. Your data (incidents, tickets, ratings) stays preserved.
-            </p>
-            <p className="text-xs text-amber-700 mt-2 leading-relaxed">
-              💡 Want it permanently deleted? Contact support via Help & Support — we&apos;ll erase everything within 7 days.
-            </p>
-          </div>
-
-          <button onClick={() => setDeleteConfirm(true)}
-            className="w-full flex items-center justify-center gap-2 p-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', boxShadow: '0 4px 16px rgba(245,158,11,0.3)' }}>
-            <Lock size={14} /> Deactivate My Account
-          </button>
-        </div>
-
-        {/* App info */}
-        <div className="text-center py-4">
-          <Image src="/logo.png" alt="BH360" width={40} height={40} className="object-contain mx-auto mb-2 opacity-50" />
-          <p className="text-xs text-white opacity-60">BarangayHub 360</p>
-          <p className="text-xs text-white opacity-40">Version 1.0.0</p>
-        </div>
-      </main>
+      {/* Account */}
+      <Card>
+        <SectionLabel as="h2" className="px-[18px] pt-3.5 mb-1">Account</SectionLabel>
+        <Rows>
+          <Row as="button" interactive onClick={() => router.push('/profile')} className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-ink">Change password</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">On your profile page</span>
+            </span>
+            <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+          </Row>
+          <Row as="button" interactive onClick={downloadMyData} disabled={exporting} className="flex items-center gap-3 disabled:opacity-60">
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-ink">Download my data</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">Your profile, reports and tickets as a JSON file</span>
+            </span>
+            {exporting ? <Loader2 size={16} className="animate-spin text-muted-foreground" aria-hidden="true" /> : <Download size={16} className="text-muted-foreground" aria-hidden="true" />}
+          </Row>
+          <Row as="button" interactive onClick={() => setDeleteConfirm(true)} className="flex items-center gap-3">
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold text-danger">Deactivate my account</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">You can’t sign in after this. Your reports and tickets are kept.</span>
+            </span>
+            <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+          </Row>
+        </Rows>
+      </Card>
+      <Muted className="text-center text-xs">Want your data deleted for good? Ask through Help. BarangayHub 360 · version 1.0.0</Muted>
 
       <ConfirmDialog
         open={deleteConfirm}
@@ -504,6 +325,6 @@ export default function SettingsPage() {
         cancelText="Keep Active"
         variant="warning"
       />
-    </div>
+    </PageShell>
   )
 }

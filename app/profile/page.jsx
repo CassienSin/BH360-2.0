@@ -1,8 +1,7 @@
 'use client'
-import { PageHeader } from '@/components/AppUI'
-import desktop from '@/components/desktop-pages.module.css'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { loginHref } from '@/lib/loginRedirect'
 import { PageSkeleton } from '@/components/Skeletons'
 import ClientBoundary from '@/components/ClientBoundary'
@@ -10,36 +9,24 @@ import { PAGE_HEADERS } from '@/lib/pageHeaders'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
-import { User, Phone, MapPin, Camera, Save, Lock, AlertTriangle, FileText, CheckCircle, Bell, Loader2, Edit3, X, Activity, Award, Mail, Eye, EyeOff, Check } from 'lucide-react'
+import { Phone, Camera, Lock, Loader2, Pencil, Eye, EyeOff, Check, ChevronRight, Settings, HelpCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-
-const dots = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }}>
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-  </div>
-)
+import { isVerified, verificationStyle } from '@/lib/verification'
+import { CategoryIcon, categoryColor } from '@/lib/categoryIcons'
+import PageShell from '@/components/crafted/PageShell'
+import { TicketsIcon, AnnouncementsIcon } from '@/components/icons/BhIcons'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row, RowTitle } from '@/components/ui/table'
+import { Field } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Segmented } from '@/components/ui/segmented'
+import { StatStrip } from '@/components/ui/stat-strip'
+import { Status } from '@/components/ui/tag'
+import { Muted } from '@/components/ui/text'
+import { initials } from '@/components/ui/avatar'
 
 const EXT_BY_MIME = {
   'image/jpeg': 'jpg',
@@ -51,10 +38,10 @@ const EXT_BY_MIME = {
 }
 
 const roleConfig = {
-  resident: { label: 'Resident', color: '#5B54E8', bg: '#f0effe', gradient: 'linear-gradient(135deg, #5B54E8, #7C75F0)' },
-  official: { label: 'Barangay Official', color: '#f97316', bg: '#fff7ed', gradient: 'linear-gradient(135deg, #f97316, #ea580c)' },
-  tanod: { label: 'Tanod', color: '#22c55e', bg: '#f0fdf4', gradient: 'linear-gradient(135deg, #22c55e, #16a34a)' },
-  super_admin: { label: 'Super Admin', color: '#1f2937', bg: '#f3f4f6', gradient: 'linear-gradient(135deg, #1f2937, #4b5563)' },
+  resident: { label: 'Resident' },
+  official: { label: 'Barangay official' },
+  tanod: { label: 'Tanod' },
+  super_admin: { label: 'Super admin' },
 }
 
 const PROFILE_TABS = ['info', 'activity', 'security']
@@ -345,407 +332,217 @@ function ProfilePage() {
 
   if (loading) return <PageSkeleton layout="profile" header={PAGE_HEADERS.profile} />
 
+  // On the band: the role, and for residents whether they're verified.
+  const roleTag = profile?.role === 'resident' && !profile?.is_super_admin
+    ? (isVerified(profile) ? 'Verified resident' : verificationStyle(profile?.verification_status).label)
+    : rc.label
+  const cancelEdit = () => { setEditing(false); setForm({ full_name: profile.full_name, phone: profile.phone || '', address: profile.address || '' }) }
+  const place = profile?.barangays ? [profile.barangays.name, profile.barangays.city, profile.barangays.province].filter(Boolean).join(', ') : null
+
+  const statusTone = { pending: 'warn', open: 'warn', assigned: 'info', in_progress: 'info', resolved: 'ok', closed: 'quiet' }
+  const statusText = s => (s || '').replace('_', ' ').replace(/^./, c => c.toUpperCase())
+
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-        <div className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-      </div>
-
-      <PageHeader
-        {...PAGE_HEADERS.profile}
-        onBack={() => router.push(getDashboardPath())}
-        backLabel="Back to dashboard"
-      />
-
-      <main className={`relative z-10 max-w-3xl mx-auto px-4 py-8 space-y-6 ${desktop.profilePage}`}>
-
-        {/* Profile Card */}
-        <div className={`white-card overflow-hidden ${desktop.profileCard}`}>
-          {/* Cover gradient */}
-          <div className="h-24 relative" style={{ background: rc.gradient }}>
-            <div className="absolute inset-0 opacity-30"
-              style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-          </div>
-
-          <div className="px-6 pb-6 -mt-12 relative">
-            <div className="flex items-end justify-between gap-4 flex-wrap">
-              {/* Avatar */}
-              <div className="relative group">
-                <div className="w-24 h-24 rounded-3xl flex items-center justify-center text-2xl font-bold text-white border-4 border-white overflow-hidden"
-                  style={{ background: rc.gradient, boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
-                  {profile?.avatar_url ? (
-                    <img src={profile.avatar_url} alt={profile?.full_name || 'Avatar'} className="w-full h-full object-cover" />
-                  ) : (
-                    profile?.full_name?.[0]?.toUpperCase()
-                  )}
-                </div>
-
-                {/* Hover overlay (desktop) */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  aria-label="Change avatar"
-                  className="absolute inset-0 rounded-3xl bg-black/0 hover:bg-black/40 transition-colors flex items-center justify-center">
-                  {uploadingAvatar ? (
-                    <Loader2 size={20} className="animate-spin text-white" />
-                  ) : (
-                    <Camera size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                  )}
-                </button>
-
-                {/* Always-visible camera badge — on phones there's no hover,
-                    so the overlay above was invisible and users had no clue
-                    the avatar was tappable. */}
-                {!uploadingAvatar && (
-                  <button onClick={() => fileInputRef.current?.click()}
-                    aria-label="Change avatar"
-                    className="absolute -bottom-1.5 -right-1.5 w-8 h-8 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-                    style={{ background: 'white', border: '2px solid var(--brand-soft)' }}>
-                    <Camera size={13} style={{ color: 'var(--brand)' }} />
-                  </button>
-                )}
-
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-
-                {/* Remove button */}
-                {profile?.avatar_url && !uploadingAvatar && (
-                  <button onClick={handleRemoveAvatar} aria-label="Remove avatar"
-                    className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
-                    title="Remove avatar">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                {!editing ? (
-                  <button onClick={() => setEditing(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                    <Edit3 size={12} /> Edit Profile
-                  </button>
-                ) : (
-                  <>
-                    <button onClick={() => { setEditing(false); setForm({ full_name: profile.full_name, phone: profile.phone || '', address: profile.address || '' }) }}
-                      disabled={saving}
-                      className="px-4 py-2 rounded-xl text-xs font-bold transition-colors hover:bg-gray-100"
-                      style={{ color: '#6b7280', border: '1px solid #e5e7eb' }}>
-                      Cancel
-                    </button>
-                    <button onClick={handleSave} disabled={saving}
-                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-60"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
-                      {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                      {saving ? 'Saving...' : 'Save'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-2xl font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }}>{profile?.full_name}</h2>
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                  style={{ background: rc.bg, color: rc.color }}>
-                  {rc.label}
-                </span>
-              </div>
-              {profile?.barangays && (
-                <p className="text-sm text-gray-500 mt-1">📍 {profile.barangays.name}, {profile.barangays.city}, {profile.barangays.province}</p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">Member since {fullDate(profile?.created_at)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className={`flex gap-2 overflow-x-auto pb-1 ${desktop.profileTabs}`}>
-          {[
-            { value: 'info', label: 'Info', icon: User },
-            { value: 'activity', label: 'Activity', icon: Activity },
-            { value: 'security', label: 'Security', icon: Lock },
-          ].map(({ value, label, icon: Icon }) => (
-            <button key={value} onClick={() => setActiveTab(value)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all whitespace-nowrap"
-              style={{
-                background: activeTab === value ? 'white' : 'rgba(255,255,255,0.15)',
-                color: activeTab === value ? 'var(--brand)' : 'white',
-                boxShadow: activeTab === value ? '0 4px 16px rgba(91,84,232,0.15)' : 'none',
-              }}>
-              <Icon size={13} /> {label}
-            </button>
-          ))}
-        </div>
-
-        {/* INFO TAB */}
-        {activeTab === 'info' && (
-          <div className={`white-card p-6 ${tabEnter}`}>
-            <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <User size={14} style={{ color: 'var(--brand)' }} /> Personal Information
-            </h3>
-
-            <div className={`space-y-4 ${desktop.personalFields}`}>
-              {/* Email — read-only; it's the login identity */}
-              <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Email</label>
-                <p className="text-sm text-gray-800 font-medium px-1 flex items-center gap-2">
-                  <Mail size={13} className="text-gray-500" /> {email || '—'}
-                </p>
-              </div>
-
-              {/* Name */}
-              <div>
-                <label htmlFor="profile-name" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Full Name</label>
-                {editing ? (
-                  <div className="relative">
-                    <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input id="profile-name" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })}
-                      maxLength={100} autoComplete="name"
-                      className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
-                      placeholder="Your full name" />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.full_name || '—'}</p>
-                )}
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label htmlFor="profile-phone" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Phone Number</label>
-                {editing ? (
-                  <div className="relative">
-                    <Phone size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input id="profile-phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-                      maxLength={11} autoComplete="tel-national" inputMode="numeric"
-                      className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
-                      placeholder="09xxxxxxxxx" />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.phone || <span className="text-gray-500 italic">Not provided</span>}</p>
-                )}
-              </div>
-
-              {/* Address */}
-              <div>
-                <label htmlFor="profile-address" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Address</label>
-                {editing ? (
-                  <div className="relative">
-                    <MapPin size={14} className="absolute left-3.5 top-3.5 text-gray-500" />
-                    <textarea id="profile-address" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
-                      rows={2} maxLength={200} autoComplete="street-address"
-                      className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800 resize-none"
-                      placeholder="Sitio, Street, etc." />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-800 font-medium px-1">{profile?.address || <span className="text-gray-500 italic">Not provided</span>}</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ACTIVITY TAB */}
-        {activeTab === 'activity' && (
-          <div className={`space-y-4 ${tabEnter}`}>
-            {/* Activity stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {profile?.role === 'resident' && [
-                { label: 'My Incidents', value: incidents.length, icon: AlertTriangle, color: '#f97316' },
-                { label: 'Pending', value: pendingCount, icon: Activity, color: '#3b82f6' },
-                { label: 'My Tickets', value: tickets.length, icon: FileText, color: '#5B54E8' },
-                { label: 'Resolved', value: resolvedCount, icon: CheckCircle, color: '#22c55e' },
-              ].map((stat) => (
-                <div key={stat.label} className="white-card p-4">
-                  <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
-                  <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
-                </div>
-              ))}
-
-              {profile?.role === 'tanod' && [
-                { label: 'Total Assigned', value: incidents.length, icon: AlertTriangle, color: '#5B54E8' },
-                { label: 'Resolved', value: resolvedCount, icon: CheckCircle, color: '#22c55e' },
-                { label: 'Active', value: incidents.filter(i => i.status === 'assigned').length, icon: Activity, color: '#f97316' },
-                // Average rating says far more about performance than a
-                // raw count of how many ratings exist.
-                { label: avgRating ? `Avg Rating (${ratedIncidents.length})` : 'Avg Rating', value: avgRating ? `⭐ ${avgRating}` : '—', icon: Award, color: '#f59e0b' },
-              ].map((stat) => (
-                <div key={stat.label} className="white-card p-4">
-                  <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
-                  <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
-                </div>
-              ))}
-
-              {profile?.role === 'official' && [
-                { label: 'Announcements', value: announcements.length, icon: Bell, color: '#5B54E8' },
-              ].map((stat) => (
-                <div key={stat.label} className="white-card p-4">
-                  <stat.icon size={16} style={{ color: stat.color }} className="mb-2" />
-                  <p className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{stat.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Recent activity */}
-            <div className="white-card p-6">
-              <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Activity size={14} style={{ color: 'var(--brand)' }} /> Recent Activity
-              </h3>
-
-              {totalActivity === 0 && (
-                <div className="text-center py-8">
-                  <Activity size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-500">No activity yet</p>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {profile?.role === 'resident' && incidents.map(inc => (
-                  <div key={inc.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff7ed' }}>
-                      <AlertTriangle size={13} className="text-orange-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                      <p className="text-xs text-gray-500" title={fullDate(inc.created_at)}>Reported {timeAgo(inc.created_at)}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-                      inc.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                      inc.status === 'assigned' ? 'bg-blue-100 text-blue-700' :
-                      'bg-emerald-100 text-emerald-700'
-                    }`}>{inc.status}</span>
-                  </div>
-                ))}
-
-                {profile?.role === 'resident' && tickets.map(t => (
-                  <div key={t.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-                      <FileText size={13} className="text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-500" title={fullDate(t.created_at)}>Ticket · {timeAgo(t.created_at)}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-                      t.status === 'open' ? 'bg-amber-100 text-amber-700' :
-                      t.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                      'bg-emerald-100 text-emerald-700'
-                    }`}>{t.status.replace('_', ' ')}</span>
-                  </div>
-                ))}
-
-                {profile?.role === 'tanod' && incidents.map(inc => (
-                  <div key={inc.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fef9c3' }}>
-                      <AlertTriangle size={13} className="text-yellow-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{inc.title}</p>
-                      <p className="text-xs text-gray-500" title={fullDate(inc.created_at)}>
-                        {inc.status === 'resolved' && inc.resolved_at ? `Resolved ${timeAgo(inc.resolved_at)}` : `Assigned ${timeAgo(inc.created_at)}`}
-                      </p>
-                    </div>
-                    {inc.rating && (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-700 flex-shrink-0">⭐ {inc.rating}</span>
-                    )}
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${
-                      inc.status === 'resolved' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
-                    }`}>{inc.status}</span>
-                  </div>
-                ))}
-
-                {profile?.role === 'official' && announcements.map(a => (
-                  <div key={a.id} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-                      <Bell size={13} className="text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{a.title}</p>
-                      <p className="text-xs text-gray-500" title={fullDate(a.created_at)}>Posted {timeAgo(a.created_at)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* SECURITY TAB */}
-        {activeTab === 'security' && (
-          <div className={`white-card p-6 ${tabEnter}`}>
-            <h3 className="text-sm font-bold text-gray-800 mb-1 flex items-center gap-2">
-              <Lock size={14} style={{ color: 'var(--brand)' }} /> Change Password
-            </h3>
-            <p className="text-xs text-gray-500 mb-5">Update your account password</p>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="new-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">New Password</label>
-                <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input id="new-password" type={showNewPassword ? 'text' : 'password'}
-                    value={passwordForm.new}
-                    onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })}
-                    autoComplete="new-password"
-                    className="input-field w-full rounded-2xl pl-10 pr-10 py-3 text-sm text-gray-800"
-                    placeholder="At least 8 characters" />
-                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
-                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
-                    {showNewPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="confirm-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Confirm New Password</label>
-                <div className="relative">
-                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'}
-                    value={passwordForm.confirm}
-                    onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-                    onKeyDown={e => { if (e.key === 'Enter' && passwordsMatch) handleChangePassword() }}
-                    autoComplete="new-password"
-                    className="input-field w-full rounded-2xl pl-10 pr-10 py-3 text-sm text-gray-800"
-                    placeholder="Confirm new password" />
-                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
-                    {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-                {passwordForm.confirm && passwordForm.new !== passwordForm.confirm && (
-                  <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><X size={11} /> Passwords don&apos;t match</p>
-                )}
-                {passwordsMatch && passwordForm.confirm && (
-                  <p className="text-xs text-emerald-500 mt-1.5 flex items-center gap-1"><Check size={11} /> Passwords match</p>
-                )}
-              </div>
-
-              <button onClick={handleChangePassword} disabled={changingPassword || !passwordForm.new || !passwordForm.confirm}
-                className="w-full py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
-                {changingPassword ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Updating...
-                  </span>
-                ) : '🔒 Update Password'}
+    <PageShell
+      title={PAGE_HEADERS.profile.title}
+      onBack={() => router.push(getDashboardPath())}
+      backLabel="Back to dashboard"
+      actions={activeTab === 'info' && !editing ? (
+        <IconButton kind="onband" label="Edit profile" onClick={() => { setActiveTab('info'); setEditing(true) }}>
+          <Pencil size={16} strokeWidth={1.9} />
+        </IconButton>
+      ) : null}
+      bandContent={(
+        <>
+          <div className="flex items-center gap-3.5">
+            <div className="relative shrink-0">
+              <span className="flex size-16 items-center justify-center overflow-hidden rounded-[14px] bg-white text-[22px] font-extrabold text-[#4A43D4]">
+                {profile?.avatar_url
+                  ? <img src={profile.avatar_url} alt="" className="size-full object-cover" />
+                  : initials(profile?.full_name)}
+              </span>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}
+                aria-label={profile?.avatar_url ? 'Change photo' : 'Add a photo'}
+                className="absolute -right-1.5 -bottom-1.5 flex size-7 items-center justify-center rounded-full border-2 border-white bg-[#4A43D4] text-white outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-70">
+                {uploadingAvatar ? <Loader2 size={13} className="animate-spin" aria-hidden="true" /> : <Camera size={13} strokeWidth={2} aria-hidden="true" />}
               </button>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[22px] font-extrabold leading-tight tracking-[-0.4px] text-white">{profile?.full_name}</p>
+              <span className="mt-1.5 inline-flex h-[22px] items-center gap-1 rounded-[6px] bg-[var(--onband)] px-2 text-xs font-bold text-white">
+                {isVerified(profile) && profile?.role === 'resident' && <Check size={12} strokeWidth={2.6} aria-hidden="true" />}
+                {roleTag}
+              </span>
+              {profile?.avatar_url && !uploadingAvatar && (
+                <button onClick={handleRemoveAvatar} className="ml-2 text-xs font-bold text-white/85 underline-offset-2 hover:underline">Remove photo</button>
+              )}
             </div>
           </div>
-        )}
+          <Segmented onBand full label="Profile sections" value={activeTab} onChange={setActiveTab}
+            items={[{ value: 'info', label: 'Details' }, { value: 'activity', label: 'Activity' }, { value: 'security', label: 'Password' }]} />
+        </>
+      )}>
 
-      </main>
-    </div>
+      {/* DETAILS */}
+      {activeTab === 'info' && (
+        <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
+          {editing ? (
+            <Card lift className="px-[18px] py-4 space-y-4">
+              <h2 className="text-[15px] font-extrabold text-ink">Edit your details</h2>
+              <Field id="profile-name" label="Full name" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })}
+                maxLength={100} autoComplete="name" placeholder="Your full name" />
+              <Field id="profile-phone" label="Mobile number" icon={<Phone />} value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+                maxLength={11} autoComplete="tel-national" inputMode="numeric" placeholder="09XX XXX XXXX" optional />
+              <Field id="profile-address" label="Address" optional>
+                <Textarea value={form.address} onChange={e => setForm({ ...form, address: e.target.value })}
+                  rows={2} maxLength={200} autoComplete="street-address" placeholder="Sitio, street, house number" className="min-h-[72px]" />
+              </Field>
+              <div className="flex gap-2.5">
+                <Button variant="secondary" onClick={cancelEdit} disabled={saving}>Cancel</Button>
+                <Button className="flex-1" onClick={handleSave} disabled={saving} aria-busy={saving || undefined}>
+                  {saving ? <><Loader2 className="animate-spin" aria-hidden="true" />Saving…</> : 'Save changes'}
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Card lift>
+              <dl className="divide-y divide-line">
+                {[
+                  ['Barangay', place],
+                  ['Address', profile?.address],
+                  ['Mobile', profile?.phone],
+                  ['Email', email],
+                  ['Member since', fullDate(profile?.created_at)],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-baseline gap-3 px-3.5 sm:px-[18px] py-3">
+                    <dt className="w-[108px] shrink-0 text-[13px] text-muted-foreground">{label}</dt>
+                    <dd className={`min-w-0 flex-1 text-sm font-bold break-words ${value ? 'text-ink' : 'font-normal text-muted-foreground'}`}>{value || 'Not added'}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          )}
+
+          <Card>
+            <Rows>
+              <Row as={Link} href="/settings" interactive className="flex items-center gap-3">
+                <Settings size={18} strokeWidth={1.9} className="text-brand-strong" aria-hidden="true" />
+                <span className="flex-1 text-sm font-bold text-ink">Settings</span>
+                <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+              </Row>
+              <Row as={Link} href="/help" interactive className="flex items-center gap-3">
+                <HelpCircle size={18} strokeWidth={1.9} className="text-brand-strong" aria-hidden="true" />
+                <span className="flex-1 text-sm font-bold text-ink">Help and FAQ</span>
+                <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+              </Row>
+              <Row as="button" interactive onClick={() => setActiveTab('security')} className="flex items-center gap-3">
+                <Lock size={18} strokeWidth={1.9} className="text-brand-strong" aria-hidden="true" />
+                <span className="flex-1 text-sm font-bold text-ink">Change password</span>
+                <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+              </Row>
+            </Rows>
+          </Card>
+        </div>
+      )}
+
+      {/* ACTIVITY */}
+      {activeTab === 'activity' && (
+        <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
+          {profile?.role === 'resident' && (
+            <StatStrip stats={[
+              { label: 'My reports', value: incidents.length },
+              { label: 'Waiting', value: pendingCount },
+              { label: 'My tickets', value: tickets.length },
+              { label: 'Resolved', value: resolvedCount, tone: resolvedCount ? 'ok' : 'default' },
+            ]} />
+          )}
+          {profile?.role === 'tanod' && (
+            <StatStrip stats={[
+              { label: 'Assigned', value: incidents.length },
+              { label: 'Resolved', value: resolvedCount, tone: resolvedCount ? 'ok' : 'default' },
+              { label: 'Active', value: incidents.filter(i => i.status === 'assigned').length },
+              // Average rating says far more about performance than a raw
+              // count of how many ratings exist.
+              { label: 'Avg. rating', value: avgRating ? `${avgRating} / 5` : '—', note: avgRating ? `${ratedIncidents.length} ratings` : 'no ratings yet' },
+            ]} />
+          )}
+          {profile?.role === 'official' && (
+            <StatStrip stats={[{ label: 'Announcements posted', value: announcements.length }]} />
+          )}
+
+          <Card>
+            <CardHead title="Recent activity" />
+            {totalActivity === 0 ? (
+              <Muted className="px-[18px] pb-4">Nothing yet. Your reports, tickets and posts show up here.</Muted>
+            ) : (
+              <Rows className="border-t border-line">
+                {profile?.role === 'resident' && incidents.map(inc => (
+                  <Row key={inc.id} className="flex items-center gap-3">
+                    <CategoryIcon category={inc.category} size={20} className="shrink-0" style={{ color: categoryColor(inc.category) }} />
+                    <RowTitle className="flex-1" title={inc.title} sub={<span title={fullDate(inc.created_at)}>Reported {timeAgo(inc.created_at)}</span>} />
+                    <Status tone={statusTone[inc.status] || 'quiet'}>{statusText(inc.status)}</Status>
+                  </Row>
+                ))}
+                {profile?.role === 'resident' && tickets.map(t => (
+                  <Row key={t.id} className="flex items-center gap-3">
+                    <TicketsIcon size={20} className="shrink-0 text-brand-strong" />
+                    <RowTitle className="flex-1" title={t.title} sub={<span title={fullDate(t.created_at)}>Ticket · {timeAgo(t.created_at)}</span>} />
+                    <Status tone={statusTone[t.status] || 'quiet'}>{statusText(t.status)}</Status>
+                  </Row>
+                ))}
+                {profile?.role === 'tanod' && incidents.map(inc => (
+                  <Row key={inc.id} className="flex items-center gap-3">
+                    <CategoryIcon category={inc.category} size={20} className="shrink-0" style={{ color: inc.status === 'resolved' ? 'var(--ok)' : categoryColor(inc.category) }} />
+                    <RowTitle className="flex-1" title={inc.title}
+                      sub={<span title={fullDate(inc.created_at)}>{inc.status === 'resolved' && inc.resolved_at ? `Resolved ${timeAgo(inc.resolved_at)}` : `Assigned ${timeAgo(inc.created_at)}`}{inc.rating ? ` · rated ${inc.rating}/5` : ''}</span>} />
+                    <Status tone={statusTone[inc.status] || 'quiet'}>{statusText(inc.status)}</Status>
+                  </Row>
+                ))}
+                {profile?.role === 'official' && announcements.map(a => (
+                  <Row key={a.id} className="flex items-center gap-3">
+                    <AnnouncementsIcon size={20} className="shrink-0 text-brand-strong" />
+                    <RowTitle className="flex-1" title={a.title} sub={<span title={fullDate(a.created_at)}>Posted {timeAgo(a.created_at)}</span>} />
+                  </Row>
+                ))}
+              </Rows>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* PASSWORD */}
+      {activeTab === 'security' && (
+        <Card lift className={`px-[18px] py-4 space-y-4 ${tabEnter}`}>
+          <div>
+            <h2 className="text-[15px] font-extrabold text-ink">Change password</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">At least 8 characters.</p>
+          </div>
+          <Field id="new-password" label="New password" icon={<Lock />} type={showNewPassword ? 'text' : 'password'}
+            value={passwordForm.new} onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })}
+            autoComplete="new-password" placeholder="At least 8 characters"
+            trailing={
+              <IconButton kind="ghost" label={showNewPassword ? 'Hide password' : 'Show password'} onClick={() => setShowNewPassword(!showNewPassword)}>
+                {showNewPassword ? <EyeOff size={16} strokeWidth={1.9} /> : <Eye size={16} strokeWidth={1.9} />}
+              </IconButton>
+            } />
+          <Field id="confirm-password" label="Confirm new password" icon={<Lock />} type={showConfirmPassword ? 'text' : 'password'}
+            value={passwordForm.confirm} onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+            onKeyDown={e => { if (e.key === 'Enter' && passwordsMatch) handleChangePassword() }}
+            autoComplete="new-password" placeholder="Type it again"
+            error={passwordForm.confirm && passwordForm.new !== passwordForm.confirm ? 'Passwords don’t match' : undefined}
+            hint={passwordsMatch && passwordForm.confirm ? 'Passwords match.' : undefined}
+            trailing={
+              <IconButton kind="ghost" label={showConfirmPassword ? 'Hide password' : 'Show password'} onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                {showConfirmPassword ? <EyeOff size={16} strokeWidth={1.9} /> : <Eye size={16} strokeWidth={1.9} />}
+              </IconButton>
+            } />
+          <Button size="lg" full onClick={handleChangePassword} disabled={changingPassword || !passwordForm.new || !passwordForm.confirm} aria-busy={changingPassword || undefined}>
+            {changingPassword ? <><Loader2 className="animate-spin" aria-hidden="true" />Saving…</> : 'Save new password'}
+          </Button>
+        </Card>
+      )}
+    </PageShell>
   )
 }
 

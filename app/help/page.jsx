@@ -1,6 +1,4 @@
 'use client'
-import { PageHeader } from '@/components/AppUI'
-import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
@@ -11,44 +9,21 @@ import { PAGE_HEADERS } from '@/lib/pageHeaders'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
-import { HelpCircle, MessageSquare, BookOpen, Phone, ChevronDown, Send, Sparkles, Search, AlertTriangle, Loader2, CheckCircle, X } from 'lucide-react'
-import Image from 'next/image'
+import { HOTLINES, telHref } from '@/lib/hotlines'
+import { MessageSquare, Phone, ChevronDown, ChevronRight, Search, Loader2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useMediaQuery } from '@/lib/useMediaQuery'
-
-const DOTS = [...Array(20)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-// Ambient decoration only — skipped for users who prefer reduced motion.
-const AnimatedDots = () => {
-  // Server and hydration render assume reduced motion (nothing drawn), so
-  // the dots appear only once the browser says motion is welcome.
-  const show = !useMediaQuery('(prefers-reduced-motion: reduce)', true)
-  if (!show) return null
-  return (
-    <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
-      {DOTS.map((dot, i) => (
-        <div key={i} style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }} />
-      ))}
-    </div>
-  )
-}
+import PageShell from '@/components/crafted/PageShell'
+import { TicketsIcon, AiIcon } from '@/components/icons/BhIcons'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Input, Field } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Segmented } from '@/components/ui/segmented'
+import { Chip } from '@/components/ui/chip'
+import { Notice } from '@/components/ui/notice'
+import { SectionLabel, Muted } from '@/components/ui/text'
 
 const faqByRole = {
   resident: [
@@ -95,19 +70,10 @@ const guides = {
 }
 
 const CONTACT_CATEGORIES = [
-  { value: 'general', label: 'General Question', icon: '💬' },
-  { value: 'bug', label: 'Bug Report', icon: '🐛' },
-  { value: 'feature', label: 'Feature Request', icon: '✨' },
-  { value: 'account', label: 'Account Issue', icon: '🔐' },
-]
-
-const HOTLINES = [
-  { name: 'National Emergency Hotline', number: '911', icon: '🚨', desc: 'For police, fire, or medical emergencies', color: '#ef4444', bg: '#fef2f2' },
-  { name: 'Philippine Red Cross', number: '143', icon: '🚑', desc: 'Medical emergencies and ambulance', color: '#dc2626', bg: '#fef2f2' },
-  { name: 'Bureau of Fire Protection', number: '160', icon: '🚒', desc: 'Fire emergencies', color: '#f97316', bg: '#fff7ed' },
-  { name: 'Philippine National Police', number: '117', icon: '👮', desc: 'Crime, public safety', color: '#3b82f6', bg: '#eff6ff' },
-  { name: 'NDRRMC (Disaster)', number: '(02) 8911-1406', icon: '🌊', desc: 'Natural disasters', color: '#0891b2', bg: '#ecfeff' },
-  { name: 'DOH Health Hotline', number: '1555', icon: '🏥', desc: 'Health emergencies and concerns', color: '#16a34a', bg: '#f0fdf4' },
+  { value: 'general', label: 'A question' },
+  { value: 'bug', label: 'Something is broken' },
+  { value: 'feature', label: 'An idea' },
+  { value: 'account', label: 'My account' },
 ]
 
 const HELP_TABS = ['faq', 'guides', 'contact', 'emergency']
@@ -201,303 +167,196 @@ function HelpPage() {
     : faqs
 
   const tabs = [
-    { key: 'faq', label: 'FAQ', icon: HelpCircle },
-    { key: 'guides', label: 'Guides', icon: BookOpen },
-    { key: 'contact', label: 'Contact', icon: MessageSquare },
-    { key: 'emergency', label: 'Emergency', icon: Phone },
+    { value: 'faq', label: 'Questions' },
+    { value: 'guides', label: 'Guides' },
+    { value: 'contact', label: 'Contact' },
+    { value: 'emergency', label: 'Hotlines' },
   ]
+  const isResident = userRole === 'resident'
 
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-      </div>
+    <PageShell
+      title={PAGE_HEADERS.help.title}
+      sub={PAGE_HEADERS.help.description}
+      subOnDesktop
+      onBack={() => goBack(router, '/')}
+      bandContent={<Segmented onBand full label="Help sections" value={activeTab} onChange={setActiveTab} items={tabs} />}>
 
-      <PageHeader
-        {...PAGE_HEADERS.help}
-        onBack={() => goBack(router, '/')}
-      />
-
-      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-6 space-y-4 ${desktop.helpPage}`}>
-
-        {/* Hero card */}
-        <div className={`glass-card p-5 flex items-center gap-3 ${desktop.wide}`}>
-          <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(255,255,255,0.2)' }}>
-            <Sparkles size={20} className="text-yellow-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-sm font-bold">How can we help{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}?</p>
-            <p className="text-purple-200 text-xs mt-0.5">Browse FAQs, guides, or contact us directly.</p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className={`white-card p-2 ${desktop.helpTabs}`}>
-          <div className="grid grid-cols-4 gap-1" role="tablist" aria-label="Help sections">
-            {tabs.map(tab => {
-              const Icon = tab.icon
-              const selected = activeTab === tab.key
-              return (
-                <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                  role="tab" aria-selected={selected}
-                  className="flex flex-col items-center gap-1 py-2 rounded-xl transition-all"
-                  style={{
-                    background: selected ? 'var(--brand-soft)' : 'transparent',
-                    color: selected ? 'var(--brand)' : '#6b7280',
-                  }}>
-                  <Icon size={16} aria-hidden="true" />
-                  <span className="text-xs font-bold">{tab.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* FAQ Tab */}
-        {activeTab === 'faq' && (
-          <div className={`space-y-3 ${tabEnter}`}>
-            <div className="white-card p-4">
-              <div className="relative">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                  type="search"
-                  aria-label="Search FAQs"
-                  placeholder="Search FAQs..."
-                  className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')}
-                    aria-label="Clear search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className={`space-y-2 ${desktop.faqGrid}`}>
-              {filteredFaqs.length === 0 && (
-                <div className="white-card p-8 text-center">
-                  <Search size={32} className="mx-auto mb-3 text-gray-300" aria-hidden="true" />
-                  <p className="text-sm font-semibold text-gray-700">No FAQs match your search</p>
-                  <p className="text-xs text-gray-500 mt-1 mb-4">Try different keywords, or send us your question directly</p>
-                  <button
-                    onClick={() => {
-                      // Carry the search into the contact form so they don't retype it
-                      setContactForm(f => ({ ...f, subject: searchQuery.trim().slice(0, 100) }))
-                      setActiveTab('contact')
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                    <MessageSquare size={12} /> Ask support
-                  </button>
-                </div>
-              )}
-              {filteredFaqs.map(faq => {
-                // While searching, matches open automatically — the answer is
-                // usually what matched, so don't make people click each one
-                const expanded = query ? true : expandedFaq === faq.q
-                return (
-                  <div key={faq.q} className="white-card overflow-hidden">
-                    <button onClick={() => setExpandedFaq(prev => (prev === faq.q ? null : faq.q))}
-                      aria-expanded={expanded}
-                      className="w-full p-4 flex items-center justify-between gap-3 text-left hover:bg-gray-50 transition-colors">
-                      <p className="text-sm font-bold text-gray-800 flex-1">{faq.q}</p>
-                      <ChevronDown size={16} aria-hidden="true"
-                        className="text-gray-500 flex-shrink-0 transition-transform"
-                        style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                    </button>
-                    {expanded && (
-                      <div className="px-4 pb-4 fade-up">
-                        <p className="text-sm text-gray-600 leading-relaxed">{faq.a}</p>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Guides Tab */}
-        {activeTab === 'guides' && (
-          <div className={`space-y-3 ${tabEnter} ${desktop.helpGrid}`}>
-            <div className="p-3 rounded-2xl flex items-start gap-2.5"
-              style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-              <BookOpen size={14} style={{ color: 'var(--brand)' }} className="flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <p className="text-xs text-purple-900">
-                Quick guides for <strong>{userRole === 'resident' ? 'residents' : userRole === 'official' ? 'barangay officials' : 'tanods'}</strong>
-              </p>
-            </div>
-
-            {userGuides.map(guide => (
-              <div key={guide.title} className="white-card p-5">
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="text-2xl flex-shrink-0" aria-hidden="true">{guide.icon}</span>
-                  <h3 className="text-sm font-bold text-gray-800">{guide.title}</h3>
-                </div>
-                <ol className="space-y-2">
-                  {guide.steps.map((step, j) => (
-                    <li key={step} className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-xl flex items-center justify-center text-xs font-black text-white flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
-                        {j + 1}
-                      </div>
-                      <p className="text-sm text-gray-600 leading-relaxed pt-0.5">{step}</p>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Contact Tab */}
-        {activeTab === 'contact' && (
-          <div className={tabEnter || undefined}>
-            {sentAt ? (
-              /* Success panel replaces the form — clearer than a toast that
-                 vanishes, and prevents accidental duplicate sends */
-              <div className="white-card p-8 text-center">
-                <div className="w-14 h-14 mx-auto mb-4 rounded-3xl flex items-center justify-center"
-                  style={{ background: '#f0fdf4' }}>
-                  <CheckCircle size={26} className="text-emerald-500" />
-                </div>
-                <h3 className="text-base font-bold text-gray-800 mb-1">Message sent</h3>
-                <p className="text-sm text-gray-500 max-w-sm mx-auto">
-                  The BH360 support team has your message and will respond within 24 hours.
-                </p>
-                <button
-                  onClick={() => setSentAt(null)}
-                  className="mt-5 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                  <Send size={12} /> Send another message
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={submitSupport} className="white-card p-5 space-y-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'var(--brand-soft)' }}>
-                    <MessageSquare size={18} style={{ color: 'var(--brand)' }} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-gray-800">Contact Support</h3>
-                    <p className="text-xs text-gray-500">We respond within 24 hours</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Category</label>
-                  <div className="grid grid-cols-2 gap-2" role="group" aria-label="Message category">
-                    {CONTACT_CATEGORIES.map(c => (
-                      <button key={c.value} type="button"
-                        onClick={() => setContactForm(f => ({ ...f, category: c.value }))}
-                        aria-pressed={contactForm.category === c.value}
-                        className="p-2.5 rounded-2xl flex items-center gap-2 transition-all"
-                        style={{
-                          background: contactForm.category === c.value ? 'var(--brand-soft)' : 'var(--app-surface)',
-                          border: `2px solid ${contactForm.category === c.value ? 'var(--brand)' : 'var(--brand-soft)'}`,
-                        }}>
-                        <span aria-hidden="true">{c.icon}</span>
-                        <span className="text-xs font-bold text-gray-700">{c.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="support-subject" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Subject</label>
-                  <input id="support-subject" value={contactForm.subject}
-                    onChange={e => setContactForm(f => ({ ...f, subject: e.target.value }))}
-                    maxLength={100}
-                    className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800"
-                    placeholder="Brief description of your issue" />
-                </div>
-
-                <div>
-                  <label htmlFor="support-message" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Message</label>
-                  <textarea id="support-message" value={contactForm.message}
-                    onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
-                    rows={5} maxLength={1000}
-                    className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none"
-                    placeholder="Tell us what's happening..." />
-                  <p className="text-xs text-gray-500 text-right mt-1" aria-live="polite">{contactForm.message.length}/1000</p>
-                </div>
-
-                <button type="submit" disabled={submitting}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                  {submitting ? (
-                    <><Loader2 size={14} className="animate-spin" /> Sending...</>
-                  ) : (
-                    <><Send size={14} /> Send Message</>
-                  )}
-                </button>
-
-                <p className="text-xs text-gray-500 text-center flex items-center justify-center gap-1">
-                  <CheckCircle size={11} aria-hidden="true" /> Your message goes directly to the BH360 support team
-                </p>
-              </form>
+      {/* Questions */}
+      {activeTab === 'faq' && (
+        <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
+          <div className="relative">
+            <Search size={18} strokeWidth={1.9} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+            <Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+              type="search" aria-label="Search questions" placeholder="Search questions"
+              className="h-[48px] pl-11 pr-11 shadow-[var(--shadow-lift)]" />
+            {searchQuery && (
+              <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                <IconButton kind="ghost" label="Clear search" onClick={() => setSearchQuery('')}><X size={16} strokeWidth={1.9} /></IconButton>
+              </span>
             )}
           </div>
-        )}
 
-        {/* Emergency Tab */}
-        {activeTab === 'emergency' && (
-          <div className={`space-y-3 ${tabEnter} ${desktop.helpGrid}`}>
-            <div className="rounded-3xl p-5"
-              style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: '#fee2e2' }}>
-                  <AlertTriangle size={20} className="text-red-500" aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-red-700">Life-threatening Emergency?</h3>
-                  <p className="text-xs text-red-600">Use these hotlines first</p>
+          <Card>
+            <SectionLabel as="h2" className="px-[18px] pt-3.5 mb-1">Common questions</SectionLabel>
+            {filteredFaqs.length === 0 ? (
+              <div className="px-[18px] pb-4">
+                <Muted>Nothing matches “{searchQuery}”. Send us the question instead.</Muted>
+                <Button size="sm" variant="secondary" className="mt-3"
+                  onClick={() => {
+                    // Carry the search into the contact form so they don't retype it
+                    setContactForm(f => ({ ...f, subject: searchQuery.trim().slice(0, 100) }))
+                    setActiveTab('contact')
+                  }}>
+                  Ask support
+                </Button>
+              </div>
+            ) : (
+              <Rows>
+                {filteredFaqs.map(faq => {
+                  // While searching, matches open automatically — the answer is
+                  // usually what matched, so don't make people click each one
+                  const expanded = query ? true : expandedFaq === faq.q
+                  return (
+                    <div key={faq.q} role="listitem">
+                      <button onClick={() => setExpandedFaq(prev => (prev === faq.q ? null : faq.q))}
+                        aria-expanded={expanded}
+                        className="flex w-full items-center gap-3 px-3.5 sm:px-[18px] py-3 text-left transition-colors hover:bg-surface-sunk focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-strong">
+                        <span className="flex-1 text-sm font-bold text-ink">{faq.q}</span>
+                        <ChevronDown size={16} aria-hidden="true"
+                          className={`shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                      </button>
+                      {expanded && <p className="px-3.5 sm:px-[18px] pb-3.5 -mt-1 text-sm leading-[1.55] text-body">{faq.a}</p>}
+                    </div>
+                  )
+                })}
+              </Rows>
+            )}
+          </Card>
+
+          <div>
+            <SectionLabel>Still stuck?</SectionLabel>
+            <Card>
+              <Rows>
+                {isResident && (
+                  <Row as="button" interactive onClick={() => router.push('/resident/ticket/new')} className="flex items-center gap-3">
+                    <TicketsIcon size={20} className="shrink-0 text-brand-strong" />
+                    <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-ink">Ask the barangay</span><span className="block text-xs text-muted-foreground">Open a ticket and chat with an official</span></span>
+                    <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+                  </Row>
+                )}
+                {isResident && (
+                  <Row as="button" interactive onClick={() => router.push('/resident/ai')} className="flex items-center gap-3">
+                    <AiIcon size={20} className="shrink-0 text-brand-strong" />
+                    <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-ink">Ask the assistant</span><span className="block text-xs text-muted-foreground">Quick answers about barangay services</span></span>
+                    <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+                  </Row>
+                )}
+                <Row as="button" interactive onClick={() => setActiveTab('contact')} className="flex items-center gap-3">
+                  <MessageSquare size={20} strokeWidth={1.9} className="shrink-0 text-brand-strong" aria-hidden="true" />
+                  <span className="flex-1 min-w-0"><span className="block text-sm font-bold text-ink">Message BH360 support</span><span className="block text-xs text-muted-foreground">About the app itself: a bug, your account, an idea</span></span>
+                  <ChevronRight size={16} className="text-muted-foreground" aria-hidden="true" />
+                </Row>
+                <Row as="a" href={telHref('911')} interactive className="flex items-center gap-3">
+                  <Phone size={20} strokeWidth={1.9} className="shrink-0 text-danger" aria-hidden="true" />
+                  <span className="flex-1 min-w-0 text-sm font-bold text-ink">Emergency</span>
+                  <span className="text-[13px] font-bold text-muted-foreground">911</span>
+                </Row>
+              </Rows>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Guides */}
+      {activeTab === 'guides' && (
+        <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
+          {userGuides.map((guide, i) => (
+            <Card key={guide.title} lift={i === 0} className="px-[18px] py-4">
+              <h2 className="text-[15px] font-extrabold text-ink mb-3">{guide.title}</h2>
+              <ol className="space-y-2">
+                {guide.steps.map((step, j) => (
+                  <li key={step} className="flex items-start gap-3">
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-extrabold text-brand-strong" aria-hidden="true">{j + 1}</span>
+                    <span className="pt-0.5 text-sm leading-[1.55] text-body">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </Card>
+          ))}
+          <Muted className="text-center text-xs">Guides for {userRole === 'resident' ? 'residents' : userRole === 'official' ? 'barangay officials' : 'tanods'}.</Muted>
+        </div>
+      )}
+
+      {/* Contact */}
+      {activeTab === 'contact' && (
+        <div className={tabEnter || undefined}>
+          {sentAt ? (
+            /* Success panel replaces the form — clearer than a toast that
+               vanishes, and prevents accidental duplicate sends */
+            <Card lift className="px-[18px] py-5">
+              <h2 className="text-[15px] font-extrabold text-ink">Message sent</h2>
+              <Notice tone="ok" className="mt-3">The BH360 support team has your message and will reply within 24 hours.</Notice>
+              <Button variant="secondary" className="mt-4" onClick={() => setSentAt(null)}>Send another message</Button>
+            </Card>
+          ) : (
+            <Card lift as="form" onSubmit={submitSupport} className="px-[18px] py-4 space-y-4">
+              <div>
+                <h2 className="text-[15px] font-extrabold text-ink">Message BH360 support</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">For questions about the app. We reply within 24 hours.</p>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-[13px] font-bold text-ink" id="support-category">Topic</p>
+                <div className="flex flex-wrap gap-2" role="group" aria-labelledby="support-category">
+                  {CONTACT_CATEGORIES.map(c => (
+                    <Chip key={c.value} active={contactForm.category === c.value}
+                      onClick={() => setContactForm(f => ({ ...f, category: c.value }))}>{c.label}</Chip>
+                  ))}
                 </div>
               </div>
-              <p className="text-xs text-red-700">
-                BH360 is for community management. For active emergencies, contact the appropriate hotline below directly.
-              </p>
-            </div>
 
-            {HOTLINES.map(contact => (
-              <a key={contact.number} href={`tel:${contact.number.replace(/[^0-9+]/g, '')}`}
-                aria-label={`Call ${contact.name} at ${contact.number}`}
-                className="white-card p-4 flex items-center gap-3 transition-all hover:scale-[1.02]">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
-                  style={{ background: contact.bg }} aria-hidden="true">
-                  {contact.icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-gray-800">{contact.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{contact.desc}</p>
-                </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl flex-shrink-0"
-                  style={{ background: contact.bg }}>
-                  <Phone size={12} style={{ color: contact.color }} aria-hidden="true" />
-                  <span className="text-sm font-black" style={{ color: contact.color }}>{contact.number}</span>
-                </div>
-              </a>
-            ))}
+              <Field id="support-subject" label="Subject" value={contactForm.subject}
+                onChange={e => setContactForm(f => ({ ...f, subject: e.target.value }))}
+                maxLength={100} placeholder="A few words about it" />
 
-            <p className="text-xs text-white opacity-60 text-center pt-2">
-              Numbers are valid for the Philippines 🇵🇭
-            </p>
-          </div>
-        )}
+              <Field id="support-message" label="Message" hint={`${contactForm.message.length} of 1000`}>
+                <Textarea value={contactForm.message}
+                  onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
+                  rows={5} maxLength={1000} placeholder="Tell us what’s happening" />
+              </Field>
 
-        {/* Footer */}
-        <div className={`text-center py-4 ${desktop.wide}`}>
-          <Image src="/logo.png" alt="BH360" width={32} height={32} className="object-contain mx-auto mb-1 opacity-50" />
-          <p className="text-xs text-white opacity-40">BarangayHub 360 · v1.0.0</p>
+              <Button type="submit" size="lg" full disabled={submitting} aria-busy={submitting || undefined}>
+                {submitting ? <><Loader2 className="animate-spin" aria-hidden="true" />Sending…</> : 'Send message'}
+              </Button>
+            </Card>
+          )}
         </div>
-      </main>
-    </div>
+      )}
+
+      {/* Hotlines */}
+      {activeTab === 'emergency' && (
+        <div className={`flex flex-col gap-3.5 ${tabEnter}`}>
+          <Notice tone="danger" title="Life in danger? Call first.">BH360 helps the barangay follow up. For an emergency happening now, call a hotline below.</Notice>
+          <Card>
+            <Rows>
+              {HOTLINES.map(line => (
+                <Row key={line.key} as="a" href={telHref(line.number)} interactive
+                  aria-label={`Call ${line.name} at ${line.number}`} className="flex items-center gap-3">
+                  <Phone size={18} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${line.danger ? 'text-danger' : 'text-brand-strong'}`} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-bold text-ink truncate">{line.name}</span>
+                    <span className="block text-xs text-muted-foreground truncate">{line.desc}</span>
+                  </span>
+                  <span className="text-[13px] font-bold text-ink tabular-nums">{line.number}</span>
+                </Row>
+              ))}
+            </Rows>
+          </Card>
+          <Muted className="text-center text-xs">Numbers for the Philippines. Calls don’t need data.</Muted>
+        </div>
+      )}
+    </PageShell>
   )
 }
 
