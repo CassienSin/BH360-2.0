@@ -211,6 +211,8 @@ function Gallery() {
             <Avatar name="Sample Resident" size="xs" /><Avatar name="Sample Resident" size="sm" />
             <Avatar name="Sample Tanod" tone="ok" /><Avatar name="Off Duty" tone="quiet" />
             <Avatar name="Sample User" tone="solid" color="#F97316" size="sm" /><Avatar name="Sample Resident" size="lg" />
+            <Avatar name="With Photo" src="/icon-192.png" size="lg" />
+            <Avatar name="Broken Photo" src="/does-not-exist.png" size="lg" />
           </div>
           <Progress value={3} label="Report progress" labels={['Received', 'Assigned', 'On the way', 'Resolved']} />
           <Progress value={2} tone="brand" label="Case stage" labels={['Filed', 'Mediation', 'Conciliation', 'Settled']} />

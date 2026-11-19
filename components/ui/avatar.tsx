@@ -53,6 +53,13 @@ function Avatar({
   // Remember which url failed, so a new photo gets a fresh try.
   const [failed, setFailed] = React.useState<string | null>(null)
   const showImage = !!src && failed !== src
+  // A server-rendered photo can fail before React attaches onError; catch
+  // that case once mounted.
+  const imgRef = React.useRef<HTMLImageElement>(null)
+  React.useEffect(() => {
+    const img = imgRef.current
+    if (img && src && img.complete && img.naturalWidth === 0) setFailed(src)
+  }, [src])
   return (
     <span
       data-slot="avatar"
@@ -61,7 +68,7 @@ function Avatar({
       {...props}
     >
       {showImage ? (
-        <img src={src} alt="" className="size-full object-cover" onError={() => setFailed(src)} />
+        <img ref={imgRef} src={src} alt="" className="size-full object-cover" onError={() => setFailed(src)} />
       ) : (
         <span aria-hidden="true">{initials(name)}</span>
       )}
