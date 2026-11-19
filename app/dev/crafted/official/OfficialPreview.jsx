@@ -15,6 +15,7 @@ import DocumentQueue from '@/components/DocumentQueue'
 import VerificationQueue from '@/components/VerificationQueue'
 import BlotterQueue from '@/components/BlotterQueue'
 import TicketsSection from '@/components/official/TicketsSection'
+import TanodManagement from '@/components/TanodManagement'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS } from './fixtures'
@@ -123,10 +124,11 @@ export default function OfficialPreview({ initial }) {
           <TicketsSection tickets={TICKETS} filtered={tickets} now={Date.now()} search={ticketSearch} onSearch={setTicketSearch}
             filter={ticketFilter} onFilter={setTicketFilter} onOpen={noop} onExport={noop} />
         )}
+        {section === 'tanods' && <TanodManagement profile={PROFILE} onInvite={noop} onOpenIncident={noop} />}
         {section === 'documents' && <DocumentQueue profile={PROFILE} requests={DOCUMENTS} onUpdated={noop} />}
         {section === 'verifications' && <VerificationQueue profile={PROFILE} users={USERS} onUpdated={noop} />}
         {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS.filter(u => u.role === 'resident')} onChanged={noop} />}
-        {!['dashboard', 'incidents', 'tickets', 'documents', 'verifications', 'blotter'].includes(section) && (
+        {!['dashboard', 'incidents', 'tickets', 'tanods', 'documents', 'verifications', 'blotter'].includes(section) && (
           <p className="text-sm text-muted-foreground">Not in the preview yet: {section}. ({TICKETS.length} tickets, {ANNOUNCEMENTS.length} announcements in the fixtures.)</p>
         )}
       </div>

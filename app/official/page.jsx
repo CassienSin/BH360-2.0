@@ -814,7 +814,8 @@ function OfficialDashboard() {
       }
       case 'tanods': return {
         eyebrow: 'Tanod management', title: 'Your tanods',
-        desc: tanods.length ? `${onDuty} of ${tanods.length} on duty now.` : 'No tanods yet. Invite one from Users.',
+        desc: tanods.length ? `${onDuty} of ${tanods.length} on duty now.` : 'No tanods yet. Invite one with a tanod code.',
+        actions: <Button variant="white" onClick={() => navClick('users')}><Plus aria-hidden="true" />Invite a tanod</Button>,
       }
       case 'users': return {
         eyebrow: 'User management', title: 'People in your barangay',
