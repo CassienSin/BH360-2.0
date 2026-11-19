@@ -1,15 +1,17 @@
 'use client'
-// Save as: app/reset-password/page.jsx
-//
 // This is where the email's reset link lands. Supabase signs the user in
 // with a temporary "recovery" session via the link, and this page lets
 // them set a new password with supabase.auth.updateUser().
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Eye, EyeOff, Lock, ArrowRight, ArrowLeft, CheckCircle, KeyRound, Check, X } from 'lucide-react'
-import Image from 'next/image'
+import { Eye, EyeOff, Lock, Check, X, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import AuthShell, { AuthHeading } from '@/components/crafted/AuthShell'
+import { Field } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Notice } from '@/components/ui/notice'
 import { PASSWORD_RULES, checkPassword } from '@/lib/passwordRules'
 import { useBrowserValue } from '@/lib/useHydrated'
 
@@ -158,183 +160,75 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-6 py-12">
+    <AuthShell title="Reset password" backHref="/login"
+      below={linkState === 'ready' && !done ? <Link href="/login">Back to sign in</Link> : undefined}>
 
-      <Link href="/" className="absolute top-4 left-4 z-20 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors hover:bg-white/15">
-        <ArrowLeft size={15} aria-hidden="true" /> Home
-      </Link>
-
-      {/* Soft background glow, consistent with the login page */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-20 w-[500px] h-[500px] rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)', filter: 'blur(80px)' }} />
-        <div className="absolute bottom-0 left-20 w-[400px] h-[400px] rounded-full opacity-15"
-          style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)' }} />
-      </div>
-
-      <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-8 fade-up">
-          <div className="w-16 h-16 mx-auto mb-3 relative">
-            <Image src="/logo.png" alt="" fill sizes="64px" loading="eager" className="object-contain drop-shadow-2xl" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">BarangayHub 360</h1>
+      {/* Verifying the link */}
+      {linkState === 'checking' && !done && (
+        <div className="py-8 text-center" role="status">
+          <Loader2 size={22} className="mx-auto mb-3 animate-spin text-brand-strong" aria-hidden="true" />
+          <p className="text-sm text-body">Checking your reset link…</p>
         </div>
+      )}
 
-        <div className="rounded-3xl p-4 sm:p-6 md:p-8 fade-up-1"
-          style={{
-            background: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.2), 0 8px 24px rgba(91,84,232,0.15)',
-            border: '1px solid rgba(255,255,255,0.5)',
-          }}>
+      {/* Link invalid or expired */}
+      {linkState === 'invalid' && !done && (
+        <>
+          <AuthHeading title="This link has expired" sub="It was already used, or it’s too old. Ask for a new one with “Forgot password?” on the sign-in page." />
+          <Button asChild size="lg" full><Link href="/login">Back to sign in</Link></Button>
+        </>
+      )}
 
-          {/* Verifying the link */}
-          {linkState === 'checking' && !done && (
-            <div className="text-center py-8">
-              <svg className="animate-spin w-6 h-6 mx-auto mb-4" fill="none" viewBox="0 0 24 24" aria-hidden="true" style={{ color: 'var(--brand)' }}>
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              <p className="text-sm text-gray-500">Verifying your reset link...</p>
+      {/* New password form */}
+      {linkState === 'ready' && !done && (
+        <>
+          <AuthHeading title="Set a new password" sub="Pick one you haven’t used before." />
+          {error && <Notice tone="danger" className="mb-4">{error}</Notice>}
+
+          <form onSubmit={handleReset} className="space-y-4">
+            <div>
+              <Field id="new-password" label="New password" icon={<Lock />} type={showPassword ? 'text' : 'password'} value={password}
+                onChange={e => setPassword(e.target.value)} required minLength={8}
+                autoComplete="new-password" placeholder="Create a strong password"
+                aria-describedby="new-password-rules"
+                trailing={
+                  <IconButton kind="ghost" label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>
+                    {showPassword ? <EyeOff size={16} strokeWidth={1.9} /> : <Eye size={16} strokeWidth={1.9} />}
+                  </IconButton>
+                } />
+              <ul id="new-password-rules" className="mt-2.5 grid gap-1 sm:grid-cols-2" aria-label="Password requirements">
+                {PASSWORD_RULES.map(({ key, label }) => {
+                  const met = checks[key]
+                  return (
+                    <li key={key} className={`flex items-center gap-1.5 text-xs ${met ? 'text-ok' : 'text-muted-foreground'}`}>
+                      {met ? <Check size={12} strokeWidth={2.4} aria-hidden="true" /> : <X size={12} aria-hidden="true" />}
+                      <span>{label}<span className="sr-only">{met ? ' (met)' : ' (not met yet)'}</span></span>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
-          )}
 
-          {/* Link invalid or expired */}
-          {linkState === 'invalid' && !done && (
-            <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto rounded-3xl flex items-center justify-center mb-5"
-                style={{ background: '#fff1f1' }}>
-                <KeyRound size={26} className="text-red-400" />
-              </div>
-              <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Link expired</h2>
-              <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
-                This reset link is invalid, has already been used, or has expired.
-                Request a new one from the sign-in page with “Forgot password?”.
-              </p>
-              <Link href="/login"
-                className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                Back to sign in <ArrowRight size={16} />
-              </Link>
-            </div>
-          )}
+            <Field id="confirm-password" label="Confirm password" icon={<Lock />} type={showPassword ? 'text' : 'password'} value={confirm}
+              onChange={e => setConfirm(e.target.value)} required minLength={8}
+              autoComplete="new-password" placeholder="Type it again"
+              error={confirm && confirm !== password ? 'Passwords don’t match yet.' : undefined} />
 
-          {/* New password form */}
-          {linkState === 'ready' && !done && (
-            <>
-              <div className="mb-8">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3"
-                  style={{ background: 'var(--brand-soft)' }}>
-                  <KeyRound size={11} style={{ color: 'var(--brand)' }} />
-                  <span className="text-xs font-bold" style={{ color: 'var(--brand)' }}>Almost there</span>
-                </div>
-                <h2 className="text-3xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Set new password 🔐</h2>
-                <p className="text-gray-500 text-sm mt-2">Choose a strong password you haven&apos;t used before.</p>
-              </div>
+            <Button type="submit" size="lg" full disabled={loading} aria-busy={loading || undefined}>
+              {loading ? <><Loader2 className="animate-spin" aria-hidden="true" />Saving…</> : 'Save new password'}
+            </Button>
+          </form>
+        </>
+      )}
 
-              {error && (
-                <div className="mb-5 px-4 py-3 rounded-2xl text-sm flex items-start gap-2 fade-up"
-                  role="alert"
-                  style={{ background: '#fff1f1', border: '1px solid #fecaca' }}>
-                  <span aria-hidden="true">⚠️</span>
-                  <span className="text-red-700">{error}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleReset} className="space-y-4">
-                <div>
-                  <label htmlFor="new-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">New Password</label>
-                  <div className="relative">
-                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input id="new-password" type={showPassword ? 'text' : 'password'} value={password}
-                      onChange={e => setPassword(e.target.value)} required minLength={8}
-                      autoComplete="new-password"
-                      className="input-field w-full rounded-2xl pl-11 pr-12 py-3.5 text-sm text-gray-800"
-                      placeholder="Create a strong password"
-                      aria-describedby="new-password-rules" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors">
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                  <ul id="new-password-rules" className="grid grid-cols-1 gap-1 mt-3" aria-label="Password requirements">
-                    {PASSWORD_RULES.map(({ key, label }) => {
-                      const met = checks[key]
-                      return (
-                        <li key={key} className="flex items-center gap-2 text-xs">
-                          {met
-                            ? <Check size={13} className="text-emerald-600 flex-shrink-0" aria-hidden="true" />
-                            : <X size={13} className="text-gray-400 flex-shrink-0" aria-hidden="true" />}
-                          <span className={met ? 'text-emerald-700' : 'text-gray-600'}>
-                            {label}<span className="sr-only">{met ? ' (met)' : ' (not met yet)'}</span>
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-
-                <div>
-                  <label htmlFor="confirm-password" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">Confirm Password</label>
-                  <div className="relative">
-                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input id="confirm-password" type={showPassword ? 'text' : 'password'} value={confirm}
-                      onChange={e => setConfirm(e.target.value)} required minLength={8}
-                      autoComplete="new-password"
-                      className="input-field w-full rounded-2xl pl-11 pr-4 py-3.5 text-sm text-gray-800"
-                      placeholder="Repeat your new password" />
-                  </div>
-                  {confirm && confirm !== password && (
-                    <p className="text-xs text-red-600 mt-1.5">Passwords don’t match yet.</p>
-                  )}
-                </div>
-
-                <div className="pt-2">
-                  <button type="submit" disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                    {loading ? (
-                      <span className="flex items-center gap-2">
-                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                        Updating password...
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-2">Update Password <ArrowRight size={16} /></span>
-                    )}
-                  </button>
-                </div>
-              </form>
-            </>
-          )}
-
-          {/* Success */}
-          {done && (
-            <div className="text-center py-4 fade-up">
-              <div className="w-16 h-16 mx-auto rounded-3xl flex items-center justify-center mb-5"
-                style={{ background: '#f0fdf4' }}>
-                <CheckCircle size={26} className="text-emerald-500" />
-              </div>
-              <h2 className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-1px' }}>Password updated! ✅</h2>
-              <p className="text-gray-500 text-sm mt-3 max-w-xs mx-auto">
-                Your password has been changed. Sign in with your new password to continue.
-              </p>
-              <Link href="/login"
-                className="mt-8 w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-sm transition-all hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}>
-                Sign in <ArrowRight size={16} />
-              </Link>
-            </div>
-          )}
-        </div>
-
-        <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.8)' }}>
-          © 2026 BarangayHub 360
-        </p>
-      </div>
-    </div>
+      {/* Success */}
+      {done && (
+        <>
+          <AuthHeading title="Password changed" />
+          <Notice tone="ok" title="All set." className="mb-5">Sign in with your new password to continue.</Notice>
+          <Button asChild size="lg" full><Link href="/login">Sign in</Link></Button>
+        </>
+      )}
+    </AuthShell>
   )
 }
