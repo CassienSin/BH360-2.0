@@ -264,7 +264,28 @@ export function SectionSkeleton({ kind = 'records', path }) {
     if (kind === 'announcements') return <RowsCard rows={3} lift lines={3} />
     if (kind === 'launcher') return <RowsCard rows={1} lift lines={3} />
   }
-  if (path === '/official' && kind === 'overview') return <OfficialHomeSkeleton />
+  if (path === '/official') {
+    if (kind === 'overview') return <OfficialHomeSkeleton />
+    if (kind === 'records') return <ListCardSkeleton rows={5} />
+    if (kind === 'announcements') return <ListCardSkeleton rows={3} lines={1} />
+    if (kind === 'table') {
+      return (
+        <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_384px]">
+          <ListCardSkeleton rows={5} />
+          <RowsCard rows={3} label />
+        </div>
+      )
+    }
+    if (kind === 'launcher') {
+      return (
+        <div className="white-card shadow-[var(--shadow-lift)] flex items-center gap-4 px-[18px] py-5">
+          <Skeleton className="size-12 rounded-[12px] shrink-0" />
+          <div className="flex-1 space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-3/4" /></div>
+          <Skeleton className="hidden sm:block h-10 w-36 rounded-[10px]" />
+        </div>
+      )
+    }
+  }
   switch (kind) {
     case 'overview': return <OverviewSkeleton tiles={OVERVIEW_TILES[path] || 4} />
     case 'announcements': return <AnnouncementsSkeleton />
@@ -589,6 +610,23 @@ function RowsCard({ rows, lift = false, label = false, trailing, lines = 0, prog
       {label && <Skeleton className="h-2.5 w-24 mx-[18px] mt-4 mb-1.5" />}
       <div className="divide-y divide-line">
         {[...Array(rows)].map((_, i) => <RowLines key={i} trailing={trailing} lines={lines} progress={progress} />)}
+      </div>
+    </div>
+  )
+}
+
+/** An official list card (O02, O04–O10): the toolbar row (a switch and a
+ *  search box), then rows. */
+function ListCardSkeleton({ rows = 5, lines = 0 }) {
+  return (
+    <div className="white-card overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2.5 px-3.5 sm:px-[18px] py-3">
+        <Skeleton className="h-10 w-64 max-w-full rounded-xl" />
+        <Skeleton className="h-9 w-56 max-w-full rounded-[10px]" />
+      </div>
+      <div className="h-9 border-t border-line bg-surface-sunk" />
+      <div className="divide-y divide-line">
+        {[...Array(rows)].map((_, i) => <RowLines key={i} lines={lines} trailing={<Skeleton className="h-[34px] w-20 rounded-[10px]" />} />)}
       </div>
     </div>
   )
