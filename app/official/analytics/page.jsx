@@ -6,6 +6,7 @@ import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { useNow } from '@/lib/useNow'
 import { PageHeader, AppButton } from '@/components/AppUI'
+import { Notice } from '@/components/ui/notice'
 import { BarChart2, RefreshCw, TrendingUp, TrendingDown, Trophy, Clock, Star, Activity, Award, Zap, Ticket, Minus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
@@ -14,37 +15,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line, AreaChart, Area,
 } from 'recharts'
-
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
 
 const HOURS_MS = 1000 * 60 * 60
 
@@ -80,8 +50,8 @@ function TrendBadge({ current, previous }) {
 function CustomTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white rounded-2xl px-4 py-3 shadow-lg border border-gray-100">
-        <p className="text-xs font-semibold text-gray-500 mb-1">{label}</p>
+      <div className="bg-white rounded-[12px] px-4 py-3 shadow-lg border border-gray-100">
+        <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
         {payload.map((p, i) => (
           <p key={i} className="text-sm font-bold" style={{ color: p.color || p.fill || 'var(--brand)' }}>
             {p.value} {p.name}
@@ -364,14 +334,13 @@ export default function AIAnalytics() {
   // ---- Page loading skeleton ----
   if (pageLoading) {
     return (
-      <div className="min-h-dvh relative overflow-clip bg-brand">
-        <AnimatedDots />
-        <PageHeader title="Analytics Dashboard" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
+      <div className="min-h-dvh relative overflow-clip bg-page">
+        <PageHeader title="Analytics" description="Loading insights…" icon={BarChart2} maxWidth={1168} onBack={() => goBack(router, '/official?section=analytics')} />
         <main className="relative z-10 max-w-6xl mx-auto px-4 py-6 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[...Array(4)].map((_, i) => (
               <div key={i} className="white-card p-5 space-y-3">
-                <div className="skeleton-shimmer w-10 h-10 rounded-2xl" />
+                <div className="skeleton-shimmer w-10 h-10 rounded-[12px]" />
                 <div className="skeleton-shimmer h-8 w-16 rounded-lg" />
                 <div className="skeleton-shimmer h-3 w-24 rounded-lg" />
               </div>
@@ -380,7 +349,7 @@ export default function AIAnalytics() {
           {[...Array(2)].map((_, i) => (
             <div key={i} className="white-card p-5">
               <div className="skeleton-shimmer h-4 w-40 rounded-lg mb-4" />
-              <div className="skeleton-shimmer h-48 rounded-2xl" />
+              <div className="skeleton-shimmer h-48 rounded-[12px]" />
             </div>
           ))}
         </main>
@@ -389,22 +358,11 @@ export default function AIAnalytics() {
   }
 
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-      </div>
+    <div className="min-h-dvh relative overflow-clip bg-page">
 
       <PageHeader
-        title="Analytics Dashboard"
-        description={`Insights and trends${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
+        title="Analytics"
+        description={`How the barangay is doing${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}`}
         icon={BarChart2} maxWidth={1168}
         onBack={() => goBack(router, '/official?section=analytics')}
         actions={
@@ -419,76 +377,69 @@ export default function AIAnalytics() {
 
         {/* Critical alert strip — most urgent info first */}
         {stats.criticalPending > 0 && (
-          <div
-            className="rounded-2xl px-4 py-3 flex items-center gap-3 fade-up"
-            style={{ background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.35)', backdropFilter: 'blur(10px)' }}
-            role="alert"
-          >
-            <span className="text-xl" aria-hidden="true">🔴</span>
-            <p className="text-sm text-white font-semibold">
-              {stats.criticalPending} critical incident{stats.criticalPending === 1 ? '' : 's'} still unresolved — needs immediate attention
-            </p>
-          </div>
+          <Notice tone="danger" title={`${stats.criticalPending} critical incident${stats.criticalPending === 1 ? '' : 's'} still unresolved.`}>
+            These need someone now. Open Incidents to dispatch.
+          </Notice>
         )}
 
         {/* KPI Scorecards */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60 mb-3">Key Performance Indicators</p>
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-muted-foreground mb-3">Key Performance Indicators</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="white-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
+                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
+                  style={{ background: 'var(--brand-strong)' }}
                 >
                   <Activity size={18} className="text-white" />
                 </div>
                 <TrendBadge current={stats.thisWeek} previous={stats.lastWeek} />
               </div>
-              <p className="text-3xl font-black text-gray-800">{stats.totalIncidents}</p>
-              <p className="text-xs text-gray-500 mt-1">Total Incidents</p>
+              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.totalIncidents}</p>
+              <p className="text-xs text-muted-foreground mt-1">Total Incidents</p>
             </div>
 
             <div className="white-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
+                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
+                  style={{ background: 'var(--ok)' }}
                 >
                   <Award size={18} className="text-white" />
                 </div>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#f0fdf4', color: '#16a34a' }}>RATE</span>
               </div>
-              <p className="text-3xl font-black text-gray-800">{stats.resolutionRate}%</p>
-              <p className="text-xs text-gray-500 mt-1">Resolution Rate</p>
+              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.resolutionRate}%</p>
+              <p className="text-xs text-muted-foreground mt-1">Resolution Rate</p>
             </div>
 
             <div className="white-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}
+                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
+                  style={{ background: 'var(--info)' }}
                 >
                   <Clock size={18} className="text-white" />
                 </div>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#eff6ff', color: '#2563eb' }}>SPEED</span>
               </div>
-              <p className="text-3xl font-black text-gray-800">{formatHours(stats.avgResponseHours)}</p>
-              <p className="text-xs text-gray-500 mt-1">Avg Response Time</p>
+              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{formatHours(stats.avgResponseHours)}</p>
+              <p className="text-xs text-muted-foreground mt-1">Avg Response Time</p>
             </div>
 
             <div className="white-card p-5">
               <div className="flex items-center justify-between mb-2">
                 <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                  className="w-10 h-10 rounded-[12px] flex items-center justify-center"
+                  style={{ background: 'var(--warn)' }}
                 >
                   <Star size={18} className="text-white fill-white" />
                 </div>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#fffbeb', color: '#d97706' }}>RATING</span>
               </div>
-              <p className="text-3xl font-black text-gray-800">{stats.avgRating ? `${stats.avgRating}★` : 'N/A'}</p>
-              <p className="text-xs text-gray-500 mt-1">Avg Resident Rating</p>
+              <p className="text-2xl font-extrabold tracking-[-0.6px] text-ink tabular-nums">{stats.avgRating ? `${stats.avgRating}★` : 'N/A'}</p>
+              <p className="text-xs text-muted-foreground mt-1">Avg Resident Rating</p>
             </div>
           </div>
 
@@ -496,15 +447,13 @@ export default function AIAnalytics() {
           {(stats.openTickets > 0 || stats.inProgressTickets > 0) && (
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <span
-                className="text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5"
-                style={{ background: 'rgba(255,255,255,0.15)', color: 'white', backdropFilter: 'blur(10px)' }}
+                className="text-xs font-bold h-[22px] px-2 rounded-[6px] flex items-center gap-1.5 bg-warn-soft text-warn"
               >
                 <Ticket size={12} /> {stats.openTickets} open ticket{stats.openTickets === 1 ? '' : 's'}
               </span>
               {stats.inProgressTickets > 0 && (
                 <span
-                  className="text-xs font-bold px-3 py-1.5 rounded-full"
-                  style={{ background: 'rgba(255,255,255,0.15)', color: 'white', backdropFilter: 'blur(10px)' }}
+                  className="text-xs font-bold h-[22px] px-2 rounded-[6px] flex items-center bg-info-soft text-info"
                 >
                   {stats.inProgressTickets} in progress
                 </span>
@@ -522,8 +471,8 @@ export default function AIAnalytics() {
             >
               <BarChart2 size={28} style={{ color: 'var(--brand)' }} />
             </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-1">No incident data yet</h3>
-            <p className="text-sm text-gray-500 max-w-md mx-auto">
+            <h3 className="text-lg font-bold text-ink mb-1">No incident data yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
               Charts and insights will appear here once residents start reporting incidents. Check back soon!
             </p>
           </div>
@@ -534,8 +483,8 @@ export default function AIAnalytics() {
           <div className="white-card p-5">
             <div className="flex items-center gap-2 mb-4">
               <Trophy size={16} style={{ color: '#f59e0b' }} />
-              <h3 className="font-bold text-gray-800 text-sm">Tanod Leaderboard</h3>
-              <span className="text-xs text-gray-500 ml-auto">{tanods.length} tanod{tanods.length === 1 ? '' : 's'}</span>
+              <h3 className="text-[15px] font-extrabold text-ink">Tanod Leaderboard</h3>
+              <span className="text-xs text-muted-foreground ml-auto">{tanods.length} tanod{tanods.length === 1 ? '' : 's'}</span>
             </div>
 
             <div className="space-y-2">
@@ -545,16 +494,16 @@ export default function AIAnalytics() {
                 return (
                   <div
                     key={t.id}
-                    className="flex items-center gap-3 px-3 py-3 rounded-2xl transition-colors hover:bg-gray-50"
+                    className="flex items-center gap-3 px-3 py-3 rounded-[12px] transition-colors hover:bg-gray-50"
                     style={{ background: idx < 3 ? `linear-gradient(90deg, ${['#fff7ed', 'var(--brand-soft)', '#fffbeb'][idx]}, transparent)` : '#fafafa' }}
                   >
                     <div className="flex items-center gap-2 flex-shrink-0 w-12">
-                      {medal ? <span className="text-2xl" aria-hidden="true">{medal}</span> : <span className="text-sm font-bold text-gray-500">#{idx + 1}</span>}
+                      {medal ? <span className="text-2xl" aria-hidden="true">{medal}</span> : <span className="text-sm font-bold text-muted-foreground">#{idx + 1}</span>}
                     </div>
 
                     <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                      style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}
+                      className="w-10 h-10 rounded-[12px] flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
+                      style={{ background: 'var(--ok)' }}
                     >
                       {t.avatar_url ? (
                         <img loading="lazy" decoding="async" src={t.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -564,13 +513,13 @@ export default function AIAnalytics() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-800 truncate">{t.name}</p>
+                      <p className="text-sm font-bold text-ink truncate">{t.name}</p>
                       <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className="text-gray-500">{t.resolved}/{t.assigned} resolved</span>
+                        <span className="text-muted-foreground">{t.resolved}/{t.assigned} resolved</span>
                         {t.avgRating > 0 && (
                           <span className="flex items-center gap-0.5 text-amber-600 font-semibold">
                             <Star size={10} fill="#f59e0b" /> {t.avgRating.toFixed(1)}
-                            <span className="text-gray-500 font-normal">({t.ratingCount})</span>
+                            <span className="text-muted-foreground font-normal">({t.ratingCount})</span>
                           </span>
                         )}
                         {t.avgResponseTime !== null && (
@@ -587,13 +536,13 @@ export default function AIAnalytics() {
                       >
                         {Math.round(t.score)}
                       </p>
-                      <p className="text-xs text-gray-500">SCORE</p>
+                      <p className="text-xs text-muted-foreground">SCORE</p>
                     </div>
                   </div>
                 )
               })}
             </div>
-            <p className="text-xs text-gray-500 mt-3 text-center">
+            <p className="text-xs text-muted-foreground mt-3 text-center">
               Score = resolution rate (50%) · resident rating (30%) · response speed (20%)
             </p>
           </div>
@@ -606,7 +555,7 @@ export default function AIAnalytics() {
               <div className="white-card p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Activity size={16} style={{ color: 'var(--brand)' }} />
-                  <h3 className="font-bold text-gray-800 text-sm">Status Distribution</h3>
+                  <h3 className="text-[15px] font-extrabold text-ink">Status Distribution</h3>
                 </div>
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
@@ -625,7 +574,7 @@ export default function AIAnalytics() {
               <div className="white-card p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <Zap size={16} style={{ color: '#f97316' }} />
-                  <h3 className="font-bold text-gray-800 text-sm">Priority Levels</h3>
+                  <h3 className="text-[15px] font-extrabold text-ink">Priority Levels</h3>
                 </div>
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
@@ -646,25 +595,25 @@ export default function AIAnalytics() {
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Activity size={16} style={{ color: 'var(--brand)' }} />
-                <h3 className="font-bold text-gray-800 text-sm">Activity Heatmap</h3>
-                <span className="text-xs text-gray-500 ml-auto">When incidents are reported</span>
+                <h3 className="text-[15px] font-extrabold text-ink">Activity Heatmap</h3>
+                <span className="text-xs text-muted-foreground ml-auto">When incidents are reported</span>
               </div>
 
               {/* Phones: the 24 hours scroll sideways under a fixed day column. */}
-              <p className="sm:hidden text-xs text-gray-500 mb-2">Swipe sideways to see all 24 hours.</p>
+              <p className="sm:hidden text-xs text-muted-foreground mb-2">Swipe sideways to see all 24 hours.</p>
               <div className="overflow-x-auto rail-fade sm:[mask-image:none] sm:[-webkit-mask-image:none]">
                 <div className="min-w-[600px]">
                   <div className="flex items-center gap-1 mb-1">
                     <div className="w-10 flex-shrink-0 sticky left-0 z-[1] bg-white"></div>
                     {heatmapData.hours.map(h => (
-                      <div key={h} className="flex-1 text-[11px] text-gray-500 text-center">
+                      <div key={h} className="flex-1 text-[11px] text-muted-foreground text-center">
                         {h % 3 === 0 ? `${h}h` : ''}
                       </div>
                     ))}
                   </div>
                   {heatmapData.days.map(day => (
                     <div key={day} className="flex items-center gap-1 mb-1">
-                      <div className="w-10 flex-shrink-0 self-stretch flex items-center sticky left-0 z-[1] bg-white text-xs font-semibold text-gray-500">{day}</div>
+                      <div className="w-10 flex-shrink-0 self-stretch flex items-center sticky left-0 z-[1] bg-white text-xs font-semibold text-muted-foreground">{day}</div>
                       {heatmapData.hours.map(h => {
                         const value = heatmapData.grid[`${day}-${h}`] || 0
                         return (
@@ -682,11 +631,11 @@ export default function AIAnalytics() {
               </div>
 
               <div className="flex items-center gap-2 mt-4 text-xs">
-                <span className="text-gray-500">Less</span>
+                <span className="text-muted-foreground">Less</span>
                 {[0, 0.25, 0.5, 0.75, 1].map((intensity, i) => (
                   <div key={i} className="w-5 h-5 rounded" style={{ background: getHeatmapColor(intensity * heatmapData.max) }} />
                 ))}
-                <span className="text-gray-500">More</span>
+                <span className="text-muted-foreground">More</span>
               </div>
             </div>
 
@@ -694,7 +643,7 @@ export default function AIAnalytics() {
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
                 <TrendingUp size={16} style={{ color: 'var(--brand)' }} />
-                <h3 className="font-bold text-gray-800 text-sm">Category Trends — Last 4 Weeks</h3>
+                <h3 className="text-[15px] font-extrabold text-ink">Category Trends — Last 4 Weeks</h3>
               </div>
               <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trendCategoryData}>
@@ -723,7 +672,7 @@ export default function AIAnalytics() {
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Activity size={16} style={{ color: 'var(--brand)' }} />
-                <h3 className="font-bold text-gray-800 text-sm">Daily Activity — Last 14 Days</h3>
+                <h3 className="text-[15px] font-extrabold text-ink">Daily Activity — Last 14 Days</h3>
               </div>
               <ResponsiveContainer width="100%" height={220}>
                 <AreaChart data={dailyTrend}>
@@ -751,7 +700,7 @@ export default function AIAnalytics() {
             <div className="white-card p-5">
               <div className="flex items-center gap-2 mb-4">
                 <BarChart2 size={16} style={{ color: 'var(--brand)' }} />
-                <h3 className="font-bold text-gray-800 text-sm">Top Incident Categories</h3>
+                <h3 className="text-[15px] font-extrabold text-ink">Top Incident Categories</h3>
               </div>
               <div className="space-y-3">
                 {topCategories.map(cat => {
@@ -761,11 +710,11 @@ export default function AIAnalytics() {
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
                           <span className="text-base" aria-hidden="true">{cat.icon}</span>
-                          <span className="text-sm font-semibold text-gray-700">{cat.category}</span>
+                          <span className="text-sm font-semibold text-body">{cat.category}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold" style={{ color: cat.color }}>{cat.count}</span>
-                          <span className="text-xs text-gray-500">({percent.toFixed(0)}%)</span>
+                          <span className="text-xs text-muted-foreground">({percent.toFixed(0)}%)</span>
                         </div>
                       </div>
                       <div className="relative h-2 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
@@ -794,29 +743,29 @@ export default function AIAnalytics() {
           <div className="relative">
             <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 relative" style={{ animation: 'float 2s ease-in-out infinite' }}>
+                <div className="w-12 h-12 rounded-[12px] flex items-center justify-center flex-shrink-0 relative">
                   <div
-                    className="absolute inset-0 rounded-2xl"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
+                    className="absolute inset-0 rounded-[12px]"
+                    style={{ background: 'var(--brand-strong)' }}
                   />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <BarChart2 size={20} className="text-white" />
                   </div>
                   <div
                     className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center z-10"
-                    style={{ background: 'linear-gradient(135deg, #fbbf24, #f59e0b)', boxShadow: '0 2px 8px rgba(251,191,36,0.4)' }}
+                    style={{ background: 'var(--warn)' }}
                   >
                     <span className="text-[11px]" aria-hidden="true">✨</span>
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-gray-800 text-lg">AI-Powered Insights</h2>
+                    <h2 className="font-bold text-ink text-lg">AI-Powered Insights</h2>
                     <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: '#fef3c7', color: '#92400e' }}>
                       CLAUDE AI
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500">Smart analysis powered by Claude</p>
+                  <p className="text-xs text-muted-foreground">Smart analysis powered by Claude</p>
                 </div>
               </div>
 
@@ -824,7 +773,7 @@ export default function AIAnalytics() {
                 <button
                   onClick={generateAnalysis}
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-[12px] text-xs font-bold transition-all hover:scale-105 disabled:opacity-50"
                   style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}
                 >
                   <RefreshCw size={12} /> Regenerate
@@ -837,31 +786,31 @@ export default function AIAnalytics() {
                 <div className="relative w-20 h-20 mx-auto mb-5">
                   <div
                     className="absolute inset-0 rounded-3xl"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', opacity: 0.1, animation: 'float 4s ease-in-out infinite' }}
+                    style={{ background: 'var(--brand-strong)', opacity: 0.1 }}
                   />
                   <div
-                    className="absolute inset-2 rounded-2xl flex items-center justify-center"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
+                    className="absolute inset-2 rounded-[12px] flex items-center justify-center"
+                    style={{ background: 'var(--brand-strong)' }}
                   >
                     <BarChart2 size={28} className="text-white" />
                   </div>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">Ready to analyze your data</h3>
-                <p className="text-sm text-gray-500 mb-1 max-w-md mx-auto">
+                <h3 className="text-lg font-bold text-ink mb-2">Ready to analyze your data</h3>
+                <p className="text-sm text-muted-foreground mb-1 max-w-md mx-auto">
                   Get AI-powered insights, trend analysis, hotspot detection, and actionable recommendations.
                 </p>
-                <p className="text-xs text-gray-500 mb-6">Analysis takes about 10-15 seconds.</p>
+                <p className="text-xs text-muted-foreground mb-6">Analysis takes about 10-15 seconds.</p>
 
                 <button
                   onClick={generateAnalysis}
                   disabled={!dataLoaded || incidents.length === 0}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:scale-105"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 32px rgba(91,84,232,0.4)' }}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-[12px] text-sm font-bold text-white disabled:opacity-50 transition-all hover:scale-105"
+                  style={{ background: 'var(--brand-strong)' }}
                 >
                   ✨ Generate AI Report
                 </button>
                 {incidents.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-3">Needs at least one incident to analyze</p>
+                  <p className="text-xs text-muted-foreground mt-3">Needs at least one incident to analyze</p>
                 )}
               </div>
             )}
@@ -869,22 +818,22 @@ export default function AIAnalytics() {
             {loading && (
               <div className="py-8" role="status" aria-label="Generating analysis">
                 <div className="flex items-center justify-center gap-3 mb-6">
-                  <div className="relative w-12 h-12 flex-shrink-0" style={{ animation: 'float 2s ease-in-out infinite' }}>
+                  <div className="relative w-12 h-12 flex-shrink-0">
                     <div
-                      className="absolute inset-0 rounded-2xl"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)' }}
+                      className="absolute inset-0 rounded-[12px]"
+                      style={{ background: 'var(--brand-strong)' }}
                     />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <BarChart2 size={20} className="text-white" />
                     </div>
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-800">Claude AI is analyzing...</p>
+                    <p className="text-sm font-bold text-ink">Claude AI is analyzing...</p>
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
                       <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
                       <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
-                      <span className="text-xs text-gray-500 ml-1.5">Processing your data</span>
+                      <span className="text-xs text-muted-foreground ml-1.5">Processing your data</span>
                     </div>
                   </div>
                 </div>
@@ -899,16 +848,16 @@ export default function AIAnalytics() {
             {analysis && (
               <div className="fade-up">
                 <div
-                  className="rounded-2xl p-6 mb-4"
+                  className="rounded-[12px] p-6 mb-4"
                   style={{ background: 'linear-gradient(135deg, var(--app-surface) 0%, #f5f4ff 100%)', border: '1px solid var(--brand-soft)' }}
                 >
-                  <div className="markdown ai-analysis text-gray-700 leading-relaxed">
+                  <div className="markdown ai-analysis text-body leading-relaxed">
                     <ReactMarkdown>{analysis}</ReactMarkdown>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between flex-wrap gap-3 mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Generated at {analysisTime?.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -924,7 +873,7 @@ export default function AIAnalytics() {
                       onClick={generateAnalysis}
                       disabled={loading}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-50"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}
+                      style={{ background: 'var(--brand-strong)' }}
                     >
                       <RefreshCw size={11} /> Regenerate
                     </button>
