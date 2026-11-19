@@ -9,7 +9,7 @@ import {
 } from '@/components/icons/BhIcons'
 import { Button } from '@/components/ui/button'
 import { StatStrip } from '@/components/ui/stat-strip'
-import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
+import { WaitingCard, RecentIncidentsCard, TodayCard } from '@/components/official/OfficialSections'
 import IncidentsSection from '@/components/IncidentsSection'
 import DocumentQueue from '@/components/DocumentQueue'
 import VerificationQueue from '@/components/VerificationQueue'
@@ -21,7 +21,8 @@ import AnnouncementsSection from '@/components/official/AnnouncementsSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { useNow } from '@/lib/useNow'
-import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS } from './fixtures'
+import { useHydrated } from '@/lib/useHydrated'
+import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS, APPOINTMENTS } from './fixtures'
 
 // The band heading per section, as app/official/page.jsx sets it.
 const HEADS = {
@@ -62,7 +63,15 @@ const NAV = [
 /** The official dashboard's sections with invented data (fixtures.js), for
  *  checking the Crafted styling without an official account. Actions do
  *  nothing; components that load their own data show their empty state. */
-export default function OfficialPreview({ initial }) {
+/** The fixtures' times come from Date.now() when the module loads, so the
+ *  server and the browser would disagree on every "4m ago": render in the
+ *  browser only, after hydration, so there is nothing to mismatch. */
+export default function OfficialPreview(props) {
+  const hydrated = useHydrated()
+  return hydrated ? <PreviewBody {...props} /> : null
+}
+
+function PreviewBody({ initial }) {
   const [section, setSection] = useState(initial)
   const [sidebarOpen, setSidebarOpen] = useSidebarState(false)
   const title = NAV.flatMap(g => g.items).find(i => i.key === section)?.label
@@ -115,8 +124,9 @@ export default function OfficialPreview({ initial }) {
       <div className="mx-auto w-full max-w-[100rem]">
         {home && (
           <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+            <div className="min-w-0"><WaitingCard items={waiting} onAct={noop} /></div>
             <div className="flex min-w-0 flex-col gap-3.5">
-              <WaitingCard items={waiting} onAct={noop} />
+              <TodayCard appointments={APPOINTMENTS} readyDocuments={1} onOpenCalendar={noop} onOpenDocuments={noop} />
               <RecentIncidentsCard incidents={INCIDENTS} onOpen={noop} onViewAll={noop} />
             </div>
           </div>
