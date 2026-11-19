@@ -665,7 +665,7 @@ function TanodDashboard() {
               <StatStrip lift={false} stats={[
                 { label: 'Not opened', value: unacknowledged, tone: unacknowledged ? 'danger' : 'default', note: `${assignedIncidents.length} assigned` },
                 { label: 'Overdue', value: overdue.length, tone: overdue.length ? 'danger' : 'default', note: overdue.length ? 'respond soon' : 'within target' },
-                { label: 'Response', value: stats.respond.label || '—', note: 'on average' },
+                { label: 'Response', value: stats.respond.label || '—', note: 'first reply' },
               ]} className="grid-cols-3 sm:grid-flow-row sm:grid-cols-3" />
               <DutyScheduleSummary profile={profile} />
             </div>
@@ -727,7 +727,7 @@ function TanodDashboard() {
                         <RowTitle className="flex-1" title={badge.title} sub={badge.desc} />
                         {unlocked
                           ? <Status tone="ok">Reached</Status>
-                          : <span className="text-xs font-bold text-muted-foreground tabular-nums">{badge.type === 'count' ? `${Math.min(progress, badge.target)} of ${badge.target}` : `${progress}% of ${badge.target}%`}</span>}
+                          : <span className="text-xs font-bold text-muted-foreground tabular-nums">{badge.type === 'count' ? `${Math.min(progress, badge.target)} of ${badge.target}` : stats.totalAssigned ? `${progress}% of ${badge.target}%` : `— of ${badge.target}%`}</span>}
                       </Row>
                     )
                   })}

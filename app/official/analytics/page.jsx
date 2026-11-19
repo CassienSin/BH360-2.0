@@ -21,7 +21,8 @@ import {
 const HOURS_MS = 1000 * 60 * 60
 
 function formatHours(hours) {
-  if (hours == null) return 'N/A'
+  // No data is a dash, not N/A or 0 (one rule for every rate and average).
+  if (hours == null) return '—'
   if (hours < 1) return `${Math.round(hours * 60)}m`
   if (hours < 48) return `${hours.toFixed(1)}h`
   return `${(hours / 24).toFixed(1)}d`
@@ -328,7 +329,7 @@ export default function AIAnalytics() {
       band={<StatStrip stats={[
         { label: 'Reports', value: stats.totalIncidents, note: `${stats.thisWeek} this week, ${stats.lastWeek} the week before` },
         { label: 'Avg. response', value: formatHours(stats.avgResponseHours), note: 'to the first response' },
-        { label: 'Resolved', value: stats.resolvedIncidents, tone: stats.resolvedIncidents ? 'ok' : 'default', note: `${stats.resolutionRate}% of reports` },
+        { label: 'Resolved', value: stats.resolvedIncidents, tone: stats.resolvedIncidents ? 'ok' : 'default', note: stats.totalIncidents ? `${stats.resolutionRate}% of reports` : 'no reports yet' },
         { label: 'Rating', value: stats.avgRating ? `${stats.avgRating} / 5` : '—', note: 'from residents' },
       ]} />}>
       <div className="space-y-6">
@@ -429,10 +430,10 @@ export default function AIAnalytics() {
                     <div className="text-right flex-shrink-0">
                       <p
                         className="text-lg font-black"
-                        style={{ color: t.score >= 70 ? '#22c55e' : t.score >= 40 ? '#f97316' : '#9ca3af' }}
-                        title="Score = resolution rate (50%) + rating (30%) + responsiveness (20%)"
+                        style={{ color: !t.assigned ? 'var(--text-muted)' : t.score >= 70 ? 'var(--ok)' : t.score >= 40 ? 'var(--warn)' : 'var(--text-muted)' }}
+                        title={t.assigned ? 'Score = resolution rate (50%) + rating (30%) + responsiveness (20%)' : 'Nothing assigned yet, so there is nothing to score'}
                       >
-                        {Math.round(t.score)}
+                        {t.assigned ? Math.round(t.score) : '—'}
                       </p>
                       <p className="text-xs text-muted-foreground">SCORE</p>
                     </div>
