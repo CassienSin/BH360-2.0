@@ -1,13 +1,23 @@
 'use client'
-import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation' 
 import { isSettled } from '@/lib/recordState'
-import { AlertTriangle, Search, X, Download, FileSpreadsheet, SlidersHorizontal, Star, ChevronDown, Clock, Shield, Phone, Check, Send, Scale, ShieldAlert, Pencil, ArrowUpDown } from 'lucide-react'
+import { X, Check, Pencil, ExternalLink } from 'lucide-react'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG, getPriority } from '@/lib/legalBasis'
-import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
-import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
+import { computeStanding } from '@/lib/triage'
 import { useNow } from '@/lib/useNow'
+import { CategoryIcon, categoryColor } from '@/lib/categoryIcons'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Tag, Status, TONE_FG } from '@/components/ui/tag'
+import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
+import { Avatar } from '@/components/ui/avatar'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
+import { Textarea } from '@/components/ui/textarea'
+import { SearchBox, FilterSelect, ExportMenu, RowMenu } from '@/components/official/Toolbar'
 
 
 const PRIORITY_CONFIG = {
@@ -17,18 +27,19 @@ const PRIORITY_CONFIG = {
   Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
 }
 
-const STATUS_CONFIG = {
-  pending: { label: 'Pending', color: '#c2410c', bg: '#fff7ed' },
-  assigned: { label: 'Assigned', color: '#1d4ed8', bg: '#eff6ff' },
-  resolved: { label: 'Resolved', color: '#15803d', bg: '#f0fdf4' },
-}
+// Priority as a tag (DESIGN.md §5): red only for Critical.
+const PRIORITY_TONE = { Critical: 'danger', High: 'warn', Medium: 'quiet', Low: 'quiet' }
 
+// The switch above the table (O02). Active is what still needs the
+// barangay: unassigned plus dispatched.
 const STATUS_FILTERS = [
-  { value: 'all', label: 'All', color: '#5B54E8' },
-  { value: 'pending', label: 'Pending', color: '#f97316' },
-  { value: 'assigned', label: 'Assigned', color: '#3b82f6' },
-  { value: 'resolved', label: 'Resolved', color: '#22c55e' },
+  { value: 'active', label: 'Active' },
+  { value: 'pending', label: 'Unassigned' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'all', label: 'All' },
 ]
+const inStatus = (inc, status) =>
+  status === 'all' || (status === 'active' ? !isSettled(inc.status) : inc.status === status)
 
 const SORTS = [
   { value: 'triage', label: 'Needs action first' },
@@ -45,35 +56,7 @@ const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
    blew out to unreadable proportions on a real phone.
 --------------------------------------------------------------------------- */
 const styles = `
-.inc-collapse { display: grid; grid-template-rows: 0fr; opacity: 0; }
-.inc-collapse > .inc-collapse-inner { overflow: hidden; min-height: 0; }
-.inc-collapse.inc-open { grid-template-rows: 1fr; opacity: 1; }
-
-.inc-noscrollbar::-webkit-scrollbar { display: none; }
-.inc-noscrollbar { scrollbar-width: none; }
-.inc-sheet-scroll { -webkit-overflow-scrolling: touch; }
-
-/* Pinned type scale — immune to browser/OS font scaling blowing up the grid */
-.inc-t10 { font-size: 10px; line-height: 1.35; }
-.inc-t11 { font-size: 11px; line-height: 1.4; }
-.inc-t12 { font-size: 12px; line-height: 1.45; }
-.inc-t13 { font-size: 13px; line-height: 1.45; }
-.inc-t14 { font-size: 14px; line-height: 1.4; }
-
-/* Horizontal chip rail: fades at the right edge so it reads as scrollable
-   instead of looking like a clipped row */
-.inc-rail { position: relative; }
-.inc-rail::after {
-  content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 24px;
-  background: linear-gradient(90deg, transparent, white);
-  pointer-events: none;
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes incCardIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: none; }
-  }
   @keyframes incFadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes incSheetIn {
     from { opacity: 0; transform: translateY(20px) scale(0.98); }
@@ -81,31 +64,14 @@ const styles = `
   }
   @keyframes incSheetUpMobile { from { transform: translateY(100%); } to { transform: none; } }
   @keyframes incSheetDownMobile { from { transform: none; } to { transform: translateY(100%); } }
-  @keyframes incZoomIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
-  @keyframes incRowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
-
-  .inc-card { animation: incCardIn 320ms ${EASE} both; }
   .inc-backdrop { animation: incFadeIn 180ms ease-out both; }
   .inc-backdrop-out { animation: incFadeIn 160ms ease-in reverse both; }
   .inc-sheet { animation: incSheetIn 300ms ${EASE} both; }
   .inc-sheet-out { animation: incFadeIn 180ms ease-in reverse both; }
-  .inc-zoom { animation: incZoomIn 260ms ${EASE} both; }
-  .inc-row { animation: incRowIn 260ms ${EASE} both; }
-
   @media (max-width: 639px) {
     .inc-sheet { animation: incSheetUpMobile 320ms ${EASE} both; }
     .inc-sheet-out { animation: incSheetDownMobile 220ms cubic-bezier(0.4, 0, 1, 1) both; }
   }
-
-  .inc-collapse { transition: grid-template-rows 300ms ${EASE}, opacity 220ms ease-out; }
-  .inc-press { transition: transform 120ms ${EASE}; }
-  .inc-press:active { transform: scale(0.96); }
-  .inc-chevron { transition: transform 280ms ${EASE}; }
-  .inc-lift { transition: box-shadow 240ms ${EASE}, transform 240ms ${EASE}; }
-  @media (hover: hover) {
-    .inc-lift:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(91,84,232,0.10); }
-  }
-  .inc-tint { transition: background 200ms ${EASE}, color 200ms ${EASE}, border-color 200ms ${EASE}; }
 }
 `
 
@@ -148,24 +114,30 @@ function Sheet({ open, onClose, labelledBy, children }) {
   if (!mounted) return null
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 ${closing ? 'inc-backdrop-out' : 'inc-backdrop'}`}
-      style={{ background: 'rgba(17,17,27,0.45)', backdropFilter: 'blur(6px)' }}
+    <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-[var(--scrim)] ${closing ? 'inc-backdrop-out' : 'inc-backdrop'}`}
       onClick={onClose}>
       <div ref={panelRef} tabIndex={-1}
         role="dialog" aria-modal="true" aria-labelledby={labelledBy}
         onClick={e => e.stopPropagation()}
-        className={`w-full sm:max-w-sm bg-white outline-none flex flex-col ${closing ? 'inc-sheet-out' : 'inc-sheet'}`}
-        style={{
-          borderRadius: '24px 24px 0 0',
-          boxShadow: '0 -8px 48px rgba(17,17,27,0.25)',
-          maxHeight: '85dvh',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        }}>
-        <div className="sm:hidden flex justify-center pt-2.5 pb-1 flex-shrink-0">
-          <div className="w-9 h-1 rounded-full" style={{ background: '#e5e7eb' }} />
-        </div>
+        className={`flex max-h-[85dvh] w-full flex-col rounded-t-[20px] bg-surface pb-[env(safe-area-inset-bottom,0px)] shadow-[var(--shadow-float)] outline-none sm:max-w-md sm:rounded-[16px] sm:border sm:border-line ${closing ? 'inc-sheet-out' : 'inc-sheet'}`}>
+        <span aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
         {children}
       </div>
+    </div>
+  )
+}
+
+function SheetHead({ id, title, sub, onClose }) {
+  return (
+    <div className="flex shrink-0 items-start gap-3 border-b border-line px-[18px] pt-3.5 pb-3 sm:pt-[18px]">
+      <div className="min-w-0 flex-1">
+        <h3 id={id} className="text-[17px] font-extrabold text-ink">{title}</h3>
+        {sub && <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{sub}</p>}
+      </div>
+      <button type="button" onClick={onClose} aria-label="Close"
+        className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
+        <X size={18} strokeWidth={1.9} />
+      </button>
     </div>
   )
 }
@@ -193,97 +165,59 @@ function TanodPicker({ open, onClose, incident, tanods, activeCounts, onPick }) 
   const onDuty = list.filter(t => t.on_duty)
   const offDuty = list.filter(t => !t.on_duty)
 
-  const row = (t, i) => {
+  const row = t => {
     const active = activeCounts[t.id] || 0
     return (
-      <button key={t.id} onClick={() => { onPick(t.id); onClose() }}
-        className="inc-row inc-press w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 active:bg-gray-100"
-        style={{ animationDelay: `${Math.min(i, 8) * 25}ms` }}>
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden inc-t13 font-bold text-white"
-          style={{
-            background: t.on_duty
-              ? 'linear-gradient(135deg, #22c55e, #16a34a)'
-              : 'linear-gradient(135deg, #9ca3af, #6b7280)',
-          }}>
-          {t.avatar_url
-            ? <img loading="lazy" decoding="async" src={t.avatar_url} alt="" className="w-full h-full object-cover" />
-            : (t.full_name?.[0]?.toUpperCase() || '?')}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="inc-t13 font-bold text-gray-800 truncate">{t.full_name}</p>
-          <p className="inc-t11 text-gray-500 truncate">
+      <Row key={t.id} as="button" type="button" interactive onClick={() => { onPick(t.id); onClose() }} className="flex items-center gap-3">
+        <Avatar name={t.full_name} src={t.avatar_url} size="sm" tone={t.on_duty ? 'ok' : 'brand'} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-bold text-ink">{t.full_name}</span>
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
             {active > 0 ? `${active} active` : 'No active assignments'}
             {t.phone ? ` · ${t.phone}` : ''}
-          </p>
-        </div>
-        <span className="inc-t10 px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-          style={{
-            background: t.on_duty ? '#f0fdf4' : '#f3f4f6',
-            color: t.on_duty ? '#16a34a' : '#9ca3af',
-          }}>
-          {t.on_duty ? 'On duty' : 'Off duty'}
+          </span>
         </span>
-      </button>
+        <Status tone={t.on_duty ? 'ok' : 'quiet'} className="shrink-0">{t.on_duty ? 'On duty' : 'Off duty'}</Status>
+      </Row>
     )
   }
+  const group = label => (
+    <p className="sticky top-0 z-10 border-b border-line bg-surface-sunk px-[18px] py-2 text-xs font-bold text-muted-foreground">{label}</p>
+  )
 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="dispatch-title">
-      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-        <div className="flex-1 min-w-0">
-          <h3 id="dispatch-title" className="inc-t13 font-bold text-gray-800">Dispatch a tanod</h3>
-          <p className="inc-t11 text-gray-500 truncate">{incident?.title}</p>
-        </div>
-        <button onClick={onClose} aria-label="Close"
-          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 flex-shrink-0">
-          <X size={16} />
-        </button>
-      </div>
+      <SheetHead id="dispatch-title" title="Dispatch a tanod" sub={incident?.title} onClose={onClose} />
 
       {incident && LEGAL_BASIS[incident.category]?.responseMode === 'refer_to_agency' && (
-        <div className="mx-4 mt-3 px-3 py-2.5 rounded-xl flex items-start gap-2 flex-shrink-0"
-          style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
-          <ShieldAlert size={13} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
-          <p className="inc-t11 text-orange-800">
-            <strong>{LEGAL_BASIS[incident.category].agency}</strong> has authority here.
-            Dispatch to document and assist only — not to intervene.
-          </p>
-        </div>
+        <Notice tone="warn" className="mx-[18px] mt-3 shrink-0">
+          <strong>{LEGAL_BASIS[incident.category].agency}</strong> has authority here.
+          Dispatch to document and assist only, not to intervene.
+        </Notice>
       )}
 
       {tanods.length > 6 && (
-        <div className="px-4 py-2.5 flex-shrink-0" style={{ borderBottom: '1px solid #f7f6ff' }}>
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-            <input value={query} onChange={e => setQuery(e.target.value)}
-              placeholder="Find a tanod…" aria-label="Find a tanod"
-              className="input-field w-full rounded-xl pl-8 pr-3 py-2 inc-t13 text-gray-800" />
-          </div>
+        <div className="shrink-0 border-b border-line px-[18px] py-2.5">
+          <SearchBox value={query} onChange={setQuery} label="Find a tanod" placeholder="Find a tanod" />
         </div>
       )}
 
-      <div className="overflow-y-auto inc-sheet-scroll flex-1">
+      <div className="flex-1 overflow-y-auto">
         {list.length === 0 && (
-          <p className="px-4 py-8 text-center inc-t13 text-gray-500">
-            {tanods.length === 0 ? 'No tanods registered yet.' : 'No tanod matches that name.'}
-          </p>
+          <Muted className="px-[18px] py-6">
+            {tanods.length === 0 ? 'No tanods yet. Tanods join with an invite code from Users.' : 'No tanod matches that name.'}
+          </Muted>
         )}
         {onDuty.length > 0 && (
           <>
-            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10"
-              style={{ background: 'var(--app-surface)' }}>
-              Available now ({onDuty.length})
-            </p>
-            {onDuty.map(row)}
+            {group(`Available now · ${onDuty.length}`)}
+            <Rows>{onDuty.map(row)}</Rows>
           </>
         )}
         {offDuty.length > 0 && (
           <>
-            <p className="px-4 py-1.5 inc-t10 font-bold uppercase tracking-wider text-gray-500 sticky top-0 z-10"
-              style={{ background: 'var(--app-surface)' }}>
-              Off duty ({offDuty.length}) · may not respond right away
-            </p>
-            {offDuty.map(row)}
+            {group(`Off duty · ${offDuty.length} · may not respond right away`)}
+            <Rows>{offDuty.map(row)}</Rows>
           </>
         )}
       </div>
@@ -326,138 +260,59 @@ function PriorityOverride({ open, onClose, incident, onSubmit }) {
 
   return (
     <Sheet open={open} onClose={onClose} labelledBy="override-title">
-      <div className="px-4 pt-3 pb-3 flex items-start gap-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-        <div className="flex-1 min-w-0">
-          <h3 id="override-title" className="inc-t13 font-bold text-gray-800">Adjust priority</h3>
-          <p className="inc-t11 text-gray-500 truncate">{incident.title}</p>
-        </div>
-        <button onClick={onClose} aria-label="Close"
-          className="inc-press w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 flex-shrink-0">
-          <X size={16} />
-        </button>
-      </div>
+      <SheetHead id="override-title" title="Adjust priority" sub={incident.title} onClose={onClose} />
 
-      <div className="overflow-y-auto inc-sheet-scroll flex-1 px-4 py-3 space-y-3">
+      <div className="flex-1 space-y-4 overflow-y-auto px-[18px] py-4">
         {basis?.law && (
-          <div className="p-2.5 rounded-xl flex items-start gap-2" style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-            <Scale size={12} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} aria-hidden="true" />
-            <p className="inc-t11" style={{ color: 'var(--brand)' }}>
-              System assigned <strong>{lawAssigned}</strong> under <strong>{basis.law}</strong>.
-              Overriding records your name and reason.
-            </p>
-          </div>
+          <Notice tone="info">
+            The system set <strong>{lawAssigned}</strong> under <strong>{basis.law}</strong>.
+            A change records your name and reason.
+          </Notice>
         )}
 
         {incident.priority_override_reason && (
-          <div className="p-2.5 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-            <p className="inc-t10 font-bold uppercase tracking-wider text-amber-700 mb-1">Previously adjusted</p>
-            <p className="inc-t11 text-amber-900 italic">&quot;{incident.priority_override_reason}&quot;</p>
-          </div>
+          <Notice tone="warn" title="Changed before">&ldquo;{incident.priority_override_reason}&rdquo;</Notice>
         )}
 
         <div>
-          <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">New priority</p>
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(PRIORITY_CONFIG).sort((a, b) => b[1].order - a[1].order).map(([p, conf]) => (
-              <button key={p} onClick={() => setPicked(p)}
-                aria-pressed={picked === p}
-                className="inc-press inc-tint p-2.5 rounded-xl inc-t12 font-bold flex items-center gap-2"
-                style={{
-                  background: picked === p ? conf.bg : 'var(--app-surface)',
-                  color: picked === p ? conf.color : '#6b7280',
-                  border: `2px solid ${picked === p ? conf.color : 'var(--brand-soft)'}`,
-                }}>
-                <span aria-hidden="true">{conf.icon}</span> {p}
-                {p === lawAssigned && <span className="ml-auto inc-t10 opacity-60">auto</span>}
-              </button>
-            ))}
+          <p className="mb-2 text-[13px] font-bold text-ink">New priority</p>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="New priority">
+            {Object.entries(PRIORITY_CONFIG).sort((a, b) => b[1].order - a[1].order).map(([p]) => {
+              const on = picked === p
+              return (
+                <button key={p} type="button" onClick={() => setPicked(p)} aria-pressed={on}
+                  className={`flex h-11 items-center gap-2 rounded-[10px] border px-3 text-sm font-bold outline-none transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong ${on ? 'border-brand-strong bg-brand-soft text-brand-strong' : 'border-line bg-surface text-ink hover:border-line-strong'}`}>
+                  <span className="size-[7px] rounded-full" style={{ background: TONE_FG[PRIORITY_TONE[p]] }} aria-hidden="true" />
+                  {p}
+                  {p === lawAssigned && <span className="ml-auto text-xs font-bold text-muted-foreground">by law</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
 
         <div>
-          <label htmlFor="override-reason" className="inc-t10 font-bold text-gray-500 uppercase tracking-wider block mb-1.5">
-            Reason for change {changed && <span className="text-red-500">*</span>}
+          <label htmlFor="override-reason" className="mb-2 block text-[13px] font-bold text-ink">
+            Reason for the change
           </label>
-          <textarea id="override-reason" value={reason} onChange={e => setReason(e.target.value)}
+          <Textarea id="override-reason" value={reason} onChange={e => setReason(e.target.value)}
             rows={3} maxLength={300} disabled={!changed}
-            placeholder="e.g. Floodwater above waist level, families evacuating"
-            className="input-field w-full rounded-xl px-3 py-2.5 inc-t13 text-gray-800 resize-none disabled:opacity-50" />
-          <p className="inc-t10 text-gray-500 text-right mt-1">
-            {changed && reason.trim().length < 10
-              ? `${10 - reason.trim().length} more characters needed`
-              : `${reason.length}/300`}
+            placeholder="For example: water above waist level, families evacuating" />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {!changed ? 'Pick a different priority first.'
+              : reason.trim().length < 10 ? `${10 - reason.trim().length} more characters needed`
+                : `${reason.length} of 300`}
           </p>
         </div>
       </div>
 
-      <div className="px-4 py-3 flex gap-2 flex-shrink-0" style={{ borderTop: '1px solid var(--brand-soft)' }}>
-        <button onClick={onClose}
-          className="inc-press flex-1 h-11 rounded-xl inc-t12 font-bold"
-          style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-          Cancel
-        </button>
-        <button onClick={save} disabled={!canSave}
-          className="inc-press flex-1 h-11 rounded-xl inc-t12 font-bold text-white disabled:opacity-40"
-          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
+      <div className="flex shrink-0 gap-2.5 border-t border-line px-[18px] py-3">
+        <Button variant="secondary" size="lg" onClick={onClose}>Cancel</Button>
+        <Button size="lg" className="flex-1" onClick={save} disabled={!canSave} aria-busy={saving || undefined}>
           {saving ? 'Saving…' : 'Save change'}
-        </button>
+        </Button>
       </div>
     </Sheet>
-  )
-}
-
-/* -------------------------------- Lightbox ------------------------------ */
-function Lightbox({ src, alt, onClose }) {
-  const [closing, setClosing] = useState(false)
-
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') { setClosing(true); setTimeout(onClose, 160) } }
-    document.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
-    }
-  }, [onClose])
-
-  function close() {
-    setClosing(true)
-    setTimeout(onClose, 160)
-  }
-
-  return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 ${closing ? 'inc-backdrop-out' : 'inc-backdrop'}`}
-      style={{ background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(6px)' }}
-      onClick={close} role="dialog" aria-modal="true" aria-label={alt}>
-      <button onClick={close} aria-label="Close image"
-        className="inc-press absolute top-4 right-4 w-10 h-10 rounded-2xl flex items-center justify-center text-white z-10"
-        style={{ background: 'rgba(255,255,255,0.15)' }}>
-        <X size={18} />
-      </button>
-      <img src={src} alt={alt} onClick={e => e.stopPropagation()}
-        className={closing ? '' : 'inc-zoom'}
-        style={{
-          maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16,
-          objectFit: 'contain', boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-        }} />
-    </div>
-  )
-}
-
-// `src` here is what the incident row stores, not a URL you can render.
-// The bucket is private, so the thumbnail signs its own URL and passes the
-// signed one up when opened — nothing renders until access is confirmed,
-// which means a photo you may not see simply does not appear.
-function Thumb({ src, label, onOpen }) {
-  const signed = useSignedIncidentUrl(src)
-  if (!signed) return null
-  return (
-    <button onClick={() => onOpen(signed, label)}
-      aria-label={`View ${label}`}
-      className="inc-press relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0"
-      style={{ border: '1px solid var(--brand-soft)' }}>
-      <img src={signed} alt="" loading="lazy" className="w-full h-full object-cover" />
-    </button>
   )
 }
 
@@ -479,16 +334,13 @@ export default function IncidentsSection({
   const now = useNow()
   const router = useRouter()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('all')
+  const [status, setStatus] = useState('active')
   // What the user picked. The filter actually applied (`category`,
   // `priority`, below) falls back to 'all' when the pick no longer matches
   // anything, so a chip never vanishes while its filter stays on.
   const [categoryChoice, setCategory] = useState('all')
   const [priorityChoice, setPriority] = useState('all')
   const [sort, setSort] = useState('triage')
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [expanded, setExpanded] = useState(() => new Set())
-  const [lightbox, setLightbox] = useState(null)
   const [dispatchFor, setDispatchFor] = useState(null)
   const [overrideFor, setOverrideFor] = useState(null)
   const searchRef = useRef(null)
@@ -507,8 +359,8 @@ export default function IncidentsSection({
 
   const counts = useMemo(() => ({
     all: incidents.length,
+    active: incidents.filter(i => !isSettled(i.status)).length,
     pending: incidents.filter(i => i.status === 'pending').length,
-    assigned: incidents.filter(i => i.status === 'assigned').length,
     resolved: incidents.filter(i => i.status === 'resolved').length,
   }), [incidents])
 
@@ -521,7 +373,7 @@ export default function IncidentsSection({
   }, [incidents])
 
   const scoped = useMemo(
-    () => status === 'all' ? incidents : incidents.filter(i => i.status === status),
+    () => incidents.filter(i => inStatus(i, status)),
     [incidents, status]
   )
   const categoryCounts = useMemo(() => {
@@ -546,7 +398,7 @@ export default function IncidentsSection({
         inc.location?.toLowerCase().includes(q) ||
         inc.profiles?.full_name?.toLowerCase().includes(q)
       return matchesSearch &&
-        (status === 'all' || inc.status === status) &&
+        inStatus(inc, status) &&
         (category === 'all' || inc.category === category) &&
         (priority === 'all' || inc.priority === priority)
     })
@@ -569,564 +421,229 @@ export default function IncidentsSection({
 
   const activeFilters = [
     search && { key: 'search', label: `"${search}"`, clear: () => setSearch('') },
-    status !== 'all' && { key: 'status', label: STATUS_FILTERS.find(f => f.value === status)?.label, clear: () => setStatus('all') },
     category !== 'all' && { key: 'category', label: category, clear: () => setCategory('all') },
     priority !== 'all' && { key: 'priority', label: priority, clear: () => setPriority('all') },
   ].filter(Boolean)
 
   function clearAll() {
-    setSearch(''); setStatus('all'); setCategory('all'); setPriority('all')
+    setSearch(''); setCategory('all'); setPriority('all')
   }
 
-  function toggleExpanded(id) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
+  const tanodById = useMemo(() => Object.fromEntries(tanods.map(t => [t.id, t])), [tanods])
 
+  const open = inc => router.push(`/official/incident/${inc.id}`)
 
-  // Live first, settled after, each side keeping the order the filters and
-  // sort produced. `firstSettled` marks where the divider goes.
-  const { grouped, settledCount } = useMemo(() => {
-    const live = filtered.filter(i => !isSettled(i.status))
-    const settled = filtered.filter(i => isSettled(i.status))
+  // What a row says about an incident: where it stands, who has it, and
+  // whether it has waited longer than its priority allows.
+  function describe(inc) {
+    const tanod = inc.assigned_to ? tanodById[inc.assigned_to] : null
+    const name = tanod?.full_name || 'Tanod'
+    const resolved = inc.status === 'resolved'
+    let status = 'Unassigned'
+    let tone = inc.priority === 'Critical' ? 'danger' : 'warn'
+    if (resolved) { status = 'Resolved'; tone = 'quiet' }
+    else if (inc.arrived_at) { status = `${name} · on scene`; tone = 'ok' }
+    else if (inc.acknowledged_at) { status = `${name} · on the way`; tone = 'ok' }
+    else if (inc.status === 'assigned' || inc.assigned_to) { status = name; tone = 'info' }
+    const standing = resolved ? null : computeStanding(inc, now)
+    const basis = LEGAL_BASIS[inc.category]
     return {
-      settledCount: settled.length,
-      grouped: [
-        ...live.map(inc => ({ inc, firstSettled: false })),
-        ...settled.map((inc, i) => ({ inc, firstSettled: i === 0 })),
-      ],
+      status, tone,
+      critical: inc.priority === 'Critical' && !resolved,
+      aged: standing?.aged ? standing.label : null,
+      agedTone: standing?.level >= 2 ? 'danger' : 'warn',
+      note: resolved ? null
+        : inc.assignment_method === 'auto_offduty' ? 'No tanod was on duty: call to confirm'
+          : basis?.responseMode === 'refer_to_agency' && basis.agency ? `Refer to ${basis.agency}` : null,
     }
-  }, [filtered])
+  }
+
+  function menuFor(inc) {
+    const resolved = inc.status === 'resolved'
+    return [
+      { label: 'Open report', icon: <ExternalLink size={15} aria-hidden="true" />, onClick: () => open(inc) },
+      !resolved && { label: 'Resolve', icon: <Check size={15} aria-hidden="true" />, onClick: () => onResolve?.(inc) },
+      !resolved && onPriorityChange && { label: 'Adjust priority', icon: <Pencil size={15} aria-hidden="true" />, onClick: () => setOverrideFor(inc) },
+    ]
+  }
+
 
   const exportMeta = { status, category, priority, count: filtered.length }
-  const advancedActive = category !== 'all' || priority !== 'all'
 
   if (loading) {
     return (
-      <div className="space-y-3">
-        <style>{styles}</style>
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="white-card p-4">
-            <div className="flex items-center gap-3">
-              <div className="skeleton-shimmer w-9 h-9 rounded-xl flex-shrink-0" />
+      <Card aria-busy="true" aria-label="Loading incidents">
+        <div className="divide-y divide-line">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-[18px] py-3.5">
+              <div className="skeleton-shimmer h-[22px] w-16 rounded-md" />
               <div className="flex-1 space-y-2">
-                <div className="skeleton-shimmer h-3.5 w-3/4" />
-                <div className="skeleton-shimmer h-3 w-1/2" />
+                <div className="skeleton-shimmer h-3.5 w-2/5" />
+                <div className="skeleton-shimmer h-3 w-1/4" />
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Card>
     )
   }
 
   return (
-    <div className="space-y-3">
+    <div className="@container">
       <style>{styles}</style>
 
-      {/* ================= TOOLBAR =================
-          Rebuilt mobile-first. Previously the export buttons and the status
-          rail competed for one row and the PDF button fell off the right
-          edge of the screen. Now: search on its own row, a scrollable status
-          rail with a fade affordance, and a compact control row where
-          exports collapse to icons under 640px. */}
-      {incidents.length > 0 && (
-        <div className="white-card p-3 space-y-2.5">
-
-          {/* Search */}
-          <div className="relative">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-            <input
-              ref={searchRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') setSearch('') }}
-              type="search"
-              aria-label="Search incidents"
-              placeholder="Search incidents…"
-              className="input-field w-full rounded-xl pl-9 pr-9 py-2.5 inc-t13 text-gray-800"
-            />
-            {search && (
-              <button onClick={() => setSearch('')} aria-label="Clear search"
-                className="inc-press absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500">
-                <X size={14} />
-              </button>
-            )}
+      {incidents.length === 0 ? (
+        <Card className="px-[18px] py-5">
+          <p className="text-sm font-bold text-ink">No incidents yet</p>
+          <Muted className="mt-1">Reports from residents show up here the moment they are sent.</Muted>
+        </Card>
+      ) : (
+      // Not overflow-hidden: the row and export menus open past its edge.
+      <Card className="!overflow-visible">
+        {/* Toolbar: the status switch, search, filters, sort, export. */}
+        <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-3 sm:px-[18px]">
+          <Segmented label="Filter by status" value={status} onChange={setStatus}
+            items={STATUS_FILTERS.map(f => ({ value: f.value, label: f.label, count: f.value === 'all' || f.value === 'resolved' ? undefined : counts[f.value] }))}
+            className="w-full @3xl:w-auto [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" />
+          <SearchBox value={search} onChange={setSearch} inputRef={searchRef} label="Search reports" className="min-w-48 flex-1 @5xl:max-w-64" />
+          <div className="flex w-full flex-wrap items-center gap-2 @3xl:ml-auto @3xl:w-auto">
+            <FilterSelect label="Category" value={category} onChange={setCategory} className="min-w-0 flex-1 @3xl:flex-none"
+              options={[{ value: 'all', label: 'Category' }, ...Object.keys(CATEGORY_CONFIG)
+                .filter(c => categoryCounts[c] || category === c)
+                .map(c => ({ value: c, label: `${c} · ${categoryCounts[c] || 0}` }))]} />
+            <FilterSelect label="Priority" value={priority} onChange={setPriority} className="min-w-0 flex-1 @3xl:flex-none"
+              options={[{ value: 'all', label: 'Priority' }, ...Object.entries(PRIORITY_CONFIG)
+                .sort((a, b) => b[1].order - a[1].order)
+                .filter(([p]) => priorityCounts[p] || priority === p)
+                .map(([p]) => ({ value: p, label: `${p} · ${priorityCounts[p] || 0}` }))]} />
+            <ExportMenu count={filtered.length} noun="incidents" onExport={format => onExport?.(format, filtered, exportMeta)} />
           </div>
+        </div>
 
-          {/* Status rail — scrolls horizontally, fades at the edge */}
-          <div className="inc-rail">
-            <div className="flex gap-1.5 overflow-x-auto inc-noscrollbar pr-6"
-              role="group" aria-label="Filter by status">
-              {STATUS_FILTERS.map(f => {
-                const on = status === f.value
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-3.5 py-2.5 sm:px-[18px]">
+            <span className="text-xs text-muted-foreground">{filtered.length} of {incidents.length}</span>
+            {activeFilters.map(f => (
+              <button key={f.key} type="button" onClick={f.clear} aria-label={`Remove filter ${f.label}`}
+                className="inline-flex h-7 items-center gap-1 rounded-lg bg-brand-soft px-2 text-xs font-bold text-brand-strong hover:bg-[color-mix(in_srgb,var(--brand-soft)_70%,var(--brand)_8%)]">
+                {f.label}<X size={12} aria-hidden="true" />
+              </button>
+            ))}
+            <Button variant="ghost" size="sm" onClick={clearAll}>Clear all</Button>
+          </div>
+        )}
+
+        {filtered.length === 0 ? (
+          <div className="border-t border-line px-[18px] py-6">
+            <p className="text-sm font-bold text-ink">
+              {status === 'active' && !search && category === 'all' && priority === 'all' ? 'Nothing open right now' : 'Nothing matches'}
+            </p>
+            <Muted className="mt-1">
+              {status === 'active' && !search && category === 'all' && priority === 'all'
+                ? 'Every report has been resolved. New ones show up here first.'
+                : 'Try a broader search or clear a filter.'}
+            </Muted>
+            {activeFilters.length > 0 && <Button variant="secondary" size="sm" className="mt-3" onClick={clearAll}>Clear filters</Button>}
+          </div>
+        ) : (
+          <>
+            {/* Wide: the table (O02). */}
+            <table className="hidden w-full table-fixed border-collapse text-left @3xl:table">
+              <thead>
+                <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
+                  <th scope="col" className="w-[104px] py-2.5 pl-[18px] font-bold">Priority</th>
+                  <th scope="col" className="px-3 py-2.5 font-bold">Report</th>
+                  <th scope="col" className="w-[150px] px-3 py-2.5 font-bold">Category</th>
+                  <th scope="col" className="hidden w-[150px] px-3 py-2.5 font-bold @5xl:table-cell">Location</th>
+                  <th scope="col" className="w-[108px] px-3 py-2.5 font-bold">Reported</th>
+                  <th scope="col" className="w-[180px] px-3 py-2.5 font-bold">Status</th>
+                  <th scope="col" className="w-[140px] py-2.5 pr-[18px]"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(inc => {
+                  const row = describe(inc)
+                  return (
+                    <tr key={inc.id} onClick={() => open(inc)}
+                      className={`cursor-pointer border-t border-line transition-colors hover:bg-surface-sunk ${row.critical ? 'bg-[color-mix(in_srgb,var(--danger-soft)_60%,var(--surface))] hover:bg-danger-soft' : ''}`}>
+                      <td className="py-3 pl-[18px]"><Tag tone={PRIORITY_TONE[inc.priority] || 'quiet'}>{inc.priority || 'Medium'}</Tag></td>
+                      <td className="min-w-0 px-3 py-3">
+                        <button type="button" onClick={e => { e.stopPropagation(); open(inc) }}
+                          className="block max-w-full truncate text-left text-sm font-bold text-ink outline-none hover:underline focus-visible:underline">
+                          {inc.title}
+                        </button>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {[inc.profiles?.full_name || 'Unknown reporter', row.note].filter(Boolean).join(' · ')}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-body">
+                          <span className="shrink-0" style={{ color: categoryColor(inc.category) }}><CategoryIcon category={inc.category} size={16} /></span>
+                          <span className="truncate">{inc.category || 'Other'}</span>
+                        </span>
+                      </td>
+                      <td className="hidden truncate px-3 py-3 text-[13px] text-body @5xl:table-cell">{inc.location || '—'}</td>
+                      <td className="px-3 py-3 text-[13px]">
+                        <time title={fullDate(inc.created_at)} dateTime={inc.created_at} className="block truncate text-body">{timeAgo(inc.created_at, new Date(now))}</time>
+                        {row.aged && <span className="block truncate text-xs font-bold" style={{ color: TONE_FG[row.agedTone] }}>{row.aged}</span>}
+                      </td>
+                      <td className="px-3 py-3"><Status tone={row.tone} className="max-w-full">{row.status}</Status></td>
+                      <td className="py-3 pr-[18px]" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {inc.status === 'pending'
+                            ? <Button size="sm" onClick={() => setDispatchFor(inc)}>Dispatch</Button>
+                            : <Button size="sm" variant="secondary" onClick={() => open(inc)}>Open</Button>}
+                          <RowMenu label={`More for ${inc.title}`} items={menuFor(inc)} />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+
+            {/* Narrow: one row per report. */}
+            <Rows className="border-t border-line @3xl:hidden">
+              {filtered.map(inc => {
+                const row = describe(inc)
                 return (
-                  <button key={f.value} onClick={() => setStatus(f.value)}
-                    aria-pressed={on}
-                    className="inc-press inc-tint px-3 h-9 rounded-xl inc-t12 font-bold whitespace-nowrap flex-shrink-0 flex items-center gap-1.5"
-                    style={{
-                      background: on ? f.color : 'var(--app-surface)',
-                      color: on ? 'white' : '#6b7280',
-                      border: `1px solid ${on ? f.color : 'var(--brand-soft)'}`,
-                    }}>
-                    {f.label}
-                    <span className="inc-t10 px-1.5 rounded-md font-black"
-                      style={{
-                        background: on ? 'rgba(255,255,255,0.25)' : 'var(--brand-soft)',
-                        color: on ? 'white' : 'var(--brand)',
-                      }}>
-                      {counts[f.value]}
-                    </span>
-                  </button>
+                  <Row key={inc.id} critical={row.critical} className="flex items-start gap-3">
+                    <span className="mt-0.5 shrink-0" style={{ color: categoryColor(inc.category) }}><CategoryIcon category={inc.category} size={20} /></span>
+                    <button type="button" onClick={() => open(inc)} className="min-w-0 flex-1 text-left outline-none focus-visible:underline">
+                      <span className="block truncate text-sm font-bold text-ink">{inc.title}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {[inc.location, timeAgo(inc.created_at, new Date(now)), row.note].filter(Boolean).join(' · ')}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <Tag tone={PRIORITY_TONE[inc.priority] || 'quiet'}>{inc.priority || 'Medium'}</Tag>
+                        <Status tone={row.tone}>{row.status}</Status>
+                        {row.aged && <span className="text-xs font-bold" style={{ color: TONE_FG[row.agedTone] }}>{row.aged}</span>}
+                      </span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {inc.status === 'pending' && <Button size="sm" onClick={() => setDispatchFor(inc)}>Dispatch</Button>}
+                      <RowMenu label={`More for ${inc.title}`} items={menuFor(inc)} />
+                    </div>
+                  </Row>
                 )
               })}
-            </div>
-          </div>
+            </Rows>
+          </>
+        )}
 
-          {/* Controls: sort · filters · exports.
-              Exports become icon-only below 640px so nothing overflows. */}
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex-1 min-w-0">
-              <ArrowUpDown size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" aria-hidden="true" />
-              <select value={sort} onChange={e => setSort(e.target.value)}
-                aria-label="Sort incidents"
-                className="w-full appearance-none inc-t12 font-bold rounded-xl pl-7 pr-6 h-9 text-gray-600 outline-none cursor-pointer truncate"
-                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-                {SORTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" aria-hidden="true" />
-            </div>
-
-            <button onClick={() => setFiltersOpen(o => !o)}
-              aria-expanded={filtersOpen} aria-controls="advanced-filters"
-              aria-label="More filters"
-              className="inc-press inc-tint flex items-center gap-1 px-2.5 h-9 rounded-xl inc-t12 font-bold flex-shrink-0"
-              style={{
-                background: advancedActive ? 'var(--brand)' : 'var(--app-surface)',
-                color: advancedActive ? 'white' : '#6b7280',
-                border: `1px solid ${advancedActive ? 'var(--brand)' : 'var(--brand-soft)'}`,
-              }}>
-              <SlidersHorizontal size={13} />
-              {advancedActive && <span className="inc-t10">on</span>}
-            </button>
-
-            <button onClick={() => onExport?.('csv', filtered, exportMeta)} disabled={filtered.length === 0}
-              aria-label={`Export ${filtered.length} incidents to CSV`}
-              className="inc-press flex items-center gap-1 px-2.5 h-9 rounded-xl inc-t12 font-bold disabled:opacity-40 flex-shrink-0"
-              style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
-              <FileSpreadsheet size={13} /> <span className="hidden sm:inline">CSV</span>
-            </button>
-            <button onClick={() => onExport?.('pdf', filtered, exportMeta)} disabled={filtered.length === 0}
-              aria-label={`Export ${filtered.length} incidents to PDF`}
-              className="inc-press flex items-center gap-1 px-2.5 h-9 rounded-xl inc-t12 font-bold text-white disabled:opacity-40 flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}>
-              <Download size={13} /> <span className="hidden sm:inline">PDF</span>
-            </button>
-          </div>
-
-          {/* Advanced filters */}
-          <div id="advanced-filters" className={`inc-collapse ${filtersOpen ? 'inc-open' : ''}`}>
-            <div className="inc-collapse-inner">
-              <div className="pt-2.5 space-y-3" style={{ borderTop: '1px solid #f7f6ff' }}>
-                <div>
-                  <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">Category</p>
-                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by category">
-                    <button onClick={() => setCategory('all')} aria-pressed={category === 'all'}
-                      className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold"
-                      style={{
-                        background: category === 'all' ? 'var(--brand)' : 'var(--app-surface)',
-                        color: category === 'all' ? 'white' : '#6b7280',
-                        border: '1px solid var(--brand-soft)',
-                      }}>
-                      All
-                    </button>
-                    {Object.entries(CATEGORY_CONFIG).map(([cat, conf]) => {
-                      const n = categoryCounts[cat] || 0
-                      if (n === 0 && category !== cat) return null
-                      return (
-                        <button key={cat} onClick={() => setCategory(p => p === cat ? 'all' : cat)}
-                          aria-pressed={category === cat}
-                          className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold flex items-center gap-1"
-                          style={{
-                            background: category === cat ? conf.color : 'var(--app-surface)',
-                            color: category === cat ? 'white' : conf.color,
-                            border: `1px solid ${category === cat ? conf.color : conf.color + '25'}`,
-                          }}>
-                          <span aria-hidden="true">{conf.icon}</span> {cat} <span className="opacity-70">{n}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="inc-t10 font-bold text-gray-500 uppercase tracking-wider mb-1.5">Priority</p>
-                  <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by priority">
-                    <button onClick={() => setPriority('all')} aria-pressed={priority === 'all'}
-                      className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold"
-                      style={{
-                        background: priority === 'all' ? 'var(--brand)' : 'var(--app-surface)',
-                        color: priority === 'all' ? 'white' : '#6b7280',
-                        border: '1px solid var(--brand-soft)',
-                      }}>
-                      All
-                    </button>
-                    {Object.entries(PRIORITY_CONFIG).sort((a, b) => b[1].order - a[1].order).map(([p, conf]) => {
-                      const n = priorityCounts[p] || 0
-                      if (n === 0 && priority !== p) return null
-                      return (
-                        <button key={p} onClick={() => setPriority(prev => prev === p ? 'all' : p)}
-                          aria-pressed={priority === p}
-                          className="inc-press inc-tint px-2.5 py-1.5 rounded-lg inc-t12 font-bold flex items-center gap-1"
-                          style={{
-                            background: priority === p ? conf.color : 'var(--app-surface)',
-                            color: priority === p ? 'white' : conf.color,
-                            border: `1px solid ${priority === p ? conf.color : conf.color + '30'}`,
-                          }}>
-                          <span aria-hidden="true">{conf.icon}</span> {p} <span className="opacity-70">{n}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {activeFilters.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap pt-2.5" style={{ borderTop: '1px solid #f7f6ff' }}>
-              <span className="inc-t10 text-gray-500 font-semibold">
-                {filtered.length} of {incidents.length}
-              </span>
-              {activeFilters.map(f => (
-                <button key={f.key} onClick={f.clear}
-                  aria-label={`Remove filter ${f.label}`}
-                  className="inc-press flex items-center gap-1 px-2 py-1 rounded-lg inc-t10 font-bold"
-                  style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
-                  {f.label} <X size={9} />
-                </button>
-              ))}
-              <button onClick={clearAll} className="inc-t10 font-bold ml-1" style={{ color: 'var(--brand)' }}>
-                Clear all
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* EMPTY STATES */}
-      {incidents.length === 0 && (
-        <div className="white-card p-10 text-center inc-card">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-3xl flex items-center justify-center" style={{ background: '#fff7ed' }}>
-            <AlertTriangle size={26} className="text-orange-400" />
-          </div>
-          <p className="inc-t13 font-semibold text-gray-700">No incidents reported yet</p>
-          <p className="inc-t12 text-gray-500 mt-1">Reports from residents appear here the moment they&apos;re submitted.</p>
-        </div>
-      )}
-
-      {incidents.length > 0 && filtered.length === 0 && (
-        <div className="white-card p-10 text-center inc-card">
-          <Search size={30} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
-          <p className="inc-t13 font-semibold text-gray-700">Nothing matches these filters</p>
-          <p className="inc-t12 text-gray-500 mt-1">Try a broader search or clear a filter.</p>
-          <button onClick={clearAll}
-            className="inc-press mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl inc-t12 font-bold"
-            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-            <X size={12} /> Clear all filters
-          </button>
-        </div>
-      )}
-
-      {/* ================= CARDS ================= */}
-      {/* Live first, then the settled ones under their own heading. An
-          official works the queue; a month of resolved reports at the same
-          height as today's buries the ones that still need dispatching. */}
-      {/* One column, two once the list itself is 64rem+ wide (a wide
-          monitor) — extra columns rather than 2000px-wide cards. A
-          container query, so it follows the space the list actually has. */}
-      <div className="@container">
-      <div className="grid gap-3 items-start @5xl:grid-cols-2">
-      {grouped.map(({ inc, firstSettled }, index) => {
-        const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-        const pri = PRIORITY_CONFIG[inc.priority] || PRIORITY_CONFIG.Medium
-        const st = STATUS_CONFIG[inc.status] || STATUS_CONFIG.pending
-        const assignedTanod = inc.assigned_to ? tanods.find(t => t.id === inc.assigned_to) : null
-        const isResolved = inc.status === 'resolved'
-        const isPending = inc.status === 'pending'
-        const hasResolutionDetail = isResolved && (inc.resolution_notes || inc.rating)
-        const isOpen = expanded.has(inc.id)
-        const basis = LEGAL_BASIS[inc.category]
-        const wasOverridden = Boolean(inc.priority_overridden_by)
-        const standing = computeStanding(inc)
-        const mustRefer = basis?.responseMode === 'refer_to_agency'
-        const images = [
-          inc.image_url && { src: inc.image_url, label: 'reported photo' },
-          inc.resolution_image_url && { src: inc.resolution_image_url, label: 'resolution photo' },
-        ].filter(Boolean)
-
-        // The left rail always encodes priority — previously a resolved fire
-        // looked identical to a resolved noise complaint. Overdue items get
-        // the amber/red aging colour instead, since that's the more urgent
-        // signal while it applies.
-        const railColor = standing.level >= 2 ? STANDING_STYLE[standing.level].color
-          : standing.level === 1 ? '#f97316'
-          : pri.color
-
-        return (
-          <Fragment key={inc.id}>
-          {firstSettled && (
-            <div className="col-span-full flex items-center gap-2.5 mt-3 mb-0.5 px-0.5">
-              <span className="inc-t10 font-bold uppercase tracking-[0.12em] text-white/70">
-                Resolved · {settledCount}
-              </span>
-              <span className="flex-1 h-px bg-white/20" aria-hidden="true" />
-            </div>
-          )}
-          <article className="white-card inc-card inc-lift overflow-hidden"
-            style={{
-              animationDelay: `${Math.min(index, 8) * 25}ms`,
-              borderLeft: `4px solid ${railColor}`,
-            }}>
-            <div className="p-3.5">
-
-              {/* Row 1: icon · title · badges */}
-              <div className="flex items-start gap-2.5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: cat.bg, fontSize: 17 }} aria-hidden="true">
-                  {cat.icon}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <button
-                    onClick={() => router.push(`/official/incident/${inc.id}`)}
-                    className="inc-t14 font-bold text-gray-800 break-words text-left hover:underline"
-                    style={{ textDecorationColor: 'var(--brand)' }}>
-                    {inc.title}
-                  </button>
-
-                  {/* Badge row — priority and status ALWAYS shown, including
-                      on resolved incidents, so the list stays readable at a
-                      glance instead of going blank once handled */}
-                  <div className="flex items-center gap-1 flex-wrap mt-1">
-                    <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
-                      style={{ background: pri.bg, color: pri.color }}>
-                      <span aria-hidden="true">{pri.icon}</span> {inc.priority}
-                    </span>
-                    <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold"
-                      style={{ background: st.bg, color: st.color }}>
-                      {st.label}
-                    </span>
-                    {standing.aged && !isResolved && (
-                      <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
-                        style={{
-                          background: STANDING_STYLE[standing.level].bg,
-                          color: STANDING_STYLE[standing.level].color,
-                        }}
-                        title={`${inc.priority} incidents target ${activeWindowLabel(inc)}. Still classified ${inc.priority} — only its queue position rose.`}>
-                        <Clock size={9} /> {standing.label}
-                      </span>
-                    )}
-                    {basis?.law && (
-                      <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold flex items-center gap-1"
-                        style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}
-                        title={basis.reason}>
-                        <Scale size={9} /> {basis.law}
-                      </span>
-                    )}
-                    {wasOverridden && (
-                      <span className="inc-t10 px-1.5 py-0.5 rounded-md font-bold"
-                        style={{ background: '#fef3c7', color: '#92400e' }}
-                        title={`Changed from ${inc.original_priority}: ${inc.priority_override_reason}`}>
-                        adjusted
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Description */}
-              {inc.description && (
-                <p className="inc-t12 text-gray-500 mt-2"
-                  style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {inc.description}
-                </p>
-              )}
-
-              {/* Metadata — location on its own line so it never fights the
-                  reporter name for space on a narrow screen */}
-              <div className="mt-2 space-y-0.5">
-                <p className="inc-t11 text-gray-500 flex items-center gap-1">
-                  <span aria-hidden="true">📍</span>
-                  <span className="truncate">{inc.location || 'No location given'}</span>
-                </p>
-                <p className="inc-t11 text-gray-500 truncate">
-                  {inc.profiles?.full_name || 'Unknown reporter'}
-                  {' · '}
-                  <time title={fullDate(inc.created_at)} dateTime={inc.created_at}>{timeAgo(inc.created_at)}</time>
-                  {inc.category && <span style={{ color: cat.color }}>{' · '}{inc.category}</span>}
-                </p>
-              </div>
-
-              {/* Referral guidance */}
-              {mustRefer && !isResolved && basis?.agency && (
-                <div className="mt-2.5 px-2.5 py-2 rounded-xl flex items-start gap-2"
-                  style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
-                  <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
-                  <p className="inc-t11 text-orange-800">
-                    <strong>Refer to {basis.agency}.</strong> Document and assist only — the
-                    barangay has no enforcement authority here.
-                  </p>
-                </div>
-              )}
-
-              {/* Off-duty fallback warning */}
-              {inc.assignment_method === 'auto_offduty' && !isResolved && (
-                <div className="mt-2 px-2.5 py-2 rounded-xl flex items-start gap-2"
-                  style={{ background: '#fef2f2', border: '1px solid #fecaca' }}>
-                  <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-red-600" aria-hidden="true" />
-                  <p className="inc-t11 text-red-800">
-                    <strong>No tanod was on duty.</strong> Assigned to the most recently active
-                    tanod — call them directly to confirm.
-                  </p>
-                </div>
-              )}
-
-              {/* Assigned tanod */}
-              {assignedTanod && !isResolved && (
-                <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                  <Shield size={11} className="text-blue-500 flex-shrink-0" aria-hidden="true" />
-                  <span className="inc-t11 font-semibold text-blue-600 truncate">{assignedTanod.full_name}</span>
-                  <span className="inc-t10 px-1.5 rounded-full font-bold flex-shrink-0"
-                    style={{
-                      background: assignedTanod.on_duty ? '#f0fdf4' : '#f3f4f6',
-                      color: assignedTanod.on_duty ? '#16a34a' : '#9ca3af',
-                    }}>
-                    {assignedTanod.on_duty ? 'on duty' : 'off duty'}
-                  </span>
-                  {assignedTanod.phone && (
-                    <a href={`tel:${assignedTanod.phone.replace(/[^0-9+]/g, '')}`}
-                      aria-label={`Call ${assignedTanod.full_name}`}
-                      className="inc-press w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: '#eff6ff' }}>
-                      <Phone size={12} className="text-blue-500" />
-                    </a>
-                  )}
-                </div>
-              )}
-
-              {/* Photos */}
-              {images.length > 0 && (
-                <div className="flex gap-2 mt-2.5">
-                  {images.map(img => (
-                    <Thumb key={img.src} src={img.src} label={img.label}
-                      onOpen={(src, label) => setLightbox({ src, alt: label })} />
-                  ))}
-                </div>
-              )}
-
-              {/* Resolution detail */}
-              {hasResolutionDetail && (
-                <>
-                  <button onClick={() => toggleExpanded(inc.id)}
-                    aria-expanded={isOpen}
-                    className="inc-press flex items-center gap-2 mt-2.5 inc-t11 font-bold"
-                    style={{ color: '#16a34a' }}>
-                    {inc.rating && (
-                      <span className="flex items-center gap-0.5" aria-label={`Rated ${inc.rating} out of 5`}>
-                        {[1, 2, 3, 4, 5].map(s => (
-                          <Star key={s} size={10}
-                            fill={s <= inc.rating ? '#f59e0b' : 'none'}
-                            color={s <= inc.rating ? '#f59e0b' : '#d1d5db'} />
-                        ))}
-                      </span>
-                    )}
-                    {isOpen ? 'Hide resolution' : 'View resolution'}
-                    <ChevronDown size={11} className="inc-chevron" style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }} />
-                  </button>
-
-                  <div className={`inc-collapse ${isOpen ? 'inc-open' : ''}`}>
-                    <div className="inc-collapse-inner">
-                      <div className="mt-2 space-y-2">
-                        {inc.resolution_notes && (
-                          <div className="p-2.5 rounded-xl" style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                            <p className="inc-t10 font-bold uppercase tracking-wider text-emerald-700 mb-1">Resolution notes</p>
-                            <p className="inc-t12 text-emerald-900">{inc.resolution_notes}</p>
-                          </div>
-                        )}
-                        {inc.rating && (
-                          <div className="p-2.5 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-                            <p className="inc-t10 font-bold uppercase tracking-wider text-amber-700 mb-1">
-                              Resident feedback · {inc.rating}.0 / 5.0
-                            </p>
-                            {inc.rating_feedback && (
-                              <p className="inc-t12 text-amber-900 italic">&quot;{inc.rating_feedback}&quot;</p>
-                            )}
-                          </div>
-                        )}
-                        {wasOverridden && (
-                          <div className="p-2.5 rounded-xl" style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-                            <p className="inc-t10 font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>
-                              Priority adjusted · {inc.original_priority} → {inc.priority}
-                            </p>
-                            <p className="inc-t12 italic" style={{ color: '#4c46c4' }}>&quot;{inc.priority_override_reason}&quot;</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Actions — one full-width row on every screen size. The old
-                150px desktop side-column squeezed titles into two words per
-                line on tablets; a footer row is predictable everywhere. */}
-            {!isResolved && (
-              <div className="flex gap-2 px-3.5 py-2.5" style={{ borderTop: '1px solid #f7f6ff', background: '#fcfcff' }}>
-                {isPending && (
-                  <button onClick={() => setDispatchFor(inc)}
-                    className="inc-press flex-1 h-10 flex items-center justify-center gap-1.5 inc-t12 font-bold rounded-xl"
-                    style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                    <Send size={13} /> Dispatch
-                  </button>
-                )}
-                <button onClick={() => onResolve?.(inc)}
-                  className="inc-press flex-1 h-10 flex items-center justify-center gap-1.5 inc-t12 font-bold rounded-xl text-white"
-                  style={{ background: '#22c55e' }}>
-                  <Check size={13} /> Resolve
-                </button>
-                {onPriorityChange && (
-                  <button onClick={() => setOverrideFor(inc)}
-                    aria-label="Adjust priority"
-                    className="inc-press w-10 h-10 flex items-center justify-center rounded-xl flex-shrink-0"
-                    style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-                    <Pencil size={13} />
-                  </button>
-                )}
-              </div>
-            )}
-          </article>
-          </Fragment>
-        )
-      })}
-      </div>
-      </div>
-
-      {hasMore && (
-        <div className="pt-1 pb-2 text-center">
-          <button onClick={onLoadMore} disabled={loadingMore}
-            className="inc-press px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
-            style={{ background: 'white', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-            {loadingMore ? 'Loading…' : 'Load older incidents'}
-          </button>
-          <p className="text-xs text-white/60 mt-2">
-            Showing the {incidents.length} most recent — filters and exports cover these.
+        <div className="flex flex-wrap items-center gap-3 border-t border-line px-3.5 py-3 sm:px-[18px]">
+          <p className="flex-1 text-xs text-muted-foreground">
+            Showing {filtered.length} of {incidents.length} {hasMore ? 'loaded ' : ''}report{incidents.length === 1 ? '' : 's'}
+            {hasMore && '. Filters and exports cover the loaded ones.'}
           </p>
+          <FilterSelect label="Sort" value={sort} onChange={setSort} options={SORTS} />
+          {hasMore && (
+            <Button variant="secondary" size="sm" onClick={onLoadMore} disabled={loadingMore} aria-busy={loadingMore || undefined}>
+              {loadingMore ? 'Loading…' : 'Load older'}
+            </Button>
+          )}
         </div>
+      </Card>
       )}
 
       <TanodPicker
@@ -1144,10 +661,6 @@ export default function IncidentsSection({
         incident={overrideFor}
         onSubmit={onPriorityChange}
       />
-
-      {lightbox && (
-        <Lightbox src={lightbox.src} alt={lightbox.alt} onClose={() => setLightbox(null)} />
-      )}
     </div>
   )
 }

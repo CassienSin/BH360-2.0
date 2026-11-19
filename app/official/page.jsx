@@ -31,7 +31,7 @@ import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
 import { Button } from '@/components/ui/button'
 import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
-import { greeting, officialSummary, unassignedIncidents } from '@/lib/homeSummary'
+import { greeting, officialSummary, unassignedIncidents, plural } from '@/lib/homeSummary'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
@@ -829,6 +829,53 @@ function OfficialDashboard() {
     blotter: 'Katarungang Pambarangay: mediation, Pangkat and Certificates to File Action'
   }
 
+  // What the band says above each section (O02–O14): an eyebrow, a title
+  // in plain words, one line from the data, and the section's actions.
+  // The short name stays the phone title and the browser-tab title.
+  function sectionHead(section) {
+    const openTickets = tickets.filter(t => t.status === 'open').length
+    const onDuty = tanods.filter(t => t.on_duty).length
+    const byRole = role => users.filter(u => u.role === role).length
+    switch (section) {
+      case 'incidents': return {
+        eyebrow: 'Incidents', title: 'Reports from residents',
+        desc: 'Priorities follow the law behind each category. Critical reports stay at the top.',
+        actions: <Button variant="onband" onClick={() => navClick('map')}><MapIcon size={18} aria-hidden="true" />Open map</Button>,
+      }
+      case 'tickets': return {
+        eyebrow: 'Tickets', title: 'Conversations with residents',
+        desc: openTickets ? `${plural(openTickets, 'ticket is', 'tickets are')} waiting on a reply.` : 'Every ticket has a reply.',
+      }
+      case 'documents': return {
+        eyebrow: 'Document requests', title: 'Clearances and certificates',
+        desc: `${documentCounts.open} in progress.${documentCounts.breach ? ` ${documentCounts.breach} past the Citizen’s Charter deadline (RA 11032).` : ' All within the RA 11032 deadline.'}`,
+      }
+      case 'verifications': return {
+        eyebrow: 'Verifications', title: 'Confirm who lives here',
+        desc: pendingVerifications ? `${plural(pendingVerifications, 'resident is', 'residents are')} waiting. RA 7160, Sec. 394.` : 'Nobody is waiting. RA 7160, Sec. 394.',
+      }
+      case 'blotter': return {
+        eyebrow: 'Blotter / Lupon', title: 'Barangay justice cases',
+        desc: `${plural(blotterCounts.open, 'case', 'cases')} before the Lupon.${blotterCounts.breach ? ` ${plural(blotterCounts.breach, 'is', 'are')} past the deadline.` : ''}`,
+      }
+      case 'tanods': return {
+        eyebrow: 'Tanod management', title: 'Your tanods',
+        desc: tanods.length ? `${onDuty} of ${tanods.length} on duty now.` : 'No tanods yet. Invite one from Users.',
+      }
+      case 'users': return {
+        eyebrow: 'User management', title: 'People in your barangay',
+        desc: `${plural(byRole('resident'), 'resident', 'residents')}, ${plural(byRole('official'), 'official', 'officials')} and ${plural(byRole('tanod'), 'tanod', 'tanods')}.`,
+      }
+      case 'announcements': return {
+        eyebrow: 'Announcements', title: 'Keep everyone informed',
+        desc: 'Every resident, official and tanod gets these, with push alerts for urgent ones.',
+        actions: <Button variant="white" onClick={() => router.push('/official/announcement/new')}><Plus aria-hidden="true" />New announcement</Button>,
+      }
+      default: return { title: sectionTitle[section], desc: sectionDesc[section] }
+    }
+  }
+  const head = sectionHead(activeSection)
+
   // Each section gets its own browser-tab title (history entries, tab strip).
   useEffect(() => { document.title = `${sectionTitle[activeSection] || 'Dashboard'} · BH360` }, [activeSection]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -972,8 +1019,10 @@ function OfficialDashboard() {
           columnClass={'max-w-[100rem]'}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          sectionTitle={sectionTitle[activeSection]}
-          sectionDesc={sectionDesc[activeSection]}
+          sectionTitle={head.title}
+          sectionDesc={head.desc}
+          eyebrow={head.eyebrow}
+          actions={head.actions}
           heading={activeSection === 'dashboard' && profile?.barangay_id ? (
             <div className="flex items-end gap-4">
               <div className="min-w-0 flex-1">
@@ -989,7 +1038,7 @@ function OfficialDashboard() {
               </div>
             </div>
           ) : undefined}
-          phoneTitle={activeSection === 'dashboard' ? 'Dashboard' : undefined}
+          phoneTitle={sectionTitle[activeSection]}
           notificationCenter={notificationCenter}
           searchData={{
             incidents,

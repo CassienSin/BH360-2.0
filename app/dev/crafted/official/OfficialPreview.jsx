@@ -18,6 +18,18 @@ import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS } from './fixtures'
 
+// The band heading per section, as app/official/page.jsx sets it.
+const HEADS = {
+  incidents: { eyebrow: 'Incidents', title: 'Reports from residents', desc: 'Priorities follow the law behind each category. Critical reports stay at the top.', map: true },
+  tickets: { eyebrow: 'Tickets', title: 'Conversations with residents', desc: '2 tickets are waiting on a reply.' },
+  documents: { eyebrow: 'Document requests', title: 'Clearances and certificates', desc: '3 in progress. 1 past the Citizen’s Charter deadline (RA 11032).' },
+  verifications: { eyebrow: 'Verifications', title: 'Confirm who lives here', desc: '2 residents are waiting. RA 7160, Sec. 394.' },
+  blotter: { eyebrow: 'Blotter / Lupon', title: 'Barangay justice cases', desc: '2 cases before the Lupon. 1 is past the deadline.' },
+  tanods: { eyebrow: 'Tanod management', title: 'Your tanods', desc: '1 of 2 on duty now.' },
+  users: { eyebrow: 'User management', title: 'People in your barangay', desc: '3 residents, 1 official and 2 tanods.' },
+  announcements: { eyebrow: 'Announcements', title: 'Keep everyone informed', desc: 'Every resident, official and tanod gets these, with push alerts for urgent ones.' },
+}
+
 const NOTIFICATIONS = { items: [], unread: 0, markAllRead() {}, openItem() {} }
 const noop = () => {}
 
@@ -59,7 +71,9 @@ export default function OfficialPreview({ initial }) {
       sidebar={<DashboardSidebar profile={PROFILE} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
         activeSection={section} setActiveSection={setSection} navItems={NAV} roleLabel="Barangay Official" />}
       header={<DashboardHeader profile={PROFILE} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
-        columnClass="max-w-[100rem]" sectionTitle={title} sectionDesc="Sample subtitle"
+        columnClass="max-w-[100rem]" sectionTitle={HEADS[section]?.title || title} sectionDesc={HEADS[section]?.desc || 'Sample subtitle'}
+        eyebrow={HEADS[section]?.eyebrow}
+        actions={HEADS[section]?.map ? <Button variant="onband"><MapIcon size={18} aria-hidden="true" />Open map</Button> : undefined}
         heading={home ? (
           <div className="flex items-end gap-4">
             <div className="min-w-0 flex-1">
@@ -73,7 +87,7 @@ export default function OfficialPreview({ initial }) {
             </div>
           </div>
         ) : undefined}
-        phoneTitle={home ? 'Dashboard' : undefined}
+        phoneTitle={title}
         notificationCenter={NOTIFICATIONS}>
         {home && (
           <div className="band-slot">

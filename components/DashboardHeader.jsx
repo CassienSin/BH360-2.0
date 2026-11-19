@@ -262,7 +262,7 @@ export default function DashboardHeader({
             </button>
             {heading
               ? <p className={styles.phoneTitle}>{phoneTitle ?? sectionTitle}</p>
-              : <h1 className={styles.phoneTitle}>{sectionTitle}</h1>}
+              : <h1 className={styles.phoneTitle}>{phoneTitle ?? sectionTitle}</h1>}
 
             <p className={styles.context}>
               {place}
