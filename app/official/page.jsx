@@ -11,7 +11,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Shield, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar, BadgeCheck, FileCheck2, Gavel } from 'lucide-react'
+import { AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -26,9 +26,12 @@ import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { useNotifications } from '@/lib/useNotifications'
 import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
-import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
+import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
+import { waitingOnOfficial } from '@/lib/officialQueue'
+import { StatStrip } from '@/components/ui/stat-strip'
+import { Button } from '@/components/ui/button'
 import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
-import { greeting, officialSummary, officialMostPressing, unassignedIncidents } from '@/lib/homeSummary'
+import { greeting, officialSummary, unassignedIncidents } from '@/lib/homeSummary'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
 import CriticalAlert from '@/components/CriticalAlert'
@@ -40,7 +43,6 @@ import BlotterQueue from '@/components/BlotterQueue'
 import { deadlineState } from '@/lib/documents'
 import { stageDeadline as blotterDeadline, isOpen as blotterIsOpen } from '@/lib/katarungan'
 import { verificationStyle } from '@/lib/verification'
-import { CATEGORY_CONFIG as categoryConfig } from '@/lib/legalBasis'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
@@ -97,13 +99,6 @@ const roleConfig = {
   official: { color: '#f97316', bg: '#fff7ed', label: 'Official' },
   tanod: { color: '#22c55e', bg: '#f0fdf4', label: 'Tanod' },
 }
-
-const INCIDENT_STATUS_CHIP = {
-  pending:  { label: 'Unassigned', bg: '#fef3c7', color: '#b45309' },
-  assigned: { label: 'Dispatched', bg: '#dbeafe', color: '#1d4ed8' },
-  resolved: { label: 'Resolved',   bg: '#d1fae5', color: '#047857' },
-}
-const statusChip = s => INCIDENT_STATUS_CHIP[s] || { label: s, bg: '#f3f4f6', color: '#6b7280' }
 
 const TICKET_STATUS = {
   open:        { label: 'Open',         bg: '#fef3c7', color: '#b45309' },
@@ -744,74 +739,57 @@ function OfficialDashboard() {
     [incidents, tickets, documentCounts, blotterCounts, pendingVerifications, tanods, profile]
   )
 
-  const officialPressing = useMemo(() => officialMostPressing({ incidents }), [incidents])
-
-  const officialTiles = useMemo(() => {
-    const unassigned = unassignedIncidents(incidents).length
+  // The six numbers on the band (O01): each opens its section.
+  const officialStats = useMemo(() => {
+    const unassigned = unassignedIncidents(incidents)
     const openIncidents = incidents.filter(i => !isSettled(i.status)).length
-    const openTickets = tickets.filter(t => !isSettled(t.status)).length
+    const openTickets = tickets.filter(t => t.status === 'open')
     const onDuty = tanods.filter(t => t.on_duty).length
-
-    const tiles = [
+    const oldest = rows => rows.reduce((min, r) => (!min || r.created_at < min ? r.created_at : min), null)
+    const pending = users.filter(u =>
+      u.id !== profile?.id && !u.is_super_admin && (u.verification_status || 'pending') === 'pending')
+    const oldestTicket = oldest(openTickets)
+    const oldestSignup = oldest(pending)
+    return [
+      { label: 'Unassigned reports', value: unassigned.length, note: `${openIncidents} open`, onClick: () => navClick('incidents') },
       {
-        key: 'unassigned', icon: <AlertTriangle size={17} />, tone: 'waiting',
-        count: unassigned, quiet: unassigned === 0,
-        label: unassigned === 1 ? 'Report unassigned' : 'Reports unassigned',
-        caption: `${openIncidents} open · ${incidents.length} all time`,
-        onClick: () => navClick('incidents'),
-      },
-      {
-        // Nobody on duty is the reason the next report sits unassigned, so
-        // it goes red rather than the green a zero used to be drawn in.
-        key: 'duty', icon: <Shield size={17} />,
-        tone: onDuty === 0 && tanods.length > 0 ? 'overdue' : 'done',
-        count: onDuty, quiet: false,
-        label: 'On duty now',
-        caption: tanods.length ? `of ${tanods.length} tanod${tanods.length === 1 ? '' : 's'}` : 'no tanods yet',
+        label: 'Tanods on duty',
+        value: tanods.length ? `${onDuty} of ${tanods.length}` : 0,
+        // Nobody on duty is why the next report would sit unassigned.
+        tone: tanods.length === 0 ? 'default' : onDuty === 0 ? 'danger' : 'ok',
+        note: tanods.length === 0 ? 'no tanods yet' : onDuty === 0 ? 'nobody on duty' : 'on duty now',
         onClick: () => navClick('tanods'),
       },
+      { label: 'Tickets to reply', value: openTickets.length, note: oldestTicket ? `oldest ${timeAgo(oldestTicket)}` : 'all answered', onClick: () => navClick('tickets') },
       {
-        key: 'tickets', icon: <FileText size={17} />, tone: 'active',
-        count: openTickets, quiet: openTickets === 0,
-        label: openTickets === 1 ? 'Ticket needs a reply' : 'Tickets need a reply',
-        caption: `${tickets.length} in total`,
-        onClick: () => navClick('tickets'),
-      },
-      {
-        key: 'documents', icon: <FileCheck2 size={17} />,
-        tone: documentCounts.breach > 0 ? 'overdue' : 'active',
-        count: documentCounts.open, quiet: documentCounts.open === 0,
-        label: documentCounts.open === 1 ? 'Document waiting' : 'Documents waiting',
-        caption: documentCounts.breach > 0
-          ? `${documentCounts.breach} past the RA 11032 deadline`
-          : 'all within the deadline',
+        label: 'Documents waiting', value: documentCounts.open,
+        noteTone: documentCounts.breach > 0 ? 'danger' : 'default',
+        note: documentCounts.breach > 0 ? `${documentCounts.breach} past the deadline` : 'all within deadline',
         onClick: () => navClick('documents'),
       },
-    ]
-
-    if (pendingVerifications > 0) {
-      tiles.push({
-        key: 'verifications', icon: <BadgeCheck size={17} />, tone: 'info',
-        count: pendingVerifications, quiet: false,
-        label: pendingVerifications === 1 ? 'Resident to verify' : 'Residents to verify',
-        caption: 'waiting on an official',
-        onClick: () => navClick('verifications'),
-      })
-    }
-    if (blotterCounts.open > 0) {
-      tiles.push({
-        key: 'blotter', icon: <Gavel size={17} />,
-        tone: blotterCounts.breach > 0 ? 'overdue' : 'waiting',
-        count: blotterCounts.open, quiet: false,
-        label: blotterCounts.open === 1 ? 'Blotter case' : 'Blotter cases',
-        caption: blotterCounts.breach > 0
-          ? `${blotterCounts.breach} past a KP deadline`
-          : 'before the Lupon',
+      { label: 'Residents to verify', value: pending.length, note: oldestSignup ? `oldest ${timeAgo(oldestSignup)}` : 'none waiting', onClick: () => navClick('verifications') },
+      {
+        label: blotterCounts.breach === 1 ? 'Overdue KP case' : 'Overdue KP cases', value: blotterCounts.breach,
+        tone: blotterCounts.breach > 0 ? 'danger' : 'default',
+        noteTone: 'default',
+        note: `${blotterCounts.open} open`,
         onClick: () => navClick('blotter'),
-      })
-    }
-    return tiles
-  }, [incidents, tickets, tanods, documentCounts, blotterCounts, pendingVerifications, navClick])
+      },
+    ]
+  }, [incidents, tickets, tanods, users, profile, documentCounts, blotterCounts, navClick])
+
+  const todayLabel = new Date(now).toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric' })
+
+  // "Waiting on you" (lib/officialQueue.js), from what is already loaded.
+  const waiting = useMemo(() => waitingOnOfficial({
+    incidents, tickets, cases: blotterCases, documents: documentRequests, users, selfId: profile?.id, now,
+  }), [incidents, tickets, blotterCases, documentRequests, users, profile, now])
+
+  const actOnWaiting = useCallback(item => {
+    if (item.kind === 'incident') router.push(`/official/incident/${item.id}`)
+    else if (item.kind === 'ticket') router.push(`/official/ticket/${item.id}`)
+    else navClick({ case: 'blotter', document: 'documents', verification: 'verifications' }[item.kind])
+  }, [router, navClick])
 
 
   // One handler for both an update and an insert: BlotterQueue passes
@@ -835,20 +813,20 @@ function OfficialDashboard() {
 
   const sectionTitle = {
     dashboard: 'Dashboard', incidents: 'Incidents', announcements: 'Announcements',
-    tickets: 'Ticket Management', tanods: 'Tanod Management', analytics: 'AI Analytics',
-    users: 'User Management', map: 'Incident Map', calendar: 'Calendar',
-    verifications: 'Resident Verification', documents: 'Document Requests',
-    blotter: 'Katarungang Pambarangay'
+    tickets: 'Tickets', tanods: 'Tanods', analytics: 'Analytics',
+    users: 'Users', map: 'Incident map', calendar: 'Calendar',
+    verifications: 'Verifications', documents: 'Documents',
+    blotter: 'Blotter / Lupon'
   }
   const sectionDesc = {
-    dashboard: 'Overview of barangay operations', incidents: 'Monitor and respond to incidents',
-    announcements: 'Manage community announcements', tickets: 'Handle resident support tickets',
-    tanods: 'Manage field officers', analytics: 'AI-powered insights and trends',
-    users: 'Manage accounts and invite codes', map: 'Visualize incidents on a map',
-    calendar: 'View activity by date',
-    verifications: 'Confirm who actually lives in this barangay (RA 7160, Sec. 394)',
-    documents: 'Issue barangay documents within the RA 11032 deadline',
-    blotter: 'Barangay justice — mediation, Pangkat and Certificates to File Action'
+    dashboard: 'What needs the barangay today', incidents: 'Every report, newest first',
+    announcements: 'News and alerts for every resident', tickets: 'Questions and requests from residents',
+    tanods: 'Who is on duty and how they respond', analytics: 'Trends and response times',
+    users: 'Accounts and invite codes', map: 'Reports by place',
+    calendar: 'Hearings, appointments and activity by date',
+    verifications: 'Confirm who lives in the barangay (RA 7160, Sec. 394)',
+    documents: 'Issue documents within the RA 11032 deadline',
+    blotter: 'Katarungang Pambarangay: mediation, Pangkat and Certificates to File Action'
   }
 
   // Each section gets its own browser-tab title (history entries, tab strip).
@@ -974,18 +952,18 @@ function OfficialDashboard() {
             { key: 'incidents', label: 'Incidents', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length, hasNew: incidents.filter(i => i.status === 'pending').length > 0 },
             { key: 'announcements', label: 'Announcements', icon: AnnouncementsIcon },
           ]},
-          { section: 'MANAGEMENT', items: [
-            { key: 'tickets', label: 'Ticket Management', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
-            { key: 'documents', label: 'Document Requests', icon: DocumentsIcon, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
+          { section: 'MANAGE', items: [
+            { key: 'tickets', label: 'Tickets', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length, hasNew: tickets.filter(t => t.status === 'open').length > 0 },
+            { key: 'documents', label: 'Documents', icon: DocumentsIcon, count: documentCounts.open, badge: documentCounts.breach > 0 ? 'OVERDUE' : undefined, hasNew: documentCounts.open > 0 },
             { key: 'verifications', label: 'Verifications', icon: VerificationsIcon, count: pendingVerifications, hasNew: pendingVerifications > 0 },
             { key: 'blotter', label: 'Blotter / Lupon', icon: BlotterIcon, count: blotterCounts.open, badge: blotterCounts.breach > 0 ? 'OVERDUE' : undefined },
-            { key: 'tanods', label: 'Tanod Management', icon: TanodsIcon },
-            { key: 'users', label: 'User Management', icon: UsersIcon },
+            { key: 'tanods', label: 'Tanods', icon: TanodsIcon },
+            { key: 'users', label: 'Users', icon: UsersIcon },
           ]},
-          { section: 'INSIGHTS', items: [
-            { key: 'map', label: 'Incident Map', icon: MapIcon },
+          { section: 'TOOLS', items: [
+            { key: 'map', label: 'Incident map', icon: MapIcon },
             { key: 'calendar', label: 'Calendar', icon: CalendarIcon },
-            { key: 'analytics', label: 'AI Analytics', icon: AnalyticsIcon, badge: 'AI' },
+            { key: 'analytics', label: 'Analytics', icon: AnalyticsIcon },
           ]},
         ]}
       />}
@@ -996,6 +974,22 @@ function OfficialDashboard() {
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
           sectionDesc={sectionDesc[activeSection]}
+          heading={activeSection === 'dashboard' && profile?.barangay_id ? (
+            <div className="flex items-end gap-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold tracking-[0.08em] text-white/75 uppercase">{todayLabel}</p>
+                <h1 className="mt-1.5 text-[26px] font-extrabold leading-tight tracking-[-0.6px] text-white">
+                  {greeting()}{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.
+                </h1>
+                <p className="mt-1.5 text-sm text-white/88 max-w-[70ch]">{officialBrief.text}</p>
+              </div>
+              <div className="hidden desk:flex shrink-0 gap-2">
+                <Button variant="onband" onClick={() => navClick('map')}><MapIcon size={18} aria-hidden="true" />Open map</Button>
+                <Button variant="white" onClick={() => router.push('/official/announcement/new')}><AnnouncementsIcon size={18} aria-hidden="true" />New announcement</Button>
+              </div>
+            </div>
+          ) : undefined}
+          phoneTitle={activeSection === 'dashboard' ? 'Dashboard' : undefined}
           notificationCenter={notificationCenter}
           searchData={{
             incidents,
@@ -1006,8 +1000,11 @@ function OfficialDashboard() {
             if (type === 'incidents') setActiveSection('incidents')
             if (type === 'tickets') router.push(`/official/ticket/${item.id}`)
             if (type === 'announcements') setActiveSection('announcements')
-          }}
-        />}>
+          }}>
+          {activeSection === 'dashboard' && profile?.barangay_id && (
+            <div className="band-slot"><StatStrip stats={officialStats} className="sm:grid-flow-row sm:grid-cols-3 xl:grid-flow-col xl:grid-cols-none" /></div>
+          )}
+        </DashboardHeader>}>
 
           <div className="mx-auto w-full max-w-[100rem]">
            <NotificationBanner />
@@ -1028,93 +1025,15 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'dashboard' && (
-            <div className="space-y-6">
-              <HomeSummary
-                greeting={greeting()}
-                name={profile?.full_name?.split(' ')[0]}
-                summary={officialBrief.text}
-                pressing={officialPressing}
-                allClearNote={
-                  tanods.length === 0
-                    ? 'No tanods on the roster yet'
-                    : `${tanods.filter(t => t.on_duty).length} of ${tanods.length} tanods on duty`
-                }
-                onOpen={() => officialPressing?.href && router.push(officialPressing.href)}
-              />
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
-                  {officialBrief.allClear ? 'The barangay today' : 'Needs the barangay'}
-                </p>
-                {/* These replace both the old Quick Actions and the old
-                    Overview. The four "quick actions" were sidebar links
-                    wearing a card, and the Overview's headline number was
-                    the TOTAL — 15 incidents — with the count that actually
-                    needed acting on demoted to a caption beneath it. */}
-                <TileGrid tiles={officialTiles} render={(tile, className) => (
-                  <ActivityTile {...tile} className={className} />
-                )} />
+            <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+              <div className="flex min-w-0 flex-col gap-3.5">
+                <WaitingCard items={waiting} onAct={actOnWaiting} />
+                <RecentIncidentsCard incidents={incidents.slice(0, 4)}
+                  onOpen={inc => router.push(`/official/incident/${inc.id}`)}
+                  onViewAll={() => navClick('incidents')} />
               </div>
-
-              {/* Wide screens: actions and roster beside the recent incidents. */}
-              <div className="grid gap-6 items-start xl:grid-cols-2">
-              <div className="space-y-6 min-w-0">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
-                <button onClick={() => navClick('announcements')}
-                  className="white-card relative w-full text-left p-4 pl-[22px] flex items-center gap-3.5
-                    cursor-pointer focus:outline-none focus-visible:ring-2"
-                  style={{ '--tw-ring-color': '#ffffff' }}>
-                  <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
-                    style={{ background: 'var(--brand)' }} aria-hidden="true" />
-                  <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
-                    <Bell size={20} className="text-white" />
-                  </span>
-                  <span className="flex-1 min-w-0 block">
-                    <span className="block text-[15px] font-extrabold text-gray-800">Post an announcement</span>
-                    <span className="block text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                      Reaches every resident of {profile?.barangays?.name || 'the barangay'} at once
-                    </span>
-                  </span>
-                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: 'var(--brand)' }} aria-hidden="true" />
-                </button>
-              </div>
-
-              <TanodRoster profile={profile} />
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Recent Incidents</p>
-                  <button onClick={() => navClick('incidents')} className="text-xs font-semibold text-white opacity-70 hover:opacity-100 transition-opacity">View all →</button>
-                </div>
-                <div className="space-y-2">
-                  {incidents.slice(0, 4).map(inc => {
-                    const cat = categoryConfig[inc.category] || categoryConfig.Other
-                    const settled = isSettled(inc.status)
-                    return (
-                      <RecordCard key={inc.id}
-                        tone={toneFor(inc.status)}
-                        icon={<span aria-hidden="true">{cat.icon}</span>}
-                        iconBg={settled ? '#f3f4f6' : cat.bg}
-                        title={inc.title}
-                        meta={[inc.profiles?.full_name, inc.location].filter(Boolean).join(' · ')}
-                        badges={<Chip bg={statusChip(inc.status).bg} color={statusChip(inc.status).color}>
-                          {statusChip(inc.status).label}
-                        </Chip>}
-                        when={timeAgo(inc.created_at)}
-                        onClick={() => router.push(`/official/incident/${inc.id}`)}
-                        ariaLabel={`${inc.title} — ${inc.status}`} />
-                    )
-                  })}
-                  {incidents.length === 0 && (
-                    <div className="white-card p-6 text-center">
-                      <p className="text-gray-500 text-sm">No incidents yet.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <div className="flex min-w-0 flex-col gap-3.5">
+                <TanodRoster profile={profile} />
               </div>
             </div>
           )}

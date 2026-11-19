@@ -265,6 +265,7 @@ export function SectionSkeleton({ kind = 'records', path }) {
     if (kind === 'announcements') return <RowsCard rows={3} lift lines={3} />
     if (kind === 'launcher') return <RowsCard rows={1} lift lines={3} />
   }
+  if (path === '/official' && kind === 'overview') return <OfficialHomeSkeleton />
   switch (kind) {
     case 'overview': return <OverviewSkeleton tiles={OVERVIEW_TILES[path] || 4} />
     case 'announcements': return <AnnouncementsSkeleton />
@@ -355,11 +356,34 @@ function SidebarSkeleton({ groups }) {
   )
 }
 
-/** Mirrors components/DashboardHeader.jsx on its band: the same classes, so
- *  the heights match; placeholder bars where text depends on data. */
-/** What sits on the resident band under the title, per section kind:
- *  Home has the greeting and the first card; the record lists a switch. */
-function ResidentBandSlot({ kind }) {
+/** What sits on the band under the title, per dashboard and section kind.
+ *  Resident: Home has the greeting and the first card; the record lists a
+ *  switch. Official: the dashboard has the greeting and the stat strip. */
+function BandSlotSkeleton({ path, kind }) {
+  if (path === '/official') {
+    if (kind !== 'overview') return null
+    return (
+      <>
+        <div className={header.customHeading}>
+          <Skeleton tone="brand" className="h-3 w-40" />
+          <Skeleton tone="brand" className="h-[30px] w-72 max-w-full mt-2 rounded-lg" />
+          <Skeleton tone="brand" className="h-3.5 w-96 max-w-full mt-2.5" />
+        </div>
+        <div className="band-slot">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-line bg-line shadow-[var(--shadow-lift)] sm:grid-cols-3 xl:grid-cols-6">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="bg-surface px-4 py-3.5 sm:px-[18px] space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-6 w-10" />
+                <Skeleton className="h-2.5 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </>
+    )
+  }
+  if (path !== '/resident') return null
   if (kind === 'overview') {
     return (
       <>
@@ -384,7 +408,8 @@ function ResidentBandSlot({ kind }) {
 /** Mirrors components/DashboardHeader.jsx on its band: the same classes, so
  *  the heights match; placeholder bars where text depends on data. */
 function DashboardHeaderSkeleton({ column = '', path, kind, kinds = [] }) {
-  const resident = path === '/resident'
+  // Dashboards whose Home draws its own heading on the band.
+  const slots = path === '/resident' || path === '/official'
   return (
     <header className={header.header} aria-hidden="true">
       <Band seed={2} />
@@ -398,19 +423,19 @@ function DashboardHeaderSkeleton({ column = '', path, kind, kinds = [] }) {
           <span className={header.onband}><Bell size={16} /></span>
           <span className={`${header.deskOnly} w-[38px] h-[38px] rounded-[10px] bg-[var(--onband)]`} />
         </div>
-        {!(resident && kind === 'overview') && (
-          <div className={header.heading}>
+        {!(slots && kind === 'overview') && (
+          <div className={`${header.heading} ${slots && !kind ? 'dash-shell-heading' : ''}`}>
             <div className="min-w-0 flex-1">
               <Skeleton tone="brand" className="h-[30px] w-64 max-w-full rounded-lg" />
               <Skeleton tone="brand" className="h-3.5 w-80 max-w-full mt-2.5" />
             </div>
           </div>
         )}
-        {resident && (kind
-          ? <ResidentBandSlot kind={kind} />
+        {slots && (kind
+          ? <BandSlotSkeleton path={path} kind={kind} />
           : kinds.map((k, i) => (
             <div key={k} className="dash-shell-variant" data-kind={k} data-default={i === 0 ? '' : undefined}>
-              <ResidentBandSlot kind={k} />
+              <BandSlotSkeleton path={path} kind={k} />
             </div>
           )))}
       </div>
@@ -566,6 +591,21 @@ function RowsCard({ rows, lift = false, label = false, trailing, lines = 0, prog
       <div className="divide-y divide-line">
         {[...Array(rows)].map((_, i) => <RowLines key={i} trailing={trailing} lines={lines} progress={progress} />)}
       </div>
+    </div>
+  )
+}
+
+/** The official dashboard body (O01): "Waiting on you" and the recent
+ *  incidents, with the tanod roster beside them on wide screens. */
+function OfficialHomeSkeleton() {
+  const action = <Skeleton className="h-[34px] w-16 rounded-[10px]" />
+  return (
+    <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+      <div className="flex flex-col gap-3.5">
+        <RowsCard rows={5} label trailing={action} />
+        <RowsCard rows={4} label />
+      </div>
+      <RowsCard rows={3} label />
     </div>
   )
 }

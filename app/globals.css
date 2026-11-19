@@ -429,6 +429,10 @@ html[data-skeleton='launcher'] .dash-shell-variant[data-kind='launcher'],
 html[data-skeleton='chat'] .dash-shell-variant[data-kind='chat'],
 html[data-banner='ask'] .dash-shell-banner[data-state='ask'],
 html[data-banner='denied'] .dash-shell-banner[data-state='denied'] { display: block; }
+/* Resident and official Home draw their own heading (the greeting) on the
+   band, so the plain title placeholder steps aside for them. */
+html:not([data-skeleton]) .dash-shell-heading,
+html[data-skeleton='overview'] .dash-shell-heading { display: none; }
 
 /* THE MOBILE "UNFIT AFTER REFRESH" FIX: iOS Safari auto-zooms whenever a
    focused input has a font-size under 16px — and the app's inputs are all

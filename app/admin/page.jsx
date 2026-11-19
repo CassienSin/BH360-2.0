@@ -99,7 +99,7 @@ function inviteEmail(app) {
     '2. Choose "Barangay Official" and enter the code above',
     '3. Fill in your details and sign in',
     '',
-    'Inviting your team: once you are signed in, open User Management and press "Tanod Code" or "Official Code". Share each code with one person; they choose the matching role when they sign up.',
+    'Inviting your team: once you are signed in, open Users and press "Tanod Code" or "Official Code". Share each code with one person; they choose the matching role when they sign up.',
     '',
     'BarangayHub 360',
   ].join('\n')
@@ -976,7 +976,7 @@ function AdminPanel() {
                       <p className="w-full text-xs text-emerald-900 leading-relaxed">
                         This code is for the applicant only. Once they sign in, they create
                         <strong> tanod</strong> and <strong>official</strong> codes for their team under
-                        <strong> User Management</strong>. Need one now? Use <strong>Invite Codes</strong> above.
+                        <strong> Users</strong>. Need one now? Use <strong>Invite Codes</strong> above.
                       </p>
                       {emailMenuFor === app.id && (() => {
                         const links = emailLinks(app)

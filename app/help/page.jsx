@@ -38,8 +38,8 @@ const faqByRole = {
   official: [
     { q: 'How do I dispatch a tanod to an incident?', a: 'On any pending incident card, use the "Dispatch Tanod" dropdown to select a tanod. They\'ll be notified instantly and the incident status will update to "assigned".' },
     { q: 'How do I post an announcement?', a: 'Navigate to "Announcements" → Click "New Announcement" → Choose a template or write from scratch → Preview → Post. All residents in your barangay will see it immediately.' },
-    { q: 'How do I generate invite codes?', a: 'Go to "User Management" → Use the buttons to generate Official or Tanod codes → Share the code with the new user. They\'ll enter it during registration.' },
-    { q: 'How do I view analytics?', a: 'Navigate to "AI Analytics" in the sidebar. You\'ll see KPIs, tanod leaderboard, heatmaps, category trends, and AI-powered insights.' },
+    { q: 'How do I generate invite codes?', a: 'Open Users, then use the buttons to generate Official or Tanod codes → Share the code with the new user. They\'ll enter it during registration.' },
+    { q: 'How do I view analytics?', a: 'Open Analytics in the sidebar. You\'ll see KPIs, tanod leaderboard, heatmaps, category trends, and AI-powered insights.' },
     { q: 'What\'s the difference between incidents and tickets?', a: 'Incidents are field events (theft, noise, fire) that need physical response. Tickets are administrative concerns (clearance requests, complaints) handled via chat.' },
     { q: 'How do I export reports?', a: 'In the Incidents or Tickets section, use the CSV or PDF buttons to export filtered data with your barangay branding.' },
   ],
@@ -62,7 +62,7 @@ const guides = {
   official: [
     { title: 'Daily Operations', icon: '⚙️', steps: ['Check pending incidents', 'Dispatch tanods', 'Reply to tickets', 'Post announcements'] },
     { title: 'Team Management', icon: '👥', steps: ['Generate invite codes', 'Review user accounts', 'Monitor tanod performance', 'Export reports'] },
-    { title: 'Using AI Analytics', icon: '🧠', steps: ['Open AI Analytics tab', 'Review KPIs and trends', 'Read AI recommendations', 'Plan strategically'] },
+    { title: 'Using Analytics', icon: '🧠', steps: ['Open Analytics', 'Review KPIs and trends', 'Read AI recommendations', 'Plan strategically'] },
   ],
   tanod: [
     { title: 'Field Response', icon: '🛡️', steps: ['Check new assignments', 'Get directions to location', 'Call reporter if needed', 'Resolve and document'] },

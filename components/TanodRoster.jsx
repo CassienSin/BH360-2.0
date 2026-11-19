@@ -1,19 +1,23 @@
 'use client'
-// Save as: components/TanodRoster.jsx
-// Used in:  app/official/page.jsx  (see integration notes in chat)
+// Used in app/official/page.jsx (the dashboard's Tanods card, O01).
 //
 // Live roster of every tanod in the official's barangay, with three
 // computed states:
-//   🟠 Responding — on duty AND currently has an assigned incident
-//   🟢 Available  — on duty, no active assignment
-//   ⚪ Off duty
+//   Responding: on duty and has an assigned incident
+//   Available:  on duty, no active assignment
+//   Off duty
 // plus an "active Xm ago" freshness line from the heartbeat, and a
 // stale warning when someone is on duty but hasn't been seen in a
 // while (phone off, app closed).
 
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Shield, Phone, AlertTriangle } from 'lucide-react'
+import { Phone } from 'lucide-react'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row, RowTitle } from '@/components/ui/table'
+import { Status, Tag } from '@/components/ui/tag'
+import { Avatar } from '@/components/ui/avatar'
+import { Muted } from '@/components/ui/text'
 import { timeAgo } from '@/lib/timeAgo'
 import { useNow } from '@/lib/useNow'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
@@ -27,9 +31,9 @@ function statusOf(tanod, activeAssignments) {
 }
 
 const statusConfig = {
-  responding: { label: 'Responding', dot: '#f97316', bg: '#fff7ed', color: '#c2410c' },
-  available:  { label: 'Available',  dot: '#22c55e', bg: '#f0fdf4', color: '#15803d' },
-  off:        { label: 'Off duty',   dot: '#d1d5db', bg: '#fafaff', color: '#6b7280' },
+  responding: { label: 'Responding', tone: 'ok' },
+  available:  { label: 'Available',  tone: 'info' },
+  off:        { label: 'Off duty',   tone: 'quiet' },
 }
 
 const statusOrder = { responding: 0, available: 1, off: 2 }
@@ -147,103 +151,55 @@ export default function TanodRoster({ profile }) {
     return now - new Date(t.last_seen_at).getTime() > STALE_MS
   }
 
+  const total = tanods.length
   return (
-    <div className="rounded-2xl overflow-hidden"
-      style={{ background: 'white', border: '1px solid var(--brand-border)', boxShadow: '0 2px 12px rgba(91,84,232,0.06)' }}>
+    <Card>
+      <CardHead title="Tanods"
+        action={!loading && total > 0 && (
+          <span className={`text-[13px] font-bold ${onDutyCount > 0 ? 'text-ok' : 'text-danger'}`}>
+            {onDutyCount} of {total} on duty
+          </span>
+        )} />
 
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100"
-        style={{ background: 'var(--app-surface)' }}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-            style={{ background: '#f0fdf4' }}>
-            <Shield size={15} className="text-emerald-500" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-gray-800">Tanod Roster</h3>
-            <p className="text-xs text-gray-500">Live duty status</p>
-          </div>
-        </div>
-        <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-          style={{
-            background: onDutyCount > 0 ? '#f0fdf4' : '#fff1f1',
-            color: onDutyCount > 0 ? '#15803d' : '#dc2626',
-          }}>
-          {onDutyCount} on duty
-        </span>
-      </div>
-
-      {/* List */}
-      <div className="max-h-96 overflow-y-auto">
+      <div className="max-h-96 overflow-y-auto border-t border-line">
         {loading ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-500">Loading roster…</p>
+          <Muted className="px-[18px] py-5">Loading the roster…</Muted>
         ) : sorted.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-gray-500">No tanods registered yet.</p>
+          <Muted className="px-[18px] py-5">No tanods yet. Tanods join with an invite code from Users.</Muted>
         ) : (
-          sorted.map(t => {
-            const status = statusOf(t, activeAssignments)
-            const sc = statusConfig[status]
-            const stale = isStale(t)
-            const assignments = activeAssignments[t.id] || 0
-            return (
-              <div key={t.id}
-                className="px-4 py-3 flex items-center gap-3 border-b border-gray-50 last:border-b-0"
-                style={{ opacity: status === 'off' ? 0.6 : 1 }}>
-
-                {/* Avatar + status dot */}
-                <div className="relative flex-shrink-0">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white overflow-hidden"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-                    {t.avatar_url
-                      ? <img loading="lazy" decoding="async" src={t.avatar_url} alt={t.full_name} className="w-full h-full object-cover" />
-                      : t.full_name?.[0]?.toUpperCase()}
-                  </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
-                    style={{ background: sc.dot }} />
-                </div>
-
-                {/* Name + freshness */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{t.full_name}</p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {t.on_duty && t.last_seen_at
+          <Rows>
+            {sorted.map(t => {
+              const status = statusOf(t, activeAssignments)
+              const sc = statusConfig[status]
+              const stale = isStale(t)
+              const assignments = activeAssignments[t.id] || 0
+              return (
+                <Row key={t.id} className="flex items-center gap-3">
+                  <Avatar name={t.full_name} src={t.avatar_url} size="sm" tone={t.on_duty ? 'ok' : 'brand'} />
+                  <RowTitle className="flex-1" title={t.full_name}
+                    sub={(t.on_duty && t.last_seen_at
                       ? `Active ${timeAgo(t.last_seen_at)}`
                       : t.on_duty
                         ? 'Activity unknown'
                         : t.duty_changed_at
                           ? `Off since ${timeAgo(t.duty_changed_at)}`
-                          : 'Never on duty yet'}
-                    {assignments > 0 && ` · ${assignments} active ${assignments === 1 ? 'incident' : 'incidents'}`}
-                  </p>
-                </div>
-
-                {/* Stale warning: on duty but unreachable-looking */}
-                {stale && (
-                  <span title="On duty but not seen recently — consider calling first"
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0"
-                    style={{ background: '#fefce8', color: '#a16207' }}>
-                    <AlertTriangle size={10} /> Inactive
-                  </span>
-                )}
-
-                {/* Status badge */}
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0"
-                  style={{ background: sc.bg, color: sc.color }}>
-                  {sc.label}
-                </span>
-
-                {/* Quick call */}
-                {t.phone && (
-                  <a href={`tel:${t.phone}`} aria-label={`Call ${t.full_name}`}
-                    className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0">
-                    <Phone size={13} />
-                  </a>
-                )}
-              </div>
-            )
-          })
+                          : 'Never on duty yet')
+                      + (assignments > 0 ? ` · ${assignments} active ${assignments === 1 ? 'incident' : 'incidents'}` : '')} />
+                  {/* On duty but not seen in a while: call before dispatching. */}
+                  {stale && <Tag tone="warn" className="shrink-0" title="On duty but not seen recently. Call first.">Inactive</Tag>}
+                  <Status tone={sc.tone} className="shrink-0">{sc.label}</Status>
+                  {t.phone && (
+                    <a href={`tel:${t.phone}`} aria-label={`Call ${t.full_name}`}
+                      className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-surface-sunk hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-strong">
+                      <Phone size={15} strokeWidth={1.9} />
+                    </a>
+                  )}
+                </Row>
+              )
+            })}
+          </Rows>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
