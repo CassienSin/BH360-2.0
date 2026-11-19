@@ -173,7 +173,7 @@ export default function DutyToggle({ profile, onStatusChange }) {
             : onDuty
               ? (locationOk === false
                   ? 'Location unavailable: check permissions'
-                  : `Sharing location with the barangay${shift ? ` · ${shift}` : ''}`)
+                  : (shift ? `Location shared · ${shift}` : 'Location shared with the barangay'))
               : 'Tap to start your shift. Location is shared while on duty.'}
         </span>
       </span>

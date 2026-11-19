@@ -663,9 +663,9 @@ function TanodDashboard() {
             <div className="mx-auto flex max-w-2xl flex-col gap-3.5">
               <UpNextCard items={assignedIncidents.slice(1, 4)} now={now} onOpen={handlers.onOpen} onSeeAll={() => navClick('active')} />
               <StatStrip lift={false} stats={[
-                { label: 'Not opened yet', value: unacknowledged, tone: unacknowledged ? 'danger' : 'default', note: `${assignedIncidents.length} assigned` },
-                { label: 'Past their time', value: overdue.length, tone: overdue.length ? 'danger' : 'default', note: overdue.length ? 'respond when you can' : 'all within target' },
-                { label: 'Avg. response', value: stats.respond.label || '—', note: 'to the first response' },
+                { label: 'Not opened', value: unacknowledged, tone: unacknowledged ? 'danger' : 'default', note: `${assignedIncidents.length} assigned` },
+                { label: 'Overdue', value: overdue.length, tone: overdue.length ? 'danger' : 'default', note: overdue.length ? 'respond soon' : 'within target' },
+                { label: 'Response', value: stats.respond.label || '—', note: 'on average' },
               ]} className="grid-cols-3 sm:grid-flow-row sm:grid-cols-3" />
               <DutyScheduleSummary profile={profile} />
             </div>
