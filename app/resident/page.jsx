@@ -92,7 +92,7 @@ function ResidentDashboard() {
 
       const { data: prof, error: profError } = await supabase
         .from('profiles')
-        .select('*, barangays(id, name, city, province)')
+        .select('*, barangays(id, name, city, province, phone)')
         .eq('id', user.id)
         .maybeSingle()
 
@@ -636,7 +636,7 @@ function ResidentDashboard() {
                 onOpen={inc => router.push(`/resident/incident/${inc.id}`)}
                 onRate={inc => setRatingModal(inc)}
                 emptyText={reportFilter === 'active'
-                  ? (incidents.length ? 'Nothing in progress. Your resolved reports are under Resolved.' : 'You haven’t sent a report yet. Use the red Report button whenever something needs the barangay.')
+                  ? (incidents.length ? 'Nothing in progress. Your resolved reports are under Resolved.' : 'You haven’t sent a report yet. When something needs the barangay, report it and follow it here.')
                   : 'No resolved reports yet.'}
                 emptyAction={reportFilter === 'active' ? <Button size="sm" onClick={() => router.push('/resident/report')}>Report an incident</Button> : null}
               />
