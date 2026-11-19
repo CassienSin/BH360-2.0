@@ -16,6 +16,7 @@ import VerificationQueue from '@/components/VerificationQueue'
 import BlotterQueue from '@/components/BlotterQueue'
 import TicketsSection from '@/components/official/TicketsSection'
 import TanodManagement from '@/components/TanodManagement'
+import UsersSection from '@/components/official/UsersSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { useNow } from '@/lib/useNow'
@@ -70,6 +71,7 @@ export default function OfficialPreview({ initial }) {
 
   const home = section === 'dashboard'
   const now = useNow()
+  const [userRole, setUserRole] = useState('resident')
   const [ticketSearch, setTicketSearch] = useState('')
   const [ticketFilter, setTicketFilter] = useState('all')
   const tickets = TICKETS.filter(t => (ticketFilter === 'all' || t.status === ticketFilter) && t.title.toLowerCase().includes(ticketSearch.toLowerCase()))
@@ -126,11 +128,16 @@ export default function OfficialPreview({ initial }) {
           <TicketsSection tickets={TICKETS} filtered={tickets} now={now} search={ticketSearch} onSearch={setTicketSearch}
             filter={ticketFilter} onFilter={setTicketFilter} onOpen={noop} onExport={noop} />
         )}
+        {section === 'users' && (
+          <UsersSection users={USERS} filtered={USERS.filter(u => userRole === 'all' || u.role === userRole)} search="" onSearch={noop}
+            role={userRole} onRole={setUserRole} generating={false} onGenerate={noop} onCopy={noop} onExport={noop} onReview={noop}
+            inviteCodes={[{ id: 'c1', code: 'SMP-OFF-0000', role: 'official' }, { id: 'c2', code: 'SMP-TAN-0001', role: 'tanod', used: true, used_by: 't2' }]} />
+        )}
         {section === 'tanods' && <TanodManagement profile={PROFILE} onInvite={noop} onOpenIncident={noop} />}
         {section === 'documents' && <DocumentQueue profile={PROFILE} requests={DOCUMENTS} onUpdated={noop} />}
         {section === 'verifications' && <VerificationQueue profile={PROFILE} users={USERS} onUpdated={noop} />}
         {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS.filter(u => u.role === 'resident')} onChanged={noop} />}
-        {!['dashboard', 'incidents', 'tickets', 'tanods', 'documents', 'verifications', 'blotter'].includes(section) && (
+        {!['dashboard', 'incidents', 'tickets', 'users', 'tanods', 'documents', 'verifications', 'blotter'].includes(section) && (
           <p className="text-sm text-muted-foreground">Not in the preview yet: {section}. ({TICKETS.length} tickets, {ANNOUNCEMENTS.length} announcements in the fixtures.)</p>
         )}
       </div>

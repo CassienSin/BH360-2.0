@@ -10,7 +10,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, Bell, BarChart2, Plus, ChevronRight, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar } from 'lucide-react'
+import { AlertTriangle, Bell, BarChart2, Plus, ChevronRight, Map, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -26,6 +26,7 @@ import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { useNotifications } from '@/lib/useNotifications'
 import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
 import TicketsSection from '@/components/official/TicketsSection'
+import UsersSection from '@/components/official/UsersSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
 import { Button } from '@/components/ui/button'
@@ -41,39 +42,10 @@ import DocumentQueue from '@/components/DocumentQueue'
 import BlotterQueue from '@/components/BlotterQueue'
 import { deadlineState } from '@/lib/documents'
 import { stageDeadline as blotterDeadline, isOpen as blotterIsOpen } from '@/lib/katarungan'
-import { verificationStyle } from '@/lib/verification'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
-
-// Profile picture with graceful fallback to the initial-letter circle.
-// Used in User Management and Tanod Management — avatar_url was never
-// rendered there before, only the initial.
-function Avatar({ src, name, gradient, className = 'w-9 h-9', textClass = 'text-sm' }) {
-  // Remember WHICH url failed: a new url gets a fresh try with no reset effect.
-  const [failedSrc, setFailedSrc] = useState(null)
-  const failed = failedSrc != null && failedSrc === src
-  if (src && !failed) {
-    return (
-      <img
-        src={src}
-        alt=""
-        className={`${className} rounded-2xl object-cover flex-shrink-0`}
-        style={{ border: '2px solid white', boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}
-        onError={() => setFailedSrc(src)}
-        loading="lazy"
-      />
-    )
-  }
-  return (
-    <div className={`${className} rounded-2xl flex items-center justify-center ${textClass} font-bold text-white flex-shrink-0`}
-      style={{ background: gradient }}>
-      {name?.[0]?.toUpperCase() || '?'}
-    </div>
-  )
-}
-
 
 const priorityConfig = {
   Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
@@ -92,12 +64,6 @@ const ANNOUNCEMENT_LIMIT = 100
 const USER_LIMIT = 300
 const INVITE_CODE_LIMIT = 100
 const BLOTTER_LIMIT = 200
-
-const roleConfig = {
-  resident: { color: '#5B54E8', bg: '#f0effe', label: 'Resident' },
-  official: { color: '#f97316', bg: '#fff7ed', label: 'Official' },
-  tanod: { color: '#22c55e', bg: '#f0fdf4', label: 'Tanod' },
-}
 
 // Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
 const { kinds: OFFICIAL_SKELETONS, fallback: OFFICIAL_HOME } = DASHBOARD_SKELETONS['/official']
@@ -133,7 +99,7 @@ function OfficialDashboard() {
   // The blotter's filing form, opened from the band's File a complaint.
   const [blotterFiling, setBlotterFiling] = useState(false)
   const [userSearch, setUserSearch] = useState('')
-  const [userRoleFilter, setUserRoleFilter] = useState('all')
+  const [userRoleFilter, setUserRoleFilter] = useState('resident')
   const [confirmDialog, setConfirmDialog] = useState(null) // { type, ...data }
   const [generatingCode, setGeneratingCode] = useState(false)
   const hadDropRef = useRef(false) // realtime dropped at some point → refetch on reconnect
@@ -1210,190 +1176,13 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'users' && (
-            <div className="space-y-6">
-              <div className="white-card p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))'}}>
-                    <KeyRound size={18} className="text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-800">Invite Codes</h3>
-                    <p className="text-xs text-gray-500">Generate codes for {profile?.barangays?.name || 'your barangay'}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3 mb-5">
-                  <button onClick={() => generateInviteCode('official')} disabled={generatingCode}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold text-white disabled:opacity-50"
-                    style={{background: 'linear-gradient(135deg, #f97316, #ea580c)', boxShadow: '0 4px 16px rgba(249,115,22,0.3)'}}>
-                    <Plus size={14} /> Official Code
-                  </button>
-                  <button onClick={() => generateInviteCode('tanod')} disabled={generatingCode}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold text-white disabled:opacity-50"
-                    style={{background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 4px 16px rgba(34,197,94,0.3)'}}>
-                    <Plus size={14} /> Tanod Code
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  {inviteCodes.length === 0 && <p className="text-gray-500 text-sm text-center py-4">No invite codes yet.</p>}
-                  {inviteCodes.map(code => {
-                    const usedBy = users.find(user => user.id === code.used_by)
-                    return (
-                    <div key={code.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                      style={{background: code.used ? '#f9fafb' : 'var(--brand-soft)', border: `1px solid ${code.used ? '#e5e7eb' : 'var(--brand-border)'}`}}>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm font-bold" style={{color: code.used ? '#9ca3af' : 'var(--brand)'}}>
-                            {code.code}
-                          </span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
-                            code.role === 'official' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-                          }`}>{code.role}</span>
-                          {code.used && <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-500">used</span>}
-                        </div>
-                        {code.used && usedBy && (
-                          <p className="text-xs text-gray-500 mt-0.5">Used by {usedBy.full_name}</p>
-                        )}
-                      </div>
-                      {!code.used && (
-                        <button onClick={() => copyToClipboard(code.code)}
-                          aria-label={`Copy code ${code.code}`}
-                          className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
-                          <Copy size={14} style={{color: 'var(--brand)'}} />
-                        </button>
-                      )}
-                    </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="white-card p-5">
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{background: 'var(--brand-soft)'}}>
-                      <Users size={18} style={{color: 'var(--brand)'}} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800">All Users</h3>
-                      <p className="text-xs text-gray-500">{users.length} registered accounts in {profile?.barangays?.name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleExportUsers('csv')} disabled={filteredUsers.length === 0}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40"
-                      style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
-                      <FileSpreadsheet size={12} /> CSV
-                    </button>
-                    <button onClick={() => handleExportUsers('pdf')} disabled={filteredUsers.length === 0}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-40"
-                      style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'}}>
-                      <Download size={12} /> PDF
-                    </button>
-                  </div>
-                </div>
-
-                {/* Search + role filter — a barangay can have hundreds of
-                    residents; an unfilterable list wasn't usable */}
-                {users.length > 0 && (
-                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
-                    <div className="relative flex-1">
-                      <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                      <input
-                        value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
-                        type="search"
-                        aria-label="Search users"
-                        placeholder="Search by name, phone, or address..."
-                        className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800"
-                      />
-                      {userSearch && (
-                        <button onClick={() => setUserSearch('')}
-                          aria-label="Clear search"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
-                          <X size={13} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter users by role">
-                      {[
-                        { value: 'all', label: 'All', count: users.length },
-                        { value: 'resident', label: 'Residents', count: users.filter(u => u.role === 'resident').length },
-                        { value: 'official', label: 'Officials', count: users.filter(u => u.role === 'official').length },
-                        { value: 'tanod', label: 'Tanods', count: users.filter(u => u.role === 'tanod').length },
-                      ].map(f => {
-                        const color = f.value === 'all' ? '#5B54E8' : roleConfig[f.value].color
-                        return (
-                          <button key={f.value} onClick={() => setUserRoleFilter(f.value)}
-                            aria-pressed={userRoleFilter === f.value}
-                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all"
-                            style={{
-                              background: userRoleFilter === f.value ? color : 'var(--app-surface)',
-                              color: userRoleFilter === f.value ? 'white' : '#6b7280',
-                              border: userRoleFilter === f.value ? `1px solid ${color}` : '1px solid var(--brand-soft)',
-                            }}>
-                            {f.label} <span style={{opacity: 0.75}}>{f.count}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {users.length > 0 && filteredUsers.length === 0 && (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 text-sm font-medium">No users match your search</p>
-                    <button onClick={() => { setUserSearch(''); setUserRoleFilter('all') }}
-                      className="mt-2 text-xs font-semibold" style={{color: 'var(--brand)'}}>
-                      Clear filters →
-                    </button>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {filteredUsers.map(u => {
-                    const rc = roleConfig[u.role] || roleConfig.resident
-                    return (
-                      <div key={u.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl"
-                        style={{background: '#fafafa', border: '1px solid var(--brand-soft)'}}>
-                        {/* Profile photo — this list previously showed only the initial */}
-                        <Avatar
-                          src={u.avatar_url}
-                          name={u.full_name}
-                          className="w-9 h-9"
-                          textClass="text-sm"
-                          gradient={`linear-gradient(135deg, ${rc.color}, ${rc.color}99)`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
-                          <p className="text-xs text-gray-500 truncate">{u.phone || 'No phone'} · {u.address || 'No address'}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {/* Verification standing, next to the role — the two
-                              together are what say what this account may do. */}
-                          {!u.is_super_admin && (() => {
-                            const vs = verificationStyle(u.verification_status)
-                            return (
-                              <span className="text-xs px-2 py-1 rounded-full font-bold"
-                                style={{background: vs.bg, color: vs.color, border: `1px solid ${vs.border}`}}
-                                title={vs.label}>
-                                {vs.icon} {vs.short}
-                              </span>
-                            )
-                          })()}
-                          <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                            style={{background: rc.bg, color: rc.color}}>
-                            {rc.label}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+            <UsersSection users={users} filtered={filteredUsers}
+              search={userSearch} onSearch={setUserSearch}
+              role={userRoleFilter} onRole={setUserRoleFilter}
+              inviteCodes={inviteCodes} generating={generatingCode}
+              onGenerate={generateInviteCode} onCopy={copyToClipboard}
+              onExport={handleExportUsers}
+              onReview={() => navClick('verifications')} />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'verifications' && (
