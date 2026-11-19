@@ -10,9 +10,8 @@ import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { MapPin, CheckCircle, Clock, AlertTriangle, Phone, Navigation, Award, Zap, FileText, Star } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import dynamic from 'next/dynamic'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import DashboardFrame from '@/components/crafted/DashboardFrame'
@@ -21,34 +20,40 @@ import { HomeIcon, IncidentsIcon, PerformanceIcon } from '@/components/icons/BhI
 import ResolveModal from '@/components/ResolveModal'
 import DutyToggle from '@/components/DutyToggle'
 import DutyScheduleSummary from '@/components/DutyScheduleSummary'
-import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import { timeAgo } from '@/lib/timeAgo'
 import NotificationBanner from '@/components/NotificationBanner'
 import CriticalAlert from '@/components/CriticalAlert'
 import { playSiren } from '@/lib/audioAlert'
 import { notifyNewAssignment, notifyNewAnnouncement } from '@/lib/notifications'
-import { CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { notify } from '@/components/Toast'
-import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
-import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
-import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { greeting } from '@/lib/homeSummary'
 import { KINDS } from '@/lib/offline/outbox'
 import { enqueue, drainOutbox } from '@/lib/offline/sync'
 import * as snapshot from '@/lib/offline/snapshot'
-import { toneFor } from '@/lib/recordState'
-import { computeStanding, STANDING_STYLE, activeWindowLabel } from '@/lib/triage'
 import { useSidebarState } from '@/lib/useSidebarState'
+import { useUrlParam } from '@/lib/useUrlParam'
+import { useNow } from '@/lib/useNow'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row, RowTitle } from '@/components/ui/table'
+import { Tag, Status } from '@/components/ui/tag'
+import { Button } from '@/components/ui/button'
+import { Segmented } from '@/components/ui/segmented'
+import { StatStrip } from '@/components/ui/stat-strip'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
+import {
+  AssignmentHero, UpNextCard, AssignmentList, DoneList, AssignmentPanel, HandledChart, ByTypeCard,
+} from '@/components/tanod/TanodSections'
 import { useNotifications } from '@/lib/useNotifications'
 import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 import {
-  RESPONSE_STEPS, responseStage, nextAction, byUrgency, overdueAssignments,
-  tanodSummary, mostUrgentAssignment, tanodStats,
+  byUrgency, overdueAssignments,
+  tanodSummary, tanodStats, handledByDay, resolvedByCategory,
 } from '@/lib/tanod'
 
 
-const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
 
 const PAGE_SIZE = 50
 const INCIDENT_SELECT = '*, profiles!incidents_reported_by_fkey(full_name, phone)'
@@ -57,28 +62,17 @@ const SEEN_ALERTS_KEY = 'bh360-tanod-alerts-seen'
 // Incident photos live in a private bucket, so the URL has to be signed
 // per viewer. Opening in a new tab still works — the signed URL carries its
 // own token and expires on its own.
-function IncidentPhoto({ stored, alt, className, imgClassName, style }) {
-  const signed = useSignedIncidentUrl(stored)
-  if (!signed) return null
-  return (
-    <a href={signed} target="_blank" rel="noopener noreferrer" className={className} style={style}>
-      <img src={signed} alt={alt} className={imgClassName} loading="lazy" />
-    </a>
-  )
-}
-
-const PRIORITY_CONFIG = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢', order: 1 },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵', order: 2 },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠', order: 3 },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴', order: 4 },
-}
-
 const SECTION_TITLES = {
-  home: 'Home',
-  active: 'Active Assignments',
-  resolved: 'Resolved Incidents',
-  stats: 'My Performance',
+  home: 'Duty',
+  active: 'Assigned to me',
+  resolved: 'Assigned to me',
+  stats: 'My performance',
+}
+const SECTION_SUBS = {
+  home: 'Your duty and what is assigned to you',
+  active: 'Worst first, then the one waiting longest',
+  resolved: 'What you have closed, with your notes',
+  stats: 'How you are doing, from your own reports',
 }
 
 const ACHIEVEMENTS = [
@@ -104,6 +98,9 @@ function TanodDashboard() {
   const notificationCenter = useNotifications(profile?.id, { silentTypes: ['incident_assigned'] })
   const [incidents, setIncidents] = useState([])
   const [activeSection, setActiveSection] = useUrlSection(TANOD_SECTIONS, TANOD_HOME)
+  // T03: the assignment panel, in the URL so the phone's Back closes it.
+  const [assignmentId, openAssignment, closeAssignment] = useUrlParam('assignment')
+  const now = useNow()
   // Open state, remembered on desktop, closed on phones (lib/useSidebarState)
   const [sidebarOpen, setSidebarOpen] = useSidebarState(true)
   const [loading, setLoading] = useState(true)
@@ -124,7 +121,6 @@ function TanodDashboard() {
     try { return new Set(JSON.parse(localStorage.getItem(SEEN_ALERTS_KEY) || '[]')) } catch { return new Set() }
   })
   const [staleSince, setStaleSince] = useState(null)
-  const [directionsMenu, setDirectionsMenu] = useState(null)
 
   // Mirror of incident ids, so the realtime handler can tell "new to me"
   // apart from "update to something I already have" without relying on
@@ -545,58 +541,19 @@ function TanodDashboard() {
     [assignedIncidents, profile]
   )
 
-  const urgent = useMemo(
-    () => mostUrgentAssignment(assignedIncidents),
-    [assignedIncidents]
-  )
-
-  // Counts of what still needs doing, not totals. "Unopened" is the one
-  // that did not exist before: a tanod could be sent three reports and the
-  // dashboard could not tell them which they had actually looked at.
-  const tanodTiles = useMemo(() => [
-    {
-      key: 'unopened', icon: <AlertTriangle size={17} />, tone: 'waiting',
-      count: unacknowledged, quiet: unacknowledged === 0,
-      label: unacknowledged === 1 ? 'Not opened yet' : 'Not opened yet',
-      caption: `${assignedIncidents.length} assigned`,
-      onClick: () => navClick('active'),
-    },
-    {
-      key: 'overdue', icon: <Clock size={17} />, tone: 'overdue',
-      count: overdue.length, quiet: overdue.length === 0,
-      label: overdue.length === 1 ? 'Past its time' : 'Past their time',
-      caption: overdue.length ? 'respond as soon as you can' : 'all within target',
-      onClick: () => navClick('active'),
-    },
-    {
-      key: 'month', icon: <Zap size={17} />, tone: 'done',
-      count: stats.resolvedThisMonth, quiet: stats.resolvedThisMonth === 0,
-      label: 'Resolved this month',
-      caption: `${stats.resolvedTotal} all time`,
-      onClick: () => navClick('stats'),
-    },
-    {
-      key: 'response', icon: <Award size={17} />, tone: 'info',
-      count: stats.respond.label || '—', quiet: !stats.respond.label,
-      label: 'Average response',
-      caption: stats.respond.sample
-        ? `over ${stats.respond.sample} report${stats.respond.sample === 1 ? '' : 's'}`
-        : 'nothing acknowledged yet',
-      onClick: () => navClick('stats'),
-    },
-  ], [unacknowledged, assignedIncidents.length, overdue.length, stats, navClick])
-
   const recentRatings = useMemo(
     () => resolvedIncidents.filter(i => i.rating).slice(0, 5),
     [resolvedIncidents]
   )
 
+  // The tanod's sidebar on desktop (phones use the tab bar: Duty ·
+  // Assigned · Stats). Resolved is reached from Assigned.
   const navItems = [
     { section: 'MAIN', items: [
-      { key: 'home', label: 'Home', icon: HomeIcon },
-      { key: 'active', label: 'Active Assignments', icon: IncidentsIcon, count: assignedIncidents.length, hasNew: assignedIncidents.length > 0 },
-      { key: 'resolved', label: 'Resolved', icon: CheckCircle },
-      { key: 'stats', label: 'My Performance', icon: PerformanceIcon, badge: 'NEW' },
+      { key: 'home', label: 'Duty', icon: HomeIcon },
+      { key: 'active', label: 'Assigned', icon: IncidentsIcon, count: assignedIncidents.length, hasNew: assignedIncidents.length > 0 },
+      { key: 'resolved', label: 'Done', icon: CheckCircle },
+      { key: 'stats', label: 'Stats', icon: PerformanceIcon },
     ]},
   ]
 
@@ -614,6 +571,46 @@ function TanodDashboard() {
     )
   }
 
+  const column = activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'
+  const hero = assignedIncidents[0] || null
+  const todayLabel = new Date(now).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric' })
+  const assigned = activeSection === 'active' || activeSection === 'resolved'
+  const handlers = {
+    busy: hero ? busyStamp === hero.id : false,
+    onOpen: inc => openAssignment(inc.id),
+    onStamp: (inc, field) => stampResponse(inc, field),
+    onResolve: inc => setResolveModal(inc),
+    onDirections: openDirections,
+  }
+
+  // What sits on the band under the title, per section (T01, T02, T06).
+  const bandSlot = activeSection === 'home' ? (
+    <div className="flex flex-col gap-3.5">
+      <DutyToggle profile={profile} />
+      {hero ? (
+        <AssignmentHero inc={hero} {...handlers} />
+      ) : (
+        <Card lift className="px-[18px] py-3.5">
+          <Status tone="ok">All clear</Status>
+          <p className="mt-1 text-[15px] font-bold text-ink">{brief.text}</p>
+          <Muted className="mt-0.5">{profile?.on_duty ? 'You will be told the moment something comes in.' : 'Go on duty so the barangay can dispatch to you.'}</Muted>
+        </Card>
+      )}
+    </div>
+  ) : assigned ? (
+    <Segmented onBand full label="Assigned to me" value={activeSection} onChange={key => setActiveSection(key, { replace: true })}
+      items={[{ value: 'active', label: 'Active', count: assignedIncidents.length }, { value: 'resolved', label: 'Done', count: resolvedIncidents.length }]} />
+  ) : activeSection === 'stats' ? (
+    <StatStrip className="sm:grid-flow-row sm:grid-cols-4" stats={[
+      { label: 'Resolved', value: stats.resolvedThisMonth, note: `this month · ${stats.resolvedTotal} in all` },
+      { label: 'Avg. response', value: stats.respond.label || '—', note: stats.respond.sample ? `over ${stats.respond.sample} report${stats.respond.sample === 1 ? '' : 's'}` : 'nothing yet' },
+      { label: 'Resolved rate', value: stats.totalAssigned ? `${stats.resolutionRate}%` : '—', note: stats.totalAssigned ? `of ${stats.totalAssigned} assigned` : 'nothing assigned yet' },
+      { label: 'Resident rating', value: stats.avgRating ? `${stats.avgRating} / 5` : '—', note: stats.ratedCount ? `${stats.ratedCount} rating${stats.ratedCount === 1 ? '' : 's'}` : 'no ratings yet' },
+    ]} />
+  ) : null
+
+  const openInc = assignmentId ? incidents.find(i => i.id === assignmentId) : null
+
   return (
     <>
       <DashboardFrame mainRef={mainRef} sidebarOpen={sidebarOpen}
@@ -629,526 +626,130 @@ function TanodDashboard() {
       />}
         header={<DashboardHeader
           profile={profile}
-          columnClass={activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'}
+          columnClass={column}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={SECTION_TITLES[activeSection]}
-          sectionDesc="Field officer portal"
+          sectionDesc={SECTION_SUBS[activeSection]}
+          phoneTitle={activeSection === 'home' ? `Tanod${profile?.barangays?.name ? ` · ${profile.barangays.name}` : ''}` : SECTION_TITLES[activeSection]}
+          heading={activeSection === 'home' ? (
+            <>
+              <p className="text-xs font-bold tracking-[0.08em] text-white/75 uppercase">{todayLabel}</p>
+              <h1 className="mt-1.5 text-[26px] font-extrabold leading-tight tracking-[-0.6px] text-white">
+                {greeting()}{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.
+              </h1>
+            </>
+          ) : undefined}
           notificationCenter={notificationCenter}
           searchData={{ incidents, tickets: [], announcements: [] }}
-          onSearchResultClick={() => setActiveSection('active')}
-        />}>
+          onSearchResultClick={(type, item) => openAssignment(item.id)}>
+          {bandSlot && <div className="band-slot">{bandSlot}</div>}
+        </DashboardHeader>}>
 
           <div className="mx-auto w-full max-w-[100rem]">
-          <NotificationBanner />
-
-          {!loading && profile && (
-            <div className={`${activeSection === 'stats' ? 'max-w-3xl' : 'max-w-2xl'} mx-auto mb-4`}>
-              <DutyToggle profile={profile} />
-            </div>
-          )}
+          <div className={`${column} mx-auto`}><NotificationBanner /></div>
 
           {/* Keyed on the section: switching sections remounts it, which
               eases the new section in (only after a switch — see `entering`
               above and components/SectionContent.jsx). */}
           <SectionContent key={activeSection} entering={entering}>
-          {!loading && activeSection === 'home' && (
-            <div className="space-y-6 max-w-2xl mx-auto">
-              {staleSince && (
-                <div className="rounded-2xl px-4 py-2.5 flex items-center gap-2.5"
-                  style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.28)' }}>
-                  <Clock size={14} className="text-white flex-shrink-0" aria-hidden="true" />
-                  <p className="text-[12.5px] font-semibold text-white">
-                    Showing what was last loaded, as of {snapshot.asOf(staleSince)}.
-                  </p>
-                </div>
-              )}
+          {staleSince && (
+            <Notice tone="info" className={`${column} mx-auto mb-3.5`}>
+              Showing what was last loaded, as of {snapshot.asOf(staleSince)}.
+            </Notice>
+          )}
 
-              <HomeSummary
-                greeting={greeting()}
-                name={profile?.full_name?.split(' ')[0]}
-                summary={brief.text}
-                pressing={urgent}
-                allClearNote={profile?.on_duty
-                  ? 'On duty — you will be told the moment something comes in'
-                  : 'Go on duty so the barangay can dispatch to you'}
-                onOpen={() => navClick('active')}
-              />
-
+          {activeSection === 'home' && (
+            <div className="mx-auto flex max-w-2xl flex-col gap-3.5">
+              <UpNextCard items={assignedIncidents.slice(1, 4)} now={now} onOpen={handlers.onOpen} onSeeAll={() => navClick('active')} />
+              <StatStrip lift={false} stats={[
+                { label: 'Not opened yet', value: unacknowledged, tone: unacknowledged ? 'danger' : 'default', note: `${assignedIncidents.length} assigned` },
+                { label: 'Past their time', value: overdue.length, tone: overdue.length ? 'danger' : 'default', note: overdue.length ? 'respond when you can' : 'all within target' },
+                { label: 'Avg. response', value: stats.respond.label || '—', note: 'to the first response' },
+              ]} className="grid-cols-3 sm:grid-flow-row sm:grid-cols-3" />
               <DutyScheduleSummary profile={profile} />
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
-                  {brief.allClear ? 'Your record' : 'Needs you'}
-                </p>
-                <TileGrid tiles={tanodTiles} render={(tile, className) => (
-                  <ActivityTile {...tile} className={className} />
-                )} />
-              </div>
-
-              {assignedIncidents.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/85">Next up</p>
-                    <button onClick={() => navClick('active')}
-                      className="text-xs font-semibold text-white/75 hover:text-white transition-colors">
-                      View all →
-                    </button>
-                  </div>
-                  <div className="space-y-2">
-                    {assignedIncidents.slice(0, 3).map(inc => {
-                      const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                      const standing = computeStanding(inc)
-                      const stage = responseStage(inc)
-                      return (
-                        <RecordCard key={inc.id}
-                          tone={standing.aged ? 'overdue' : toneFor(inc.status)}
-                          icon={<span aria-hidden="true">{cat.icon}</span>}
-                          iconBg={cat.bg}
-                          title={inc.title}
-                          meta={inc.location ? `📍 ${inc.location}` : 'No location given'}
-                          badges={standing.aged
-                            ? <Chip bg={STANDING_STYLE[standing.level].bg} color={STANDING_STYLE[standing.level].color}>
-                                {standing.label}
-                              </Chip>
-                            : <Chip bg="#f0effe" color="#5B54E8">{RESPONSE_STEPS[stage]}</Chip>}
-                          when={timeAgo(inc.created_at)}
-                          onClick={() => navClick('active')}
-                          ariaLabel={`${inc.title} — ${RESPONSE_STEPS[stage]}`} />
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {assignedIncidents.length === 0 && (
-                <div className="white-card p-8 text-center">
-                  <CheckCircle size={40} className="mx-auto text-emerald-300 mb-3" />
-                  <p className="font-semibold text-gray-700">All clear!</p>
-                  <p className="text-gray-500 text-sm mt-1">No active assignments right now.</p>
-                </div>
-              )}
             </div>
           )}
 
-          {!loading && activeSection === 'active' && (
-            <div className="space-y-4 max-w-2xl mx-auto">
-              {assignedIncidents.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <CheckCircle size={40} className="mx-auto text-emerald-300 mb-3" />
-                  <p className="font-semibold text-gray-700">All clear!</p>
-                  <p className="text-gray-500 text-sm mt-1">No active assignments right now.</p>
-                </div>
-              )}
-              {assignedIncidents.map(inc => {
-                const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                const hasCoords = inc.latitude && inc.longitude
-                const standing = computeStanding(inc)
-                const stage = responseStage(inc)
-                const action = nextAction(inc)
-                const stamping = busyStamp === inc.id
-                return (
-                  <div key={inc.id} className="white-card p-5 pl-6 relative overflow-visible">
-                    {/* The rail says how this one stands — priority normally,
-                        the aging colour once it is past its response time,
-                        which is the more urgent fact while it applies. */}
-                    <span className="absolute left-0 top-5 bottom-5 w-1 rounded-r" aria-hidden="true"
-                      style={{ background: standing.aged
-                        ? STANDING_STYLE[standing.level].color
-                        : (PRIORITY_CONFIG[inc.priority]?.color || '#9ca3af') }} />
-
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 text-xl" style={{ background: cat.bg }}>
-                        {cat.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-gray-800">{inc.title}</h3>
-                          {inc.priority && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
-                              style={{
-                                background: PRIORITY_CONFIG[inc.priority]?.bg,
-                                color: PRIORITY_CONFIG[inc.priority]?.color,
-                              }}>
-                              <span>{PRIORITY_CONFIG[inc.priority]?.icon}</span> {inc.priority}
-                            </span>
-                          )}
-                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                            style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
-                            {RESPONSE_STEPS[stage]}
-                          </span>
-                          {/* The same aging signal the officials' queue
-                              shows. The person expected to respond had no
-                              way of seeing it. */}
-                          {standing.aged && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1"
-                              style={{
-                                background: STANDING_STYLE[standing.level].bg,
-                                color: STANDING_STYLE[standing.level].color,
-                              }}
-                              title={`${inc.priority} reports target ${activeWindowLabel(inc)}.`}>
-                              <Clock size={10} /> {standing.label}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-500 text-sm mt-1">{inc.description}</p>
-                        <div className="flex items-center gap-1 mt-2 text-gray-500 text-xs">
-                          <MapPin size={12} /><span>{inc.location}</span>
-                        </div>
-                        <div className="flex items-center gap-1 mt-1 text-gray-500 text-xs" title={fullDate(inc.created_at)}>
-                          <Clock size={12} />
-                          <span>Reported by {inc.profiles?.full_name || 'Unknown'} · {timeAgoLong(inc.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <IncidentPhoto stored={inc.image_url} alt="Incident evidence"
-                      className="block mb-3 rounded-2xl overflow-hidden"
-                      imgClassName="w-full max-h-48 object-cover"
-                      style={{ border: '1px solid var(--brand-soft)' }} />
-
-                    {hasCoords && (
-                      <div className="mb-3 relative">
-                        <MiniMap lat={inc.latitude} lng={inc.longitude} />
-                        <div className="absolute top-2 left-2 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
-                          style={{ background: 'rgba(255,255,255,0.95)', color: 'var(--brand)', backdropFilter: 'blur(10px)' }}>
-                          <MapPin size={10} /> Reported Location
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-3 gap-2 mb-2">
-                      {hasCoords && (
-                        <div className="relative">
-                          <button
-                            onClick={() => setDirectionsMenu(directionsMenu === inc.id ? null : inc.id)}
-                            aria-expanded={directionsMenu === inc.id}
-                            className="w-full py-2.5 rounded-2xl text-xs font-bold transition-all hover:scale-105 flex items-center justify-center gap-1.5"
-                            style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                            <Navigation size={12} /> Navigate
-                          </button>
-                          {directionsMenu === inc.id && (
-                            <>
-                              {/* Invisible backdrop: click anywhere else to close */}
-                              <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => setDirectionsMenu(null)} />
-                              <div className="absolute bottom-full left-0 right-0 mb-2 rounded-2xl overflow-hidden fade-up"
-                                style={{ background: 'white', boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)', zIndex: 9999 }}>
-                                <button onClick={() => openDirections('google', inc.latitude, inc.longitude)}
-                                  className="w-full px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors">
-                                  🗺️ Google Maps
-                                </button>
-                                <button onClick={() => openDirections('waze', inc.latitude, inc.longitude)}
-                                  className="w-full px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-t border-gray-100">
-                                  🚗 Waze
-                                </button>
-                                <button onClick={() => openDirections('apple', inc.latitude, inc.longitude)}
-                                  className="w-full px-3 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors border-t border-gray-100">
-                                  🍎 Apple Maps
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      <button onClick={() => callReporter(inc.profiles?.phone)}
-                        disabled={!inc.profiles?.phone}
-                        title={inc.profiles?.phone || 'No phone number on file'}
-                        className="w-full py-2.5 rounded-2xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 flex items-center justify-center gap-1.5"
-                        style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
-                        <Phone size={12} /> Call
-                      </button>
-
-                      <button onClick={() => setResolveModal(inc)}
-                        className={`w-full py-2.5 rounded-2xl text-xs font-bold transition-all hover:scale-105 flex items-center justify-center gap-1.5 ${!hasCoords && 'col-span-2'}`}
-                        style={stage >= 2
-                          ? { background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: 'white', boxShadow: '0 4px 16px rgba(34,197,94,0.3)' }
-                          : { background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                        <CheckCircle size={12} /> Resolve
-                      </button>
-                    </div>
-
-                    {/* What to do next, one step at a time. Nothing here
-                        existed before — a tanod could only resolve, so the
-                        barangay never learned when anyone had seen a report
-                        or reached it. */}
-                    {action && action.key !== 'resolve' && (
-                      <button onClick={() => stampResponse(inc, action.field)}
-                        disabled={stamping}
-                        className="w-full py-3 rounded-2xl text-sm font-black text-white transition-transform
-                          active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
-                        style={{
-                          background: action.key === 'acknowledge'
-                            ? 'linear-gradient(135deg, var(--brand), var(--brand-light))'
-                            : 'linear-gradient(135deg, #f59e0b, #d97706)',
-                          boxShadow: action.key === 'acknowledge'
-                            ? '0 8px 24px rgba(91,84,232,0.35)'
-                            : '0 8px 24px rgba(245,158,11,0.35)',
-                        }}>
-                        {action.key === 'acknowledge'
-                          ? <><Navigation size={15} /> {stamping ? 'Saving…' : action.label}</>
-                          : <><MapPin size={15} /> {stamping ? 'Saving…' : action.label}</>}
-                      </button>
-                    )}
-
-                    {/* The trail so far, and how far it has to go. */}
-                    <ol className="flex items-center mt-3.5 pt-3.5 border-t" style={{ borderColor: '#f3f4f6' }}>
-                      {RESPONSE_STEPS.map((label, i) => {
-                        const state = i < stage ? 'done' : i === stage ? 'now' : 'todo'
-                        const dot = state === 'done' ? '#10b981' : state === 'now' ? '#5B54E8' : '#e5e7eb'
-                        const ink = state === 'done' ? '#047857' : state === 'now' ? '#5B54E8' : '#6b7280'
-                        return (
-                          <li key={label} className="contents">
-                            {i > 0 && (
-                              <span className="flex-1 h-0.5 mx-1.5 rounded-sm min-w-[10px]" aria-hidden="true"
-                                style={{ background: i <= stage ? '#10b981' : '#e5e7eb' }} />
-                            )}
-                            <span className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="w-2 h-2 rounded-full flex-shrink-0" aria-hidden="true"
-                                style={{ background: dot, ...(state === 'now' ? { boxShadow: '0 0 0 3px rgba(91,84,232,0.18)' } : {}) }} />
-                              <span className={`text-xs font-semibold ${state === 'now' ? '' : 'hidden sm:inline'}`}
-                                style={{ color: ink }}>{label}</span>
-                            </span>
-                          </li>
-                        )
-                      })}
-                    </ol>
-                  </div>
-                )
-              })}
-
+          {activeSection === 'active' && (
+            <div className="mx-auto flex max-w-2xl flex-col gap-3.5">
+              <AssignmentList items={assignedIncidents} now={now} onOpen={handlers.onOpen}
+                empty={profile?.on_duty ? 'New assignments show up here the moment the barangay dispatches you.' : 'Go on duty from the Duty tab so the barangay can dispatch to you.'} />
               {hasMore && (
-                <div className="pt-1 pb-2 text-center">
-                  <button onClick={loadMore} disabled={loadingMore}
-                    className="px-5 py-2.5 rounded-2xl text-xs font-bold disabled:opacity-50"
-                    style={{ background: 'white', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                    {loadingMore ? 'Loading…' : 'Load older assignments'}
-                  </button>
-                </div>
+                <Button variant="secondary" className="self-center" onClick={loadMore} disabled={loadingMore} aria-busy={loadingMore || undefined}>
+                  {loadingMore ? 'Loading…' : 'Load older assignments'}
+                </Button>
               )}
             </div>
           )}
 
-          {!loading && activeSection === 'resolved' && (
-            <div className="space-y-3 max-w-2xl mx-auto">
-              {resolvedIncidents.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <p className="text-gray-500 text-sm">No resolved incidents yet.</p>
-                </div>
+          {activeSection === 'resolved' && (
+            <div className="mx-auto flex max-w-2xl flex-col gap-3.5">
+              <DoneList items={resolvedIncidents} onOpen={handlers.onOpen} />
+              {hasMore && (
+                <Button variant="secondary" className="self-center" onClick={loadMore} disabled={loadingMore} aria-busy={loadingMore || undefined}>
+                  {loadingMore ? 'Loading…' : 'Load older'}
+                </Button>
               )}
-              <RecordGroup label="Resolved" count={resolvedIncidents.length}>
-                {resolvedIncidents.map(inc => {
-                  const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                  return (
-                    <div key={inc.id} className="space-y-2">
-                      <RecordCard
-                        tone="done"
-                        icon={<span aria-hidden="true">{cat.icon}</span>}
-                        iconBg="#f3f4f6"
-                        title={inc.title}
-                        meta={inc.location ? `📍 ${inc.location}` : 'No location given'}
-                        badges={inc.rating
-                          ? <Chip bg="#fffbeb" color="#b45309">★ {inc.rating}</Chip>
-                          : <Chip bg="#d1fae5" color="#047857">Resolved</Chip>}
-                        when={timeAgo(inc.resolved_at || inc.created_at)}
-                        ariaLabel={`${inc.title} — resolved`} />
-
-                      {/* What the tanod wrote and photographed is the record
-                          of the job, so it stays visible rather than moving
-                          behind a tap. */}
-                      {(inc.resolution_notes || inc.resolution_image_url) && (
-                        <div className="ml-[22px] px-3 py-2.5 rounded-xl flex items-start gap-2.5"
-                          style={{ background: '#f0fdf4', border: '1px solid #dcfce7' }}>
-                          <FileText size={12} className="text-emerald-600 mt-0.5 flex-shrink-0" aria-hidden="true" />
-                          <div className="min-w-0 flex-1">
-                            {inc.resolution_notes && (
-                              <p className="text-xs text-emerald-900 leading-relaxed">{inc.resolution_notes}</p>
-                            )}
-                            <IncidentPhoto stored={inc.resolution_image_url} alt="Resolution proof"
-                              className="block mt-2 rounded-lg overflow-hidden"
-                              imgClassName="w-full max-h-28 object-cover"
-                              style={{ border: '1px solid #dcfce7', maxWidth: '180px' }} />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </RecordGroup>
             </div>
           )}
 
-          {!loading && activeSection === 'stats' && (
-            <div className="space-y-6 max-w-3xl mx-auto">
-              <div className="white-card p-6 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Performance Dashboard</p>
-                  <h2 className="text-2xl font-bold text-gray-800" style={{ letterSpacing: '-0.5px' }}>Your Impact 🏆</h2>
-                  <p className="text-gray-500 text-sm mt-1">Keep up the great work, {profile?.full_name?.split(' ')[0]}!</p>
-                </div>
-                <div className="w-16 h-16 rounded-3xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 24px rgba(34,197,94,0.4)' }}>
-                  <Award size={28} className="text-white" />
-                </div>
-              </div>
+          {activeSection === 'stats' && (
+            <div className="mx-auto flex max-w-3xl flex-col gap-3.5">
+              <HandledChart days={handledByDay(incidents, 7, now)} />
+              <ByTypeCard rows={resolvedByCategory(incidents)} />
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {/* Each of these now says what it measures. "Avg Response"
-                    used to be resolved_at - created_at — the time to finish
-                    the job, presented as the time to answer the call — and
-                    every average carries the sample it came from, because
-                    the stamps only start existing now. */}
-                {[
-                  { label: 'Resolved, all time', value: stats.resolvedTotal, note: `${stats.resolutionRate}% of what you were sent`, icon: CheckCircle, color: '#22c55e', bg: '#f0fdf4' },
-                  { label: 'Resolved this month', value: stats.resolvedThisMonth, note: 'since the 1st', icon: Zap, color: '#f97316', bg: '#fff7ed' },
-                  { label: 'Time to respond', value: stats.respond.label || 'N/A', note: stats.respond.sample ? `over ${stats.respond.sample} report${stats.respond.sample === 1 ? '' : 's'}` : 'nothing acknowledged yet', icon: Clock, color: '#3b82f6', bg: '#eff6ff' },
-                  { label: 'Rating from residents', value: stats.avgRating ? `${stats.avgRating}★` : 'N/A', note: stats.ratedCount ? `from ${stats.ratedCount} rating${stats.ratedCount === 1 ? '' : 's'}` : 'not rated yet', icon: Star, color: '#f59e0b', bg: '#fffbeb' },
-                ].map(({ label, value, note, icon: Icon, color, bg }) => (
-                  <div key={label} className="white-card p-4">
-                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center mb-3" style={{ background: bg }}>
-                      <Icon size={18} style={{ color }} />
-                    </div>
-                    <p className="text-2xl font-bold tabular-nums" style={{ color }}>{value}</p>
-                    <p className="text-xs font-semibold text-gray-700 mt-1">{label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>{note}</p>
-                  </div>
-                ))}
-              </div>
+              {/* How fast, in three parts, each with the sample it came from. */}
+              <Card>
+                <CardHead title="How fast" sub="Averages over your reports" />
+                <Rows className="border-t border-line">
+                  {[
+                    ['To respond', 'from the report to your first response', stats.respond],
+                    ['To get there', 'from responding to arriving', stats.travel],
+                    ['To resolve', 'from the report to resolved', stats.resolve],
+                  ].map(([label, sub, s]) => (
+                    <Row key={label} className="flex items-center gap-3">
+                      <RowTitle className="flex-1" title={label} sub={`${sub}${s.sample ? ` · ${s.sample} report${s.sample === 1 ? '' : 's'}` : ''}`} />
+                      <span className="text-[15px] font-extrabold text-ink tabular-nums">{s.label || '—'}</span>
+                    </Row>
+                  ))}
+                </Rows>
+              </Card>
 
-              {/* The two halves of a response, which nobody could see
-                  before because neither was being recorded. */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="white-card p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Travel time</p>
-                  <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.travel.label || 'N/A'}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
-                    {stats.travel.sample ? `acknowledged to on scene, over ${stats.travel.sample}` : 'no arrivals recorded yet'}
-                  </p>
-                </div>
-                <div className="white-card p-4">
-                  <p className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--app-text-muted)' }}>Start to finish</p>
-                  <p className="text-xl font-bold text-gray-800 mt-1 tabular-nums">{stats.resolve.label || 'N/A'}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}>
-                    {stats.resolve.sample ? `reported to resolved, over ${stats.resolve.sample}` : 'nothing resolved yet'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Resolution Rate */}
-              <div className="white-card p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-bold text-gray-800 text-sm">Resolution Rate</h3>
-                    <p className="text-xs text-gray-500">Percentage of incidents you&apos;ve resolved</p>
-                  </div>
-                  <p className="text-3xl font-black" style={{ color: stats.resolutionRate >= 80 ? '#22c55e' : stats.resolutionRate >= 50 ? '#f97316' : '#ef4444' }}>
-                    {stats.resolutionRate}%
-                  </p>
-                </div>
-                <div className="relative h-3 rounded-full overflow-hidden" style={{ background: '#f3f4f6' }}>
-                  <div className="absolute inset-y-0 left-0 transition-all duration-1000 rounded-full"
-                    style={{
-                      width: `${stats.resolutionRate}%`,
-                      background: stats.resolutionRate >= 80
-                        ? 'linear-gradient(90deg, #22c55e, #16a34a)'
-                        : stats.resolutionRate >= 50
-                        ? 'linear-gradient(90deg, #f97316, #ea580c)'
-                        : 'linear-gradient(90deg, #ef4444, #dc2626)',
-                    }} />
-                </div>
-                <div className="flex items-center gap-2 mt-3 text-xs">
-                  <span className="text-gray-500">{resolvedIncidents.length} of {stats.totalAssigned} incidents resolved</span>
-                </div>
-              </div>
-
-              {/* Badges/Achievements with progress toward locked ones */}
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white opacity-60">Achievements</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Card>
+                <CardHead title="Milestones" />
+                <Rows className="border-t border-line">
                   {ACHIEVEMENTS.map(badge => {
-                    const current = badge.type === 'count' ? resolvedIncidents.length : stats.resolutionRate
-                    const unlocked = badge.type === 'count'
-                      ? current >= badge.target
-                      : current >= badge.target && stats.totalAssigned >= 5
-                    const progress = Math.min((current / badge.target) * 100, 100)
+                    const progress = badge.type === 'count' ? stats.resolvedTotal : stats.resolutionRate
+                    const unlocked = progress >= badge.target
                     return (
-                      <div key={badge.title} className={`white-card p-4 text-center transition-all ${unlocked ? '' : 'opacity-60'}`}>
-                        <div className={`text-3xl mb-2 ${unlocked ? '' : 'grayscale opacity-60'}`}>{badge.icon}</div>
-                        <p className="text-xs font-bold text-gray-800">{badge.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">{badge.desc}</p>
-                        {unlocked ? (
-                          <div className="mt-2 inline-block px-2 py-0.5 rounded-full text-xs font-bold"
-                            style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                            UNLOCKED
-                          </div>
-                        ) : (
-                          <div className="mt-2">
-                            <div className="relative h-1 rounded-full overflow-hidden mx-auto" style={{ background: '#f3f4f6', maxWidth: '80px' }}>
-                              <div className="absolute inset-y-0 left-0 rounded-full"
-                                style={{ width: `${progress}%`, background: '#a78bfa' }} />
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {badge.type === 'count' ? `${current}/${badge.target}` : `${current}% of ${badge.target}%`}
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                      <Row key={badge.title} className="flex items-center gap-3">
+                        <RowTitle className="flex-1" title={badge.title} sub={badge.desc} />
+                        {unlocked
+                          ? <Status tone="ok">Reached</Status>
+                          : <span className="text-xs font-bold text-muted-foreground tabular-nums">{badge.type === 'count' ? `${Math.min(progress, badge.target)} of ${badge.target}` : `${progress}% of ${badge.target}%`}</span>}
+                      </Row>
                     )
                   })}
-                </div>
-              </div>
+                </Rows>
+              </Card>
 
-              {/* Recent Ratings */}
               {recentRatings.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">Recent Ratings</p>
-                    {stats.avgRating && (
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full"
-                        style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}
-                        title={`Average of all ${stats.ratedCount} rating${stats.ratedCount === 1 ? '' : 's'}`}>
-                        <Star size={12} className="text-white fill-white" />
-                        <span className="text-xs font-bold text-white">{stats.avgRating} / 5.0</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    {recentRatings.map(inc => {
-                      const cat = CATEGORY_CONFIG[inc.category] || CATEGORY_CONFIG.Other
-                      return (
-                        <div key={inc.id} className="white-card p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 text-base" style={{ background: cat.bg }}>
-                              {cat.icon}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <p className="text-sm font-bold text-gray-800 truncate">{inc.title}</p>
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <div className="flex gap-0.5">
-                                    {[1, 2, 3, 4, 5].map(s => (
-                                      <Star key={s} size={11} fill={s <= inc.rating ? '#f59e0b' : 'none'} color={s <= inc.rating ? '#f59e0b' : '#d1d5db'} />
-                                    ))}
-                                  </div>
-                                  <span className="text-xs font-bold text-amber-700">{inc.rating}.0</span>
-                                </div>
-                              </div>
-                              {inc.rating_feedback ? (
-                                <p className="text-xs text-gray-500 italic">&quot;{inc.rating_feedback}&quot;</p>
-                              ) : (
-                                <p className="text-xs text-gray-500">No written feedback</p>
-                              )}
-                              <p className="text-xs text-gray-500 mt-1">
-                                From {inc.profiles?.full_name || 'a resident'} · {timeAgo(inc.rated_at || inc.resolved_at)}
-                              </p>
-                            </div>
-                          </div>
+                <Card>
+                  <CardHead title="Recent ratings" action={stats.avgRating && <span className="text-xs font-bold text-muted-foreground">{stats.avgRating} / 5 average</span>} />
+                  <Rows className="border-t border-line">
+                    {recentRatings.map(inc => (
+                      <Row key={inc.id} className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-ink">{inc.title}</p>
+                          <p className="mt-0.5 text-[13px] text-body">{inc.rating_feedback ? <>&ldquo;{inc.rating_feedback}&rdquo;</> : 'No written feedback'}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">From {inc.profiles?.full_name || 'a resident'} · {timeAgo(inc.rated_at || inc.resolved_at)}</p>
                         </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                        <Tag tone="warn" className="shrink-0">{inc.rating} / 5</Tag>
+                      </Row>
+                    ))}
+                  </Rows>
+                </Card>
               )}
             </div>
           )}
@@ -1156,6 +757,16 @@ function TanodDashboard() {
           </SectionContent>
           </div>
       </DashboardFrame>
+
+      {/* T03: the assignment, full screen; Back closes it (?assignment=). */}
+      {openInc && (
+        <AssignmentPanel inc={openInc} now={now} busy={busyStamp === openInc.id}
+          onClose={closeAssignment}
+          onStamp={(inc, field) => stampResponse(inc, field)}
+          onResolve={inc => setResolveModal(inc)}
+          onDirections={openDirections}
+          onCall={callReporter} />
+      )}
 
       <CriticalAlert
         audience="tanod"

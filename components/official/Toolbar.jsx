@@ -46,7 +46,7 @@ export function FilterSelect({ value, onChange, label, options, className = '' }
 }
 
 /** A small menu anchored to its button; closes on Escape or an outside click. */
-function Menu({ trigger, items, align = 'right' }) {
+export function Menu({ trigger, items, align = 'right', up = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   useEffect(() => {
@@ -61,7 +61,7 @@ function Menu({ trigger, items, align = 'right' }) {
     <span ref={ref} className="relative inline-flex shrink-0">
       {trigger({ open, toggle: () => setOpen(o => !o) })}
       {open && (
-        <div role="menu" className={`absolute top-full z-30 mt-1.5 min-w-44 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-[var(--shadow-float)] ${align === 'right' ? 'right-0' : 'left-0'}`}>
+        <div role="menu" className={`absolute ${up ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} z-30 min-w-44 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-[var(--shadow-float)] ${align === 'right' ? 'right-0' : 'left-0'}`}>
           {items.filter(Boolean).map(item => (
             <button key={item.label} type="button" role="menuitem" disabled={item.disabled}
               onClick={() => { setOpen(false); item.onClick() }}

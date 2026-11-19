@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Shield, ShieldOff, MapPin } from 'lucide-react'
+import { useNow } from '@/lib/useNow'
 import toast from 'react-hot-toast'
 import { KINDS } from '@/lib/offline/outbox'
 import { enqueue } from '@/lib/offline/sync'
@@ -36,6 +36,7 @@ export default function DutyToggle({ profile, onStatusChange }) {
   const supabase = useMemo(() => createClient(), [])
   const [onDuty, setOnDuty] = useState(profile?.on_duty ?? false)
   const [saving, setSaving] = useState(false)
+  const now = useNow()
   const [locationOk, setLocationOk] = useState(null) // null=unknown, true, false
   const onDutyRef = useRef(onDuty)
   useEffect(() => { onDutyRef.current = onDuty }, [onDuty])
@@ -144,55 +145,42 @@ export default function DutyToggle({ profile, onStatusChange }) {
     onStatusChange?.(next)
   }
 
+  // How long this shift has run, from the last duty change (T01).
+  const since = onDuty && profile?.duty_changed_at ? now - new Date(profile.duty_changed_at).getTime() : null
+  const shift = since == null || since < 60000 ? null
+    : since >= 24 * 3600000
+      // A shift longer than a day reads as when it started, not "595h".
+      ? `on since ${new Date(profile.duty_changed_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`
+      : since >= 3600000
+        ? `${Math.floor(since / 3600000)}h ${Math.floor((since % 3600000) / 60000)}m`
+        : `${Math.floor(since / 60000)}m`
+
+  // On the band (DESIGN.md §5 onband): a dark translucent row, white text,
+  // the 44×26 switch green when on.
   return (
     <button
+      type="button"
       onClick={toggleDuty}
       disabled={saving}
       role="switch"
       aria-checked={onDuty}
       aria-label={onDuty ? 'Go off duty' : 'Go on duty'}
-      className="w-full sm:w-auto flex items-center gap-3 px-4 py-3 rounded-2xl transition-all disabled:opacity-60"
-      style={{
-        background: onDuty ? '#f0fdf4' : 'var(--app-surface)',
-        border: `2px solid ${onDuty ? '#22c55e' : 'var(--brand-border)'}`,
-        boxShadow: onDuty ? '0 0 0 4px rgba(34,197,94,0.08)' : 'none',
-      }}>
-
-      <div className="relative w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
-        style={{ background: onDuty ? '#22c55e' : 'var(--brand-border)' }}>
-        {onDuty
-          ? <Shield size={16} className="text-white" />
-          : <ShieldOff size={16} style={{ color: 'var(--brand)' }} />}
-        {onDuty && (
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-        )}
-      </div>
-
-      <div className="flex-1 text-left min-w-0">
-        <p className="text-sm font-bold" style={{ color: onDuty ? '#15803d' : '#6b7280' }}>
-          {onDuty ? 'On Duty' : 'Off Duty'}
-        </p>
-        <p className="text-xs text-gray-500 flex items-center gap-1 text-keep">
+      className="flex w-full items-center gap-3 rounded-[12px] bg-[var(--onband)] px-3.5 py-3 text-left text-white outline-none transition-colors hover:bg-[var(--onband-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:opacity-60">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-extrabold">{onDuty ? 'On duty' : 'Off duty'}</span>
+        <span className="block truncate text-xs text-white/80">
           {saving ? 'Updating…'
             : onDuty
-              ? (<>
-                  <MapPin size={9} className={locationOk === false ? 'text-amber-500' : 'text-emerald-500'} />
-                  {locationOk === false
-                    ? 'Location unavailable — check permissions'
-                    : 'Location shared with officials'}
-                </>)
-              : 'Tap to start your shift · location shared while on duty'}
-        </p>
-      </div>
-
-      <div className="w-11 h-6 rounded-full flex items-center transition-all flex-shrink-0 px-0.5"
-        style={{
-          background: onDuty ? '#22c55e' : '#d1d5db',
-          justifyContent: onDuty ? 'flex-end' : 'flex-start',
-        }}>
-        <div className="w-5 h-5 rounded-full bg-white transition-all"
-          style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
-      </div>
+              ? (locationOk === false
+                  ? 'Location unavailable: check permissions'
+                  : `Sharing location with the barangay${shift ? ` · ${shift}` : ''}`)
+              : 'Tap to start your shift. Location is shared while on duty.'}
+        </span>
+      </span>
+      <span aria-hidden="true"
+        className={`flex h-[26px] w-11 shrink-0 items-center rounded-full px-[3px] transition-colors ${onDuty ? 'justify-end bg-ok' : 'justify-start bg-white/30'}`}>
+        <span className="size-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)]" />
+      </span>
     </button>
   )
 }

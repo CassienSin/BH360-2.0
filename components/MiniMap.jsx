@@ -19,7 +19,9 @@ function Pin() {
  * A fixed preview of one location. It cannot be panned or zoomed, so it
  * never fights the page scroll on a phone; "Directions" is the action.
  */
-export default function MiniMap({ lat, lng, height = 140, label = 'incident location', bare = false }) {
+export default function MiniMap({ lat, lng, height = 140, label = 'incident location', bare = false, directions = true }) {
+  // directions={false}: the page draws its own way there (the tanod's
+  // Navigate / Open in Maps with a choice of app).
   // bare: no frame of its own, for a map that sits inside a card.
   const frame = bare ? '' : 'rounded-[14px] border border-line'
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -39,7 +41,7 @@ export default function MiniMap({ lat, lng, height = 140, label = 'incident loca
           <Pin />
         </Marker>
       </BaseMap>
-      <a
+      {directions && <a
         href={`https://www.google.com/maps?q=${lat},${lng}`}
         target="_blank"
         rel="noopener noreferrer"
@@ -47,7 +49,7 @@ export default function MiniMap({ lat, lng, height = 140, label = 'incident loca
         className="absolute top-2.5 right-2.5 flex h-8 items-center gap-1.5 rounded-[9px] border border-line bg-surface px-3 text-[13px] font-bold text-ink shadow-[var(--shadow-lift)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong"
         style={{ zIndex: 2 }}>
         <Navigation size={14} strokeWidth={1.9} aria-hidden="true" /> Directions
-      </a>
+      </a>}
     </div>
   )
 }

@@ -266,6 +266,17 @@ export function SectionSkeleton({ kind = 'records', path }) {
     if (kind === 'announcements') return <RowsCard rows={3} lift lines={3} />
     if (kind === 'launcher') return <RowsCard rows={1} lift lines={3} />
   }
+  if (path === '/tanod') {
+    if (kind === 'overview') {
+      return (
+        <div className="flex flex-col gap-3.5">
+          <RowsCard rows={2} label trailing={<Skeleton className="size-4" />} />
+          <RowsCard rows={1} lines={1} />
+        </div>
+      )
+    }
+    if (kind === 'records') return <RowsCard rows={3} lift lines={1} />
+  }
   if (path === '/official') {
     if (kind === 'overview') return <OfficialHomeSkeleton />
     if (kind === 'records') return <ListCardSkeleton rows={5} />
@@ -405,6 +416,41 @@ function BandSlotSkeleton({ path, kind }) {
       </>
     )
   }
+  if (path === '/tanod') {
+    // T01: greeting, duty switch, the assignment card; T02: the Active /
+    // Done switch; T06: the four numbers.
+    if (kind === 'overview') {
+      return (
+        <>
+          <div className={header.customHeading}>
+            <Skeleton tone="brand" className="h-3 w-36" />
+            <Skeleton tone="brand" className="h-[30px] w-64 max-w-full mt-2 rounded-lg" />
+          </div>
+          <div className="band-slot flex flex-col gap-3.5">
+            <div className="h-[62px] rounded-[12px] bg-[var(--onband)]" />
+            <div className="white-card shadow-[var(--shadow-lift)] px-[18px] py-3.5 space-y-2.5">
+              <Skeleton className="h-[22px] w-24 rounded-md" />
+              <Skeleton className="h-4 w-56 max-w-full" />
+              <Skeleton className="h-3 w-40" />
+            </div>
+          </div>
+        </>
+      )
+    }
+    if (kind === 'records') return <div className="band-slot"><div className="h-[42px] rounded-xl bg-[var(--onband)]" /></div>
+    if (kind === 'analytics') {
+      return (
+        <div className="band-slot">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[14px] border border-line bg-line shadow-[var(--shadow-lift)] sm:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-surface px-4 py-3.5 space-y-2"><Skeleton className="h-3 w-20" /><Skeleton className="h-6 w-12" /><Skeleton className="h-2.5 w-16" /></div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+    return null
+  }
   if (path !== '/resident') return null
   if (kind === 'overview') {
     return (
@@ -431,7 +477,7 @@ function BandSlotSkeleton({ path, kind }) {
  *  the heights match; placeholder bars where text depends on data. */
 function DashboardHeaderSkeleton({ column = '', path, kind, kinds = [] }) {
   // Dashboards whose Home draws its own heading on the band.
-  const slots = path === '/resident' || path === '/official'
+  const slots = path === '/resident' || path === '/official' || path === '/tanod'
   return (
     <header className={header.header} aria-hidden="true">
       <Band seed={2} />

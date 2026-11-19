@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { CheckCircle, Upload, X, Camera, FileText, Loader2, Image as ImageIcon } from 'lucide-react'
+import { Check, X, Camera, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase'
 import toast from 'react-hot-toast'
 
@@ -140,49 +141,34 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
 
   if (!open) return null
 
+  // T04 as a bottom sheet on phones, a dialog on wider screens (the same
+  // chrome as the rating sheet).
   return (
-    <div className="fixed inset-0 z-50 sheet-overlay"
-      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+    <div className="fixed inset-0 z-50 sheet-overlay bg-[var(--scrim)] [animation:sheetFade_.2s_ease_both]"
       onClick={() => { if (!submitting) onClose() }}>
 
-      <div className="sheet-panel max-w-md overflow-hidden fade-up-1 flex flex-col"
-        style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
+      <div
+        className="sheet-panel relative flex max-w-md flex-col overflow-hidden bg-surface shadow-[var(--shadow-float)] outline-none [animation:sheetUp_.32s_var(--ease-sheet)_both] sm:border sm:border-line"
         role="dialog"
         aria-modal="true"
         aria-labelledby="resolve-modal-title"
         onClick={e => e.stopPropagation()}>
 
-        <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-3 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 24px rgba(34,197,94,0.4)' }}>
-              <CheckCircle size={22} className="text-white" />
-            </div>
-            <div>
-              <h2 id="resolve-modal-title" className="text-lg font-bold text-gray-800">Mark as Resolved</h2>
-              <p className="text-xs text-gray-500">Add details and proof of resolution</p>
-            </div>
+        <span aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
+        <div className="flex items-start gap-3 px-[18px] pt-3.5 pb-1 sm:pt-[18px]">
+          <div className="min-w-0 flex-1">
+            <h2 id="resolve-modal-title" className="text-[17px] font-extrabold text-ink">Close the report</h2>
+            <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{incident?.title}{incident?.location ? ` · ${incident.location}` : ''}</p>
           </div>
           <button onClick={onClose} disabled={submitting} aria-label="Close"
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors flex-shrink-0 disabled:opacity-50">
-            <X size={16} />
+            className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong disabled:opacity-50">
+            <X size={18} strokeWidth={1.9} />
           </button>
         </div>
 
-        <div className="overflow-y-auto p-6 space-y-4">
-          {/* Incident summary */}
-          <div className="p-3 rounded-2xl" style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Resolving</p>
-            <p className="text-sm font-bold text-gray-800">{incident?.title}</p>
-            <p className="text-xs text-gray-500 mt-0.5">📍 {incident?.location}</p>
-          </div>
-
-          {/* Notes */}
+        <div className="space-y-4 overflow-y-auto px-[18px] py-4">
           <div>
-            <label htmlFor="resolution-notes"
-              className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <FileText size={11} /> Resolution Notes <span className="text-red-500">*</span>
-            </label>
+            <label htmlFor="resolution-notes" className="mb-2 block text-[13px] font-bold text-ink">What did you do?</label>
             <textarea
               id="resolution-notes"
               ref={textareaRef}
@@ -190,65 +176,39 @@ export default function ResolveModal({ open, onClose, onResolve, incident, userI
               onChange={e => setNotes(e.target.value)}
               rows={4} maxLength={500}
               disabled={submitting}
-              placeholder="What actions did you take to resolve this incident?"
-              className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none disabled:opacity-60" />
-            <p className="text-xs text-gray-500 text-right mt-1">{notes.length}/500</p>
+              placeholder="What you found and what you did about it"
+              className="w-full resize-none rounded-[10px] border border-line bg-surface px-3.5 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-foreground focus:border-brand-strong disabled:opacity-60" />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {notes.trim().length < 5 ? `At least 5 characters · ${notes.length} of 500` : `${notes.length} of 500`}
+            </p>
           </div>
 
-          {/* Photo Evidence */}
           <div>
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Camera size={11} /> Photo Evidence <span className="text-gray-500 font-normal">(Optional)</span>
-            </span>
-
+            <p className="mb-2 text-[13px] font-bold text-ink">Photo of the scene <span className="font-normal text-muted-foreground">(optional)</span></p>
             {!imagePreview ? (
-              <label className="block cursor-pointer">
-                <div className="rounded-2xl p-5 text-center transition-all hover:scale-[1.01]"
-                  style={{ background: 'var(--app-surface)', border: '2px dashed var(--brand-border)' }}>
-                  <div className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center mb-2"
-                    style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)' }}>
-                    <Upload size={16} className="text-white" />
-                  </div>
-                  <p className="text-xs font-bold text-gray-800">Tap to upload photo</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Proof of resolution helps build trust</p>
-                </div>
+              <label className="flex size-20 cursor-pointer flex-col items-center justify-center gap-1 rounded-[10px] border border-dashed border-line-strong text-brand-strong hover:bg-surface-sunk focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-brand-strong">
+                <Camera size={20} aria-hidden="true" />
+                <span className="text-xs font-bold">Add</span>
                 <input type="file" accept="image/*" capture="environment"
-                  onChange={handleImageSelect} disabled={submitting} className="hidden" />
+                  onChange={handleImageSelect} disabled={submitting} className="sr-only" />
               </label>
             ) : (
-              <div className="relative rounded-2xl overflow-hidden fade-up"
-                style={{ border: '2px solid #dcfce7' }}>
-                <img src={imagePreview} alt="Resolution proof" className="w-full max-h-48 object-cover" />
+              <div className="relative inline-block overflow-hidden rounded-[10px] border border-line">
+                <img src={imagePreview} alt="Resolution photo" className="h-32 max-w-full object-cover" />
                 <button onClick={removeImage} disabled={submitting} aria-label="Remove photo"
-                  className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-50"
-                  style={{ background: 'rgba(239,68,68,0.95)', color: 'white' }}>
-                  <X size={14} />
+                  className="absolute top-1.5 right-1.5 flex size-8 items-center justify-center rounded-[8px] bg-surface text-ink shadow-[var(--shadow-lift)] disabled:opacity-50">
+                  <X size={15} />
                 </button>
-                <div className="absolute bottom-0 left-0 right-0 px-3 py-2 flex items-center gap-2"
-                  style={{ background: 'linear-gradient(180deg, transparent, rgba(0,0,0,0.7))' }}>
-                  <ImageIcon size={12} className="text-white" />
-                  <p className="text-xs text-white font-semibold truncate">{imageFile?.name}</p>
-                </div>
               </div>
             )}
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-          <button onClick={onClose} disabled={submitting}
-            className="flex-1 py-3 rounded-2xl text-sm font-bold transition-all hover:bg-gray-50 disabled:opacity-50"
-            style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-            Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={submitting || notes.trim().length < 5}
-            className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-            style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', boxShadow: '0 8px 32px rgba(34,197,94,0.4)' }}>
-            {submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <Loader2 size={14} className="animate-spin" /> Resolving...
-              </span>
-            ) : '✓ Confirm Resolution'}
-          </button>
+        <div className="border-t border-line px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
+          <p className="mb-2.5 text-center text-xs text-muted-foreground">The resident is told and can rate the response.</p>
+          <Button size="lg" className="w-full" onClick={handleSubmit} disabled={submitting || notes.trim().length < 5} aria-busy={submitting || undefined}>
+            {submitting ? <><Loader2 className="animate-spin" aria-hidden="true" />Resolving…</> : <><Check aria-hidden="true" />Mark as resolved</>}
+          </Button>
         </div>
       </div>
     </div>
