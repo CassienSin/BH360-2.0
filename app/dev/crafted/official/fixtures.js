@@ -51,3 +51,9 @@ export const ANNOUNCEMENTS = [
   { id: 'a1', title: 'Water interruption on Saturday', content: 'Purok 1 to 3, 9 AM to 3 PM, for pipe repairs.', priority: 'urgent', created_at: ago(2) },
   { id: 'a2', title: 'Clean-up drive this Sunday', content: 'Meet at the covered court at 6 AM.', priority: 'normal', created_at: ago(30) },
 ]
+
+const at = h => { const d = new Date(); d.setHours(h, 0, 0, 0); return d.toISOString() }
+export const APPOINTMENTS = [
+  { id: 'p1', title: 'Mediation hearing', participant_name: 'KP-SAMPLE-0001 · Lupon room', starts_at: at(9) },
+  { id: 'p2', title: 'Clearance pickups', participant_name: null, starts_at: at(14) },
+]

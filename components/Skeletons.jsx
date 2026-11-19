@@ -633,16 +633,17 @@ function ListCardSkeleton({ rows = 5, lines = 0 }) {
 }
 
 /** The official dashboard body (O01): "Waiting on you" and the recent
- *  incidents, with the tanod roster beside them on wide screens. */
+ *  on the left; Today, the tanods and recent incidents on the right. */
 function OfficialHomeSkeleton() {
   const action = <Skeleton className="h-[34px] w-16 rounded-[10px]" />
   return (
     <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+      <RowsCard rows={5} label trailing={action} />
       <div className="flex flex-col gap-3.5">
-        <RowsCard rows={5} label trailing={action} />
-        <RowsCard rows={4} label />
+        <RowsCard rows={2} label />
+        <RowsCard rows={2} label />
+        <RowsCard rows={3} label />
       </div>
-      <RowsCard rows={3} label />
     </div>
   )
 }

@@ -24,7 +24,7 @@ import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { useNotifications } from '@/lib/useNotifications'
-import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
+import { WaitingCard, RecentIncidentsCard, TodayCard } from '@/components/official/OfficialSections'
 import TicketsSection from '@/components/official/TicketsSection'
 import UsersSection from '@/components/official/UsersSection'
 import AnnouncementsSection from '@/components/official/AnnouncementsSection'
@@ -91,6 +91,9 @@ function OfficialDashboard() {
   const [inviteCodes, setInviteCodes] = useState([])
   const [documentRequests, setDocumentRequests] = useState([])
   const [blotterCases, setBlotterCases] = useState([])
+  // Today's appointments (hearings, pickups, events) for the dashboard's
+  // Today card. Read-only; the calendar is where they are made.
+  const [todayAppointments, setTodayAppointments] = useState([])
   const [incidentsHasMore, setIncidentsHasMore] = useState(false)
   const [loadingMoreIncidents, setLoadingMoreIncidents] = useState(false)
   const [activeSection, setActiveSection] = useUrlSection(OFFICIAL_SECTIONS, OFFICIAL_HOME)
@@ -111,7 +114,10 @@ function OfficialDashboard() {
   // ---- Data fetching (reusable so realtime reconnects can refresh) ----
   const loadBarangayData = useCallback(async (bid) => {
     // These six queries were sequential (~6 round trips) — run them in parallel
-    const [inc, tix, ann, tan, allUsers, codes, docs, blotter] = await Promise.all([
+    // Today on this device: midnight to midnight.
+    const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayStart.getDate() + 1)
+    const [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts] = await Promise.all([
       supabase.from('incidents')
         .select('*, profiles!incidents_reported_by_fkey(full_name)')
         .eq('barangay_id', bid)
@@ -154,9 +160,16 @@ function OfficialDashboard() {
         .eq('barangay_id', bid)
         .order('filed_at', { ascending: false })
         .limit(BLOTTER_LIMIT),
+      supabase.from('appointments')
+        .select('id, title, participant_name, starts_at')
+        .eq('barangay_id', bid)
+        .gte('starts_at', dayStart.toISOString())
+        .lt('starts_at', dayEnd.toISOString())
+        .order('starts_at', { ascending: true })
+        .limit(20),
     ])
     const loadError = firstRealError(
-      [inc, tix, ann, tan, allUsers, codes, docs, blotter], 'the official dashboard')
+      [inc, tix, ann, tan, allUsers, codes, docs, blotter, appts], 'the official dashboard')
     if (loadError) {
       console.error('Barangay data load failed:', loadError)
       toast.error('Some of the dashboard could not load. Try refreshing.')
@@ -172,6 +185,7 @@ function OfficialDashboard() {
     setInviteCodes(codes.data || [])
     setDocumentRequests(docs.data || [])
     setBlotterCases(blotter.data || [])
+    setTodayAppointments(appts.data || [])
   }, [supabase])
 
   useEffect(() => {
@@ -996,14 +1010,18 @@ function OfficialDashboard() {
 
           {!loading && profile?.barangay_id && activeSection === 'dashboard' && (
             <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-              <div className="flex min-w-0 flex-col gap-3.5">
+              <div className="min-w-0">
                 <WaitingCard items={waiting} onAct={actOnWaiting} />
+              </div>
+              <div className="flex min-w-0 flex-col gap-3.5">
+                <TodayCard appointments={todayAppointments}
+                  readyDocuments={documentRequests.filter(d => d.status === 'ready').length}
+                  onOpenCalendar={() => router.push('/official/calendar')}
+                  onOpenDocuments={() => navClick('documents')} />
+                <TanodRoster profile={profile} />
                 <RecentIncidentsCard incidents={incidents.slice(0, 4)}
                   onOpen={inc => router.push(`/official/incident/${inc.id}`)}
                   onViewAll={() => navClick('incidents')} />
-              </div>
-              <div className="flex min-w-0 flex-col gap-3.5">
-                <TanodRoster profile={profile} />
               </div>
             </div>
           )}

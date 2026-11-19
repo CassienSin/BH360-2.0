@@ -125,3 +125,40 @@ export function SectionLauncher({ icon: Icon, title, body, href, cta, onOpen }) 
     </Card>
   )
 }
+
+/** "9:00 AM" */
+const timeOf = at => new Date(at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
+
+/**
+ * Today (O01): the day's appointments from the calendar (hearings,
+ * pickups, events), and documents waiting at the hall for pickup.
+ */
+export function TodayCard({ appointments, readyDocuments = 0, onOpenCalendar, onOpenDocuments }) {
+  const empty = appointments.length === 0 && readyDocuments === 0
+  return (
+    <Card>
+      <CardHead title="Today" action={<Button variant="ghost" size="sm" onClick={onOpenCalendar}>Calendar</Button>} />
+      {empty ? (
+        <Muted className="border-t border-line px-[18px] py-4">Nothing scheduled today. Hearings and pickups you add to the calendar show up here.</Muted>
+      ) : (
+        <ol className="border-t border-line">
+          {appointments.map(a => (
+            <li key={a.id} className="grid grid-cols-[72px_minmax(0,1fr)] gap-3 border-b border-line px-[18px] py-2.5 last:border-b-0">
+              <time dateTime={a.starts_at} className="pt-px text-xs font-extrabold text-brand-strong">{timeOf(a.starts_at)}</time>
+              <RowTitle title={a.title} sub={a.participant_name || undefined} />
+            </li>
+          ))}
+          {readyDocuments > 0 && (
+            <li className="border-b border-line last:border-b-0">
+              <button type="button" onClick={onOpenDocuments}
+                className="grid w-full grid-cols-[72px_minmax(0,1fr)] gap-3 px-[18px] py-2.5 text-left outline-none hover:bg-surface-sunk focus-visible:bg-surface-sunk">
+                <span className="pt-px text-xs font-extrabold text-brand-strong">At the hall</span>
+                <RowTitle title={`${readyDocuments} document${readyDocuments === 1 ? '' : 's'} ready for pickup`} sub="Release when the resident comes" />
+              </button>
+            </li>
+          )}
+        </ol>
+      )}
+    </Card>
+  )
+}
