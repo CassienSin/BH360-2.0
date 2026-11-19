@@ -1,6 +1,5 @@
 'use client'
 import { IncidentDetailSkeleton } from '@/components/Skeletons'
-import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import { settleEntrances } from '@/components/SectionContent'
 import { useRouter, useParams } from 'next/navigation'
@@ -8,16 +7,21 @@ import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
-import {
-  MapPin, Clock, Shield, Scale, Star, X, FileText,
-  Check, AlertTriangle, Phone, ShieldOff, Send,
-} from 'lucide-react'
+import { Star, X, Phone } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS, CATEGORY_CONFIG } from '@/lib/legalBasis'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
-import { PageHeader } from '@/components/AppUI'
-import { CategoryIcon } from '@/lib/categoryIcons'
+import PageShell from '@/components/crafted/PageShell'
+import { reportState } from '@/components/resident/ResidentSections'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Avatar } from '@/components/ui/avatar'
+import { Tag } from '@/components/ui/tag'
+import { Notice } from '@/components/ui/notice'
+import { Textarea } from '@/components/ui/textarea'
+import { SectionLabel, Muted } from '@/components/ui/text'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { EmergencyContacts } from '@/components/ResponderAvailability'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
@@ -51,8 +55,7 @@ function IncidentPhoto({ stored, onOpen }) {
   if (!signed) return null
   return (
     <button onClick={() => onOpen(signed)} aria-label="View your photo"
-      className="rid-press w-full rounded-2xl overflow-hidden block mb-4"
-      style={{ border: '1px solid var(--brand-soft)' }}>
+      className="mt-3 block w-full overflow-hidden rounded-[10px] border border-line outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
       <img loading="lazy" decoding="async" src={signed} alt="Your photo" className="w-full max-h-56 object-cover" />
     </button>
   )
@@ -63,8 +66,7 @@ function TimelinePhoto({ stored, onOpen }) {
   if (!signed) return null
   return (
     <button onClick={() => onOpen(signed)} aria-label="View resolution photo"
-      className="rid-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
-      style={{ border: '1px solid var(--brand-soft)' }}>
+      className="mt-2 block size-16 overflow-hidden rounded-[10px] border border-line outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
       <img loading="lazy" decoding="async" src={signed} alt="" className="w-full h-full object-cover" />
     </button>
   )
@@ -81,9 +83,8 @@ const PRIORITY = {
 function statusPanel(inc, responder) {
   if (inc.status === 'resolved') {
     return {
-      tone: { bg: '#f0fdf4', border: '#dcfce7', color: '#15803d' },
-      Icon: Check,
-      title: 'This has been resolved',
+      tone: 'ok',
+      title: 'This has been resolved.',
       body: inc.resolution_notes
         ? 'The barangay marked your report resolved and left a note below.'
         : 'The barangay marked your report resolved.',
@@ -91,86 +92,23 @@ function statusPanel(inc, responder) {
   }
   if (inc.assigned_to && inc.assignment_method === 'auto_offduty') {
     return {
-      tone: { bg: '#fffbeb', border: '#fef3c7', color: '#b45309' },
-      Icon: Clock,
-      title: 'Assigned, but no tanod is on shift',
-      body: `Your report went to ${responder?.full_name || 'a tanod'}, who may not be working right now. If this is urgent, please call one of the numbers below.`,
+      tone: 'warn',
+      title: 'Assigned, but no tanod is on shift.',
+      body: `Your report went to ${responder?.full_name || 'a tanod'}, who may not be working right now. If this is urgent, call one of the numbers below.`,
     }
   }
   if (inc.assigned_to) {
     return {
-      tone: { bg: '#eff6ff', border: '#dbeafe', color: '#1d4ed8' },
-      Icon: Shield,
-      title: 'A tanod is on the way',
-      body: `${responder?.full_name || 'A tanod'} has been assigned and can see your report.`,
+      tone: inc.acknowledged_at || inc.arrived_at ? 'ok' : 'info',
+      title: inc.arrived_at ? 'The tanod is there.' : inc.acknowledged_at ? 'A tanod is on the way.' : 'A tanod has been assigned.',
+      body: `${responder?.full_name || 'A tanod'} can see your report.`,
     }
   }
   return {
-    tone: { bg: '#fef2f2', border: '#fecaca', color: '#dc2626' },
-    Icon: ShieldOff,
-    title: 'No one has been assigned yet',
+    tone: 'danger',
+    title: 'No one has been assigned yet.',
     body: 'Your report is recorded and officials will see it. If anyone is in danger, call for help now.',
   }
-}
-
-/* Timeline, in the resident's terms — no internal mechanics, no names of
-   officials who adjusted classifications. Just what happened to their report. */
-function buildTimeline(inc, responder) {
-  if (!inc) return []
-  const events = [{
-    at: inc.created_at,
-    icon: FileText,
-    tone: { dot: '#5B54E8', bg: '#f0effe' },
-    title: 'You reported this',
-  }]
-
-  const basis = LEGAL_BASIS[inc.category]
-  if (basis?.law) {
-    events.push({
-      at: inc.created_at,
-      icon: Scale,
-      tone: { dot: '#7C75F0', bg: '#f0effe' },
-      title: `Classified as ${PRIORITY[inc.priority]?.word || inc.priority}`,
-      body: `Based on ${basis.law} — ${basis.lawTitle}.`,
-    })
-  }
-
-  if (inc.assigned_to) {
-    events.push({
-      at: inc.auto_assigned_at,
-      icon: Shield,
-      tone: { dot: '#1d4ed8', bg: '#eff6ff' },
-      title: 'A tanod was assigned',
-      body: responder?.full_name ? `${responder.full_name} is responding.` : null,
-    })
-  }
-
-  if (inc.resolved_at || inc.status === 'resolved') {
-    events.push({
-      at: inc.resolved_at,
-      icon: Check,
-      tone: { dot: '#16a34a', bg: '#f0fdf4' },
-      title: 'Marked resolved',
-      body: inc.resolution_notes,
-      photo: inc.resolution_image_url,
-    })
-  }
-
-  if (inc.rated_at || inc.rating) {
-    events.push({
-      at: inc.rated_at,
-      icon: Star,
-      tone: { dot: '#d97706', bg: '#fffbeb' },
-      title: `You rated this ${inc.rating} out of 5`,
-      quote: inc.rating_feedback,
-    })
-  }
-
-  return events.sort((a, b) => {
-    if (!a.at) return 1
-    if (!b.at) return -1
-    return new Date(a.at) - new Date(b.at)
-  })
 }
 
 export default function ResidentIncidentDetail() {
@@ -249,7 +187,6 @@ export default function ResidentIncidentDetail() {
     return () => { leaveCh() }
   }, [params.id, supabase])
 
-  const timeline = useMemo(() => buildTimeline(incident, responder), [incident, responder])
   const basis = incident ? LEGAL_BASIS[incident.category] : null
   const cat = incident ? (CATEGORY[incident.category] || CATEGORY.Other) : CATEGORY.Other
   const pri = incident ? (PRIORITY[incident.priority] || PRIORITY.Medium) : PRIORITY.Medium
@@ -276,257 +213,159 @@ export default function ResidentIncidentDetail() {
 
   if (denied) {
     return (
-      <div className="min-h-dvh bg-brand flex items-center justify-center p-6">
-        <div className="white-card p-8 text-center max-w-sm">
-          <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
-          <h1 className="text-lg font-bold text-gray-800">Report not found</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            This report doesn&apos;t exist, or it isn&apos;t one of yours.
-          </p>
-          <button onClick={() => router.replace('/resident')}
-            className="btn-primary mt-5 px-5 py-2.5 rounded-2xl text-white text-sm font-bold">
-            Back to my reports
-          </button>
-        </div>
-      </div>
+      <PageShell title="Report not found" onBack={() => router.replace('/resident')} backLabel="Back to my reports">
+        <Card lift className="px-[18px] py-5">
+          <Muted>This report doesn’t exist, or it isn’t one of yours.</Muted>
+          <Button className="mt-3" onClick={() => router.replace('/resident?section=incidents')}>Back to my reports</Button>
+        </Card>
+      </PageShell>
     )
   }
 
   const canRate = incident.status === 'resolved' && !incident.rated_at
-  const { Icon: PanelIcon } = panel
+  const hasMap = Number.isFinite(incident.latitude)
+  const step = reportState(incident).step
+  const steps = [
+    { title: 'Received', at: incident.created_at, body: 'Your report reached the barangay' },
+    { title: 'Assigned', at: incident.auto_assigned_at, body: responder?.full_name ? `${responder.full_name} is responding` : 'A tanod is assigned to it' },
+    { title: incident.arrived_at ? 'On scene' : 'On the way', at: incident.arrived_at || incident.acknowledged_at, body: incident.arrived_at ? 'The tanod is there' : 'The tanod saw it and is heading over' },
+    { title: 'Resolved', at: incident.resolved_at, body: incident.resolution_notes || 'You can rate the response here', photo: incident.resolution_image_url },
+  ]
 
   return (
-    <div className="min-h-dvh bg-brand">
-      <style>{`
-        .rid-line::before {
-          content: ''; position: absolute; left: 15px; top: 30px; bottom: -14px;
-          width: 2px; background: var(--brand-border);
-        }
-        .rid-item:last-child .rid-line::before { display: none; }
-        .rid-press { transition: transform 120ms ease; }
-        .rid-press:active { transform: scale(0.97); }
-        @media (prefers-reduced-motion: no-preference) {
-          @keyframes ridIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-          .rid-item { animation: ridIn 340ms cubic-bezier(0.22,1,0.36,1) both; }
-        }
-      `}</style>
+    <PageShell
+      title={incident.title}
+      sub={`${cat.label || incident.category} · reported ${timeAgo(incident.created_at)}`}
+      onBack={() => goBack(router, '/resident?section=incidents')}
+      bandContent={hasMap ? (
+        <Card lift>
+          <MiniMap bare lat={incident.latitude} lng={incident.longitude} height="clamp(180px, 26dvh, 300px)" label="your report" />
+        </Card>
+      ) : null}>
+      <div ref={mainRef} className="contents">
 
-      <PageHeader
-        title={incident.title}
-        description={`Reported ${timeAgo(incident.created_at)}`}
-        iconElement={<CategoryIcon category={incident.category} size={21} />}
-        iconStyle={{ background: `${cat.color}18`, color: cat.color }}
-        onBack={() => goBack(router, '/resident?section=incidents')}
-      />
-
-      <main ref={mainRef} className={`max-w-2xl mx-auto px-4 py-5 space-y-4 ${desktop.incidentPage}`}>
-
-        {/* The answer they came for, first thing on the page */}
-        <div className={`rounded-2xl px-4 py-4 flex items-start gap-3 ${desktop.wide}`}
-          style={{ background: panel.tone.bg, border: `1px solid ${panel.tone.border}` }}
-          role="status">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'white' }}>
-            <PanelIcon size={18} style={{ color: panel.tone.color }} aria-hidden="true" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-black leading-tight" style={{ color: panel.tone.color }}>
-              {panel.title}
-            </p>
-            <p className="text-xs mt-1 leading-relaxed" style={{ color: panel.tone.color, opacity: 0.85 }}>
-              {panel.body}
-            </p>
-            {responder?.phone && incident.status !== 'resolved' && (
-              <a href={`tel:${responder.phone.replace(/[^0-9+]/g, '')}`}
-                className="rid-press inline-flex items-center gap-1.5 mt-2.5 px-3 h-9 rounded-xl text-xs font-bold"
-                style={{ background: 'white', color: panel.tone.color }}>
-                <Phone size={12} /> Call {responder.full_name?.split(' ')[0]}
-              </a>
-            )}
-          </div>
-        </div>
+        {/* The answer they came for: plain words on who is coming */}
+        <Notice tone={panel.tone} title={panel.title} role="status">
+          {panel.body}
+        </Notice>
 
         {/* Emergency numbers stay reachable for as long as it's unresolved */}
         {incident.status !== 'resolved' && (
-          <div className={desktop.wide}><EmergencyContacts
-            category={incident.category}
-            availability={availability}
-            barangayPhone={barangayPhone}
-          /></div>
+          <EmergencyContacts category={incident.category} availability={availability} barangayPhone={barangayPhone} />
         )}
 
-        <div className={`space-y-4 ${desktop.incidentMain}`}>
-          {/* What they reported */}
-          <div className="white-card p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs px-2 py-1 rounded-lg font-black flex items-center gap-1"
-                style={{ background: pri.bg, color: pri.color }}>
-                {pri.icon} {pri.word}
-              </span>
-              <span className="text-xs text-gray-500 font-semibold">{incident.category}</span>
+        {/* Progress */}
+        <Card lift={!hasMap} className="px-[18px] py-4">
+          <ol aria-label="Progress">
+            {steps.map((s, i) => {
+              const reached = i < step
+              const last = i === steps.length - 1
+              return (
+                <li key={s.title} className="relative flex gap-3 pb-4 last:pb-0">
+                  {!last && <span aria-hidden="true" className={`absolute left-[5px] top-4 bottom-0 w-0.5 ${i + 1 < step ? 'bg-ok' : 'bg-line'}`} />}
+                  <span aria-hidden="true" className={`relative mt-1.5 size-3 shrink-0 rounded-full ${reached ? 'bg-ok' : 'border-2 border-line-strong bg-surface'}`} />
+                  <div className="min-w-0">
+                    <p className={`text-[15px] font-extrabold ${reached ? 'text-ink' : 'text-muted-foreground'}`}>
+                      {s.title}
+                      {reached && s.at && <time className="ml-1.5 text-sm font-normal text-muted-foreground" dateTime={s.at} title={fullDate(s.at)}>{timeAgo(s.at)}</time>}
+                      {!reached && <span className="sr-only"> (not yet)</span>}
+                    </p>
+                    <p className="text-[13px] text-muted-foreground">{s.body}</p>
+                    {reached && <TimelinePhoto stored={s.photo} onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />}
+                  </div>
+                </li>
+              )
+            })}
+          </ol>
+        </Card>
+
+        {/* Who is responding */}
+        {responder && (
+          <Card className="flex items-center gap-3 px-[18px] py-3.5">
+            <Avatar name={responder.full_name} tone={responder.on_duty ? 'ok' : 'quiet'} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-extrabold text-ink">{responder.full_name}</p>
+              <p className="text-xs text-muted-foreground">Barangay tanod · {responder.on_duty ? 'on duty' : 'off duty'}</p>
             </div>
-
-            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {incident.description}
-            </p>
-
-            <p className="text-xs text-gray-500 mt-3 flex items-start gap-1.5">
-              <MapPin size={12} className="flex-shrink-0 mt-0.5" style={{ color: cat.color }} />
-              {incident.location}
-            </p>
-
-            <IncidentPhoto stored={incident.image_url}
-              onOpen={(url) => setLightbox({ src: url, alt: 'Your photo' })} />
-
-            {Number.isFinite(incident.latitude) && (
-              <div className="mt-3">
-                <MiniMap lat={incident.latitude} lng={incident.longitude} height="clamp(180px, 32dvh, 340px)" />
-              </div>
+            {responder.phone && incident.status !== 'resolved' && (
+              <IconButton kind="plain" label={`Call ${responder.full_name?.split(' ')[0] || 'the tanod'}`}
+                onClick={() => { window.location.href = `tel:${responder.phone.replace(/[^0-9+]/g, '')}` }}>
+                <Phone size={18} strokeWidth={1.9} />
+              </IconButton>
             )}
-          </div>
+          </Card>
+        )}
 
-          {/* Why it was classified this way — residents can't set priority,
-              so they deserve to see the reasoning rather than just the label */}
-          {basis?.law && (
-            <div className="white-card p-4">
-              <div className="flex items-start gap-2">
-                <Scale size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
-                    Why it was classified {pri.word.toLowerCase()}
-                  </p>
-                  <p className="text-xs text-gray-700 mt-1">
-                    <strong>{basis.law}</strong>
-                    {basis.sections && <strong>{', '}{basis.sections}</strong>} — {basis.lawTitle}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{basis.reason}</p>
-                  {basis.source && (
-                    <a href={basis.source} target="_blank" rel="noopener noreferrer"
-                      className="inline-block text-xs font-semibold mt-1.5 underline" style={{ color: 'var(--brand)' }}>
-                      Read the law
-                    </a>
-                  )}
-                </div>
-              </div>
+        {/* What they reported */}
+        <Card className="px-[18px] py-4">
+          <SectionLabel as="h2">Your report</SectionLabel>
+          <p className="text-[15px] leading-[1.55] text-ink whitespace-pre-wrap">{incident.description}</p>
+          <IncidentPhoto stored={incident.image_url} onOpen={(url) => setLightbox({ src: url, alt: 'Your photo' })} />
+          <p className="mt-2 text-xs text-muted-foreground">
+            {[cat.label || incident.category, incident.location, incident.image_url ? '1 photo' : null].filter(Boolean).join(' · ')}
+          </p>
+        </Card>
+
+        {/* Why it was classified this way — residents can't set priority,
+            so they deserve to see the reasoning rather than just the label */}
+        {basis?.law && (
+          <Card className="px-[18px] py-4">
+            <div className="flex items-center gap-2">
+              <SectionLabel as="h2" className="mb-0 flex-1">Why it’s {pri.word.toLowerCase()}</SectionLabel>
+              <Tag tone={incident.priority === 'Critical' ? 'danger' : incident.priority === 'High' ? 'warn' : 'quiet'}>{pri.word}</Tag>
             </div>
-          )}
+            <p className="mt-2 text-[13px] leading-[1.55] text-body">
+              <strong className="text-brand-strong">{basis.law}{basis.sections ? `, ${basis.sections}` : ''}</strong> · {basis.lawTitle}. {basis.reason}
+            </p>
+            {basis.source && (
+              <a href={basis.source} target="_blank" rel="noopener noreferrer" className="mt-1.5 inline-block text-[13px] font-bold text-brand-strong hover:text-brand-deep">Read the law</a>
+            )}
+          </Card>
+        )}
 
-        </div>
-
-        <div className={`space-y-4 ${desktop.incidentSide}`}>
-          {/* Progress */}
-          <div className="white-card p-5">
-            <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-4">Progress</p>
-            <div className="space-y-4">
-              {timeline.map((e, i) => {
-                const Icon = e.icon
-                return (
-                  <div key={i} className="rid-item relative flex gap-3"
-                    style={{ animationDelay: `${Math.min(i, 6) * 55}ms` }}>
-                    <div className="rid-line relative flex-shrink-0">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center relative z-10"
-                        style={{ background: e.tone.bg }}>
-                        <Icon size={14} style={{ color: e.tone.dot }} />
-                      </div>
-                    </div>
-                    <div className="min-w-0 flex-1 pb-1">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <p className="text-xs font-black text-gray-800">{e.title}</p>
-                        {e.at && (
-                          <time className="text-xs text-gray-500" title={fullDate(e.at)}>
-                            {timeAgo(e.at)}
-                          </time>
-                        )}
-                      </div>
-                      {e.body && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{e.body}</p>}
-                      {e.quote && (
-                        <p className="text-xs italic mt-1.5 px-2.5 py-1.5 rounded-lg"
-                          style={{ background: e.tone.bg, color: e.tone.dot }}>
-                          &quot;{e.quote}&quot;
-                        </p>
-                      )}
-                      <TimelinePhoto stored={e.photo}
-                        onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
-                    </div>
-                  </div>
-                )
-              })}
-
-              {incident.status !== 'resolved' && (
-                <div className="relative flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
-                    style={{ background: 'var(--app-surface)', border: '1px dashed var(--brand-border)' }}>
-                    <Clock size={13} className="text-gray-300" />
-                  </div>
-                  <p className="text-xs text-gray-500 self-center">Still in progress…</p>
-                </div>
-              )}
+        {/* Rating — only once, only after resolution */}
+        {canRate && (
+          <Card lift className="px-[18px] py-4">
+            <h2 className="text-[15px] font-extrabold text-ink">How was the response?</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Your rating helps the barangay improve. Officials can see it.</p>
+            <div className="mt-3 flex items-center gap-1.5" role="radiogroup" aria-label="Rating">
+              {[1, 2, 3, 4, 5].map(s => (
+                <button key={s} onClick={() => setRating(s)} aria-label={`${s} star${s === 1 ? '' : 's'}`} aria-checked={rating === s} role="radio"
+                  className={`flex size-11 items-center justify-center rounded-[10px] border transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong ${s <= rating ? 'border-[color-mix(in_srgb,var(--warn)_35%,var(--line))] bg-warn-soft' : 'border-line bg-surface'}`}>
+                  <Star size={20} strokeWidth={1.9} fill={s <= rating ? 'var(--warn)' : 'none'} color={s <= rating ? 'var(--warn)' : 'var(--line-strong)'} />
+                </button>
+              ))}
             </div>
-          </div>
+            <Textarea className="mt-3" value={feedback} onChange={e => setFeedback(e.target.value)} rows={3} maxLength={300}
+              aria-label="Anything you'd like the barangay to know (optional)" placeholder="Anything you’d like the barangay to know? (optional)" />
+            <Button full className="mt-3" onClick={submitRating} disabled={!rating || savingRating} aria-busy={savingRating || undefined}>
+              {savingRating ? 'Sending…' : 'Send rating'}
+            </Button>
+          </Card>
+        )}
 
-          {/* Rating — only once, only after resolution */}
-          {canRate && (
-            <div className="white-card p-5">
-              <p className="text-sm font-black text-gray-800">How was the response?</p>
-              <p className="text-xs text-gray-500 mt-0.5 mb-3">
-                Your rating helps the barangay improve. It&apos;s visible to officials.
-              </p>
-
-              <div className="flex items-center gap-1.5 mb-3" role="radiogroup" aria-label="Rating">
-                {[1, 2, 3, 4, 5].map(s => (
-                  <button key={s} onClick={() => setRating(s)}
-                    aria-label={`${s} star${s === 1 ? '' : 's'}`}
-                    aria-checked={rating === s} role="radio"
-                    className="rid-press w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{ background: s <= rating ? '#fffbeb' : 'var(--app-surface)', border: `1px solid ${s <= rating ? '#fef3c7' : 'var(--brand-soft)'}` }}>
-                    <Star size={20}
-                      fill={s <= rating ? '#f59e0b' : 'none'}
-                      color={s <= rating ? '#f59e0b' : '#d1d5db'} />
-                  </button>
-                ))}
-              </div>
-
-              <textarea value={feedback} onChange={e => setFeedback(e.target.value)}
-                rows={3} maxLength={300}
-                placeholder="Anything you'd like the barangay to know? (optional)"
-                className="input-field w-full rounded-2xl px-3 py-2.5 text-sm text-gray-800 resize-none" />
-
-              <button onClick={submitRating} disabled={!rating || savingRating}
-                className="btn-primary rid-press w-full mt-3 h-11 rounded-2xl text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
-                <Send size={14} />
-                {savingRating ? 'Sending…' : 'Submit rating'}
-              </button>
-            </div>
-          )}
-
-          {incident.rated_at && (
-            <div className="white-card p-4 flex items-center gap-3">
-              <div className="flex gap-0.5 flex-shrink-0">
-                {[1, 2, 3, 4, 5].map(s => (
-                  <Star key={s} size={14}
-                    fill={s <= incident.rating ? '#f59e0b' : 'none'}
-                    color={s <= incident.rating ? '#f59e0b' : '#d1d5db'} />
-                ))}
-              </div>
-              <p className="text-xs text-gray-500">Thanks — you rated this {timeAgo(incident.rated_at)}.</p>
-            </div>
-          )}
-        </div>
-      </main>
+        {incident.rated_at && (
+          <Card className="flex items-center gap-3 px-[18px] py-3">
+            <span className="flex gap-0.5" role="img" aria-label={`${incident.rating} out of 5 stars`}>
+              {[1, 2, 3, 4, 5].map(s => (
+                <Star key={s} size={14} fill={s <= incident.rating ? 'var(--warn)' : 'none'} color={s <= incident.rating ? 'var(--warn)' : 'var(--line-strong)'} aria-hidden="true" />
+              ))}
+            </span>
+            <p className="text-xs text-muted-foreground">Thanks. You rated this {timeAgo(incident.rated_at)}{incident.rating_feedback ? `: “${incident.rating_feedback}”` : '.'}</p>
+          </Card>
+        )}
+      </div>
 
       {lightbox && (
-        <div className="fixed inset-0 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)', zIndex: 9999 }}
-          onClick={() => setLightbox(null)} role="dialog" aria-modal="true">
-          <button onClick={() => setLightbox(null)} aria-label="Close"
-            className="absolute top-4 right-4 w-10 h-10 rounded-2xl flex items-center justify-center text-white"
-            style={{ background: 'rgba(255,255,255,0.15)', zIndex: 10000 }}>
-            <X size={18} />
-          </button>
+        <div className="fixed inset-0 flex items-center justify-center bg-[rgba(10,8,40,0.85)] p-4"
+          style={{ zIndex: 9999 }} onClick={() => setLightbox(null)} role="dialog" aria-modal="true">
+          <IconButton kind="onband" label="Close" onClick={() => setLightbox(null)} className="absolute top-4 right-4" style={{ zIndex: 10000 }}>
+            <X size={18} strokeWidth={1.9} />
+          </IconButton>
           <img src={lightbox.src} alt={lightbox.alt} onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16, objectFit: 'contain' }} />
+            style={{ maxWidth: '100%', maxHeight: '85dvh', borderRadius: 14, objectFit: 'contain' }} />
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

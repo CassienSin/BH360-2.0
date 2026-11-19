@@ -19,19 +19,20 @@ function Pin() {
  * A fixed preview of one location. It cannot be panned or zoomed, so it
  * never fights the page scroll on a phone; "Directions" is the action.
  */
-export default function MiniMap({ lat, lng, height = 140, label = 'incident location' }) {
+export default function MiniMap({ lat, lng, height = 140, label = 'incident location', bare = false }) {
+  // bare: no frame of its own, for a map that sits inside a card.
+  const frame = bare ? '' : 'rounded-[14px] border border-line'
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return (
-      <div className="rounded-2xl flex flex-col items-center justify-center gap-1"
-        style={{ border: '1px solid var(--brand-soft)', background: 'var(--app-surface)', height }}>
-        <MapPin size={18} className="text-gray-500" aria-hidden="true" />
-        <p className="text-xs text-gray-500">Location unavailable</p>
+      <div className={`flex flex-col items-center justify-center gap-1 bg-surface-sunk ${frame}`} style={{ height }}>
+        <MapPin size={18} className="text-muted-foreground" aria-hidden="true" />
+        <p className="text-xs text-muted-foreground">Location unavailable</p>
       </div>
     )
   }
 
   return (
-    <div className="relative rounded-2xl overflow-hidden" style={{ border: '1px solid var(--brand-soft)', height, background: '#eceafc' }}>
+    <div className={`relative overflow-hidden ${frame}`} style={{ height, background: 'var(--track)' }}>
       {/* Controlled view: when the same card shows a different incident, the map follows. */}
       <BaseMap interactive={false} latitude={lat} longitude={lng} zoom={16}>
         <Marker longitude={lng} latitude={lat} anchor="bottom">
@@ -43,9 +44,9 @@ export default function MiniMap({ lat, lng, height = 140, label = 'incident loca
         target="_blank"
         rel="noopener noreferrer"
         aria-label={`Get directions to ${label}`}
-        className="absolute top-2 right-2 flex items-center gap-1 px-3 rounded-xl text-xs font-bold"
-        style={{ zIndex: 2, minHeight: 36, background: 'rgba(255,255,255,0.95)', color: 'var(--brand-dark)', boxShadow: '0 2px 8px rgba(91,84,232,0.2)' }}>
-        <Navigation size={12} aria-hidden="true" /> Directions
+        className="absolute top-2.5 right-2.5 flex h-8 items-center gap-1.5 rounded-[9px] border border-line bg-surface px-3 text-[13px] font-bold text-ink shadow-[var(--shadow-lift)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong"
+        style={{ zIndex: 2 }}>
+        <Navigation size={14} strokeWidth={1.9} aria-hidden="true" /> Directions
       </a>
     </div>
   )
