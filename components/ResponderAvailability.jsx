@@ -1,6 +1,11 @@
 'use client'
-import { Shield, ShieldOff, Clock, Phone, AlertTriangle } from 'lucide-react'
+import { Phone, AlertTriangle } from 'lucide-react'
 import { LEGAL_BASIS } from '@/lib/legalBasis'
+import { hotlinesFor, telHref } from '@/lib/hotlines'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Notice } from '@/components/ui/notice'
+import { Button } from '@/components/ui/button'
 
 /**
  * Tells the resident, before and after they submit, whether anyone is
@@ -15,22 +20,19 @@ import { LEGAL_BASIS } from '@/lib/legalBasis'
 
 const LEVELS = {
   staffed: {
-    bg: '#f0fdf4', border: '#dcfce7', color: '#16a34a',
-    Icon: Shield,
-    title: (n) => `${n} tanod${n === 1 ? '' : 's'} on duty now`,
-    body: 'Your report will be sent to them immediately.',
+    tone: 'ok',
+    title: (n) => `${n} tanod${n === 1 ? '' : 's'} on duty now.`,
+    body: 'Your report goes to them right away.',
   },
   limited: {
-    bg: '#fffbeb', border: '#fef3c7', color: '#b45309',
-    Icon: Clock,
-    title: () => 'No tanods on duty — officials are online',
+    tone: 'warn',
+    title: () => 'No tanods on duty; officials are online.',
     body: 'Your report will reach a barangay official, but nobody is in the field right now.',
   },
   unstaffed: {
-    bg: '#fef2f2', border: '#fecaca', color: '#dc2626',
-    Icon: ShieldOff,
-    title: () => 'No one is on duty right now',
-    body: 'Your report will be recorded and seen when the barangay comes online. For anything urgent, call an emergency number below.',
+    tone: 'danger',
+    title: () => 'No one is on duty right now.',
+    body: 'Your report will be recorded and seen when the barangay comes online. For anything urgent, call an emergency number.',
   },
 }
 
@@ -38,41 +40,21 @@ export function AvailabilityStrip({ availability, compact = false }) {
   if (availability.loading || availability.error) return null
 
   const cfg = LEVELS[availability.level]
-  const { Icon } = cfg
 
   return (
-    <div className="rounded-2xl px-4 py-3 flex items-start gap-3"
-      style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
-      role="status" aria-live="polite">
-      <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
-        style={{ background: 'white' }}>
-        <Icon size={15} style={{ color: cfg.color }} aria-hidden="true" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-black leading-tight" style={{ color: cfg.color }}>
-          {cfg.title(availability.tanodCount)}
-        </p>
-        {!compact && (
-          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: cfg.color, opacity: 0.85 }}>
-            {cfg.body}
-          </p>
-        )}
-      </div>
-    </div>
+    <Notice tone={cfg.tone} title={cfg.title(availability.tanodCount)} role="status" aria-live="polite">
+      {!compact && cfg.body}
+    </Notice>
   )
 }
 
 /**
- * National emergency numbers, shown when the barangay cannot help fast
- * enough — either because nobody is on duty, or because the incident
- * legally belongs to an agency that operates 24/7 and the barangay does
- * not (RA 9514 fire, RA 8344 medical).
+ * Emergency numbers, shown when the barangay cannot help fast enough —
+ * either because nobody is on duty, or because the incident legally
+ * belongs to an agency that operates 24/7 and the barangay does not
+ * (RA 9514 fire, RA 8344 medical). Unified 911 covers police, fire and
+ * ambulance (lib/hotlines.js).
  */
-const EMERGENCY_NUMBERS = [
-  { label: 'National Emergency Hotline', number: '911', note: 'Fire, medical, police — 24/7' },
-  { label: 'Philippine Red Cross', number: '143', note: 'Ambulance and rescue' },
-]
-
 export function EmergencyContacts({ category, availability, barangayPhone }) {
   const basis = category ? LEGAL_BASIS[category] : null
   const isCritical = basis?.priority === 'Critical'
@@ -82,56 +64,36 @@ export function EmergencyContacts({ category, availability, barangayPhone }) {
   // Show when the barangay legally can't handle it, or when nobody's there.
   if (!isCritical && !mustRefer && !unstaffed) return null
 
+  const lines = hotlinesFor(barangayPhone).filter(l => l.number)
+
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: '2px solid #fecaca' }}>
-      <div className="px-4 py-3 flex items-start gap-2.5" style={{ background: '#dc2626' }}>
-        <AlertTriangle size={16} className="text-white flex-shrink-0 mt-0.5" aria-hidden="true" />
+    <Card className="border-[color-mix(in_srgb,var(--danger)_35%,var(--line))]">
+      <div className="flex items-start gap-2.5 bg-danger-soft px-[18px] py-3">
+        <AlertTriangle size={16} strokeWidth={2.2} className="mt-0.5 shrink-0 text-danger" aria-hidden="true" />
         <div>
-          <p className="text-xs font-black text-white leading-tight">
-            {mustRefer && basis?.agency
-              ? `${basis.agency} handles this — call them now`
-              : 'Call for help directly'}
+          <p className="text-sm font-bold text-ink">
+            {mustRefer && basis?.agency ? `${basis.agency} handles this. Call them now.` : 'Call for help directly.'}
           </p>
-          <p className="text-xs text-red-100 mt-0.5 leading-relaxed">
+          <p className="mt-0.5 text-[13px] text-body">
             {mustRefer
               ? 'The barangay will coordinate, but has no authority to respond to this itself.'
-              : 'Do not wait for the barangay if lives are at risk.'}
+              : 'Don’t wait for the barangay if lives are at risk.'}
           </p>
         </div>
       </div>
-
-      <div className="p-2 space-y-1.5" style={{ background: '#fef2f2' }}>
-        {EMERGENCY_NUMBERS.map(c => (
-          <a key={c.number} href={`tel:${c.number}`}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-transform active:scale-95"
-            style={{ background: 'white', border: '1px solid #fecaca' }}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: '#dc2626' }}>
-              <Phone size={15} className="text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-gray-900">{c.number}</p>
-              <p className="text-xs text-gray-500 truncate">{c.label} · {c.note}</p>
-            </div>
-          </a>
+      <Rows className="border-t border-line">
+        {lines.map(line => (
+          <Row key={line.key} as="a" href={telHref(line.number)} interactive aria-label={`Call ${line.name}, ${line.number}`} className="flex items-center gap-3">
+            <Phone size={18} strokeWidth={1.9} aria-hidden="true" className={`shrink-0 ${line.danger ? 'text-danger' : 'text-brand-strong'}`} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-ink">{line.name}</span>
+              <span className="block truncate text-xs text-muted-foreground">{line.desc}</span>
+            </span>
+            <span className="text-sm font-extrabold tabular-nums text-ink">{line.number}</span>
+          </Row>
         ))}
-
-        {barangayPhone && (
-          <a href={`tel:${barangayPhone.replace(/[^0-9+]/g, '')}`}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-transform active:scale-95"
-            style={{ background: 'white', border: '1px solid var(--brand-border)' }}>
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>
-              <Phone size={15} className="text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-gray-900">{barangayPhone}</p>
-              <p className="text-xs text-gray-500">Barangay hall</p>
-            </div>
-          </a>
-        )}
-      </div>
-    </div>
+      </Rows>
+    </Card>
   )
 }
 
@@ -154,43 +116,30 @@ export function ReportOutcome({ incident, availability, barangayPhone, onDone })
 
   const cfg = {
     queued: {
-      bg: '#eff6ff', border: '#dbeafe', color: '#1d4ed8', Icon: Clock,
-      title: 'Saved on this phone — not sent yet',
+      tone: 'info',
+      title: 'Saved on this phone, not sent yet.',
       body: 'You have no connection, so nobody at the barangay can see this yet. It sends by itself the moment you are back online. If anyone is in danger, call the numbers below now.',
     },
     assigned: {
-      bg: '#f0fdf4', border: '#dcfce7', color: '#16a34a', Icon: Shield,
-      title: 'A tanod has been assigned',
+      tone: 'ok',
+      title: 'A tanod has been assigned.',
       body: 'They have been notified and can see your report now.',
     },
     offduty: {
-      bg: '#fffbeb', border: '#fef3c7', color: '#b45309', Icon: Clock,
-      title: 'Assigned, but no tanod is on duty',
+      tone: 'warn',
+      title: 'Assigned, but no tanod is on duty.',
       body: 'Your report went to the most recently active tanod, who may not be working right now. If this is urgent, call the numbers below.',
     },
     unassigned: {
-      bg: '#fef2f2', border: '#fecaca', color: '#dc2626', Icon: ShieldOff,
-      title: 'No responder is available right now',
+      tone: 'danger',
+      title: 'No responder is available right now.',
       body: 'Your report is recorded and officials will see it when they come online. If anyone is in danger, call an emergency number now.',
     },
   }[state]
 
-  const { Icon } = cfg
-
   return (
-    <div className="space-y-4 fade-up">
-      <div className="rounded-2xl px-4 py-4 flex items-start gap-3"
-        style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}
-        role="status">
-        <div className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'white' }}>
-          <Icon size={18} style={{ color: cfg.color }} aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-black leading-tight" style={{ color: cfg.color }}>{cfg.title}</p>
-          <p className="text-xs mt-1 leading-relaxed" style={{ color: cfg.color, opacity: 0.85 }}>{cfg.body}</p>
-        </div>
-      </div>
+    <div className="flex flex-col gap-3.5">
+      <Notice tone={cfg.tone} title={cfg.title} role="status">{cfg.body}</Notice>
 
       {(state !== 'assigned' || basis?.responseMode === 'refer_to_agency') && (
         <EmergencyContacts
@@ -200,10 +149,7 @@ export function ReportOutcome({ incident, availability, barangayPhone, onDone })
         />
       )}
 
-      <button onClick={onDone}
-        className="btn-primary w-full py-3.5 rounded-2xl text-white font-semibold text-sm">
-        Back to dashboard
-      </button>
+      <Button size="lg" full onClick={onDone}>Back to home</Button>
     </div>
   )
 }

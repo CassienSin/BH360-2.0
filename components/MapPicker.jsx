@@ -15,9 +15,10 @@ function Pin() {
   )
 }
 
+// Map chrome in the Crafted style: a white chip with a hairline (DESIGN.md §5 Chip).
 const hintStyle = {
-  zIndex: 2, background: 'rgba(255,255,255,0.96)', border: '1px solid #e8e3ff',
-  color: '#4A43D4', boxShadow: '0 4px 16px rgba(91,84,232,0.2)',
+  zIndex: 2, background: 'var(--surface)', border: '1px solid var(--line)',
+  color: 'var(--ink)', boxShadow: 'var(--shadow-lift)',
 }
 
 /**
@@ -25,7 +26,7 @@ const hintStyle = {
  * report form) flies the map there and shows the accuracy circle; a tap or
  * drag never moves the map under the user's finger.
  */
-export default function MapPicker({ coords, setCoords, height = 280 }) {
+export default function MapPicker({ coords, setCoords, height = 280, bare = false }) {
   const mapRef = useRef(null)
   const fromUserRef = useRef(false)
 
@@ -52,7 +53,8 @@ export default function MapPicker({ coords, setCoords, height = 280 }) {
   } : null), [lat, lng, accuracy])
 
   return (
-    <div className="relative rounded-2xl overflow-hidden" style={{ border: '2px solid var(--brand-border)', height, background: '#eceafc' }}>
+    // bare: no frame of its own, for a map that sits inside a card.
+    <div className={`relative overflow-hidden ${bare ? '' : 'rounded-[14px] border border-line'}`} style={{ height, background: 'var(--track)' }}>
       <BaseMap
         ref={mapRef}
         initialViewState={startView || undefined}
@@ -86,11 +88,11 @@ export default function MapPicker({ coords, setCoords, height = 280 }) {
       </BaseMap>
 
       {!valid ? (
-        <div className="absolute top-2 left-2 right-2 mx-auto max-w-xs px-3 py-2 rounded-xl text-xs text-center font-bold" style={hintStyle}>
+        <div className="absolute top-2.5 left-2.5 right-2.5 mx-auto max-w-xs px-3 py-2 rounded-[9px] text-xs text-center font-bold" style={hintStyle}>
           Tap the map to set the location
         </div>
       ) : valid.accuracy > 100 ? (
-        <div className="absolute top-2 left-2 right-2 mx-auto max-w-xs px-3 py-2 rounded-xl text-xs text-center font-bold" style={hintStyle}>
+        <div className="absolute top-2.5 left-2.5 right-2.5 mx-auto max-w-xs px-3 py-2 rounded-[9px] text-xs text-center font-bold" style={hintStyle}>
           Tap the map or drag the pin to fine-tune the exact spot
         </div>
       ) : null}

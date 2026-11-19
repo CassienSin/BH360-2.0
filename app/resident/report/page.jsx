@@ -6,15 +6,21 @@ import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import { KINDS } from '@/lib/offline/outbox'
 import { enqueue } from '@/lib/offline/sync'
-import { AlertTriangle, MapPin, FileText, Tag, Upload, X, Image as ImageIcon, Camera, Crosshair, Loader2, Scale, ShieldAlert } from 'lucide-react'
+import { X, Camera, Crosshair, Loader2, Phone } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import toast from 'react-hot-toast'
 import imageCompression from 'browser-image-compression'
 import { CATEGORY_LIST, getPriority, getBasis, citationDetail, PRIORITY_STYLE } from '@/lib/legalBasis'
 import { useBarangayAvailability } from '@/lib/useBarangayAvailability'
 import { AvailabilityStrip, EmergencyContacts, ReportOutcome } from '@/components/ResponderAvailability'
-import styles from './report.module.css'
-import { PageHeader } from '@/components/AppUI'
+import PageShell from '@/components/crafted/PageShell'
+import { CategoryIcon, categoryColor } from '@/lib/categoryIcons'
+import { Card } from '@/components/ui/card'
+import { Field, Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { Tag } from '@/components/ui/tag'
+import { Notice } from '@/components/ui/notice'
 
 const TITLE_MIN = 3
 const TITLE_MAX = 100
@@ -38,44 +44,11 @@ const COMPRESSION_OPTIONS = {
 // governs it. A category with no legal basis cannot appear here.
 const CATEGORIES = CATEGORY_LIST
 
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
 const MapPicker = dynamic(() => import('@/components/MapPicker'), {
   ssr: false,
   loading: () => (
-    <div
-      className="rounded-2xl flex items-center justify-center"
-      style={{ height: '250px', background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
-    >
-      <Loader2 size={20} className="animate-spin text-purple-500" />
+    <div className="flex items-center justify-center bg-track" style={{ height: 'var(--report-map-height, 200px)' }}>
+      <Loader2 size={20} className="animate-spin text-brand-strong" aria-hidden="true" />
     </div>
   ),
 })
@@ -97,54 +70,48 @@ function validateForm(form) {
 
 function PriorityGuidance({ basis }) {
   return (
-                <div className="px-4 py-3" style={{ background: 'white' }}>
-                  {basis.law && (
-                    <div className="flex items-start gap-2 mb-2">
-                      <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} aria-hidden="true" />
-                      <div className="min-w-0">
-                        <p className="text-xs leading-relaxed text-gray-700">
-                          <strong style={{ color: 'var(--brand)' }}>{basis.law}</strong>
-                          {basis.sections && (
-                            <span className="font-semibold" style={{ color: 'var(--brand)' }}>{', '}{basis.sections}</span>
-                          )}
-                          {' — '}{basis.lawTitle}
-                        </p>
-                        {/* What the cited provision actually says. Without
-                            this the citation is decoration — residents (and
-                            officials on review) can check the claim. */}
-                        {basis.provision && (
-                          <p className="text-xs text-gray-500 leading-relaxed mt-1">{basis.provision}</p>
-                        )}
-                        {basis.source && (
-                          <a
-                            href={basis.source}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block text-xs font-semibold mt-1 underline"
-                            style={{ color: 'var(--brand)' }}
-                          >
-                            Read the law
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 leading-relaxed">{basis.reason}</p>
-
-                  {basis.responseMode === 'refer_to_agency' && basis.agency && (
-                    <div
-                      className="mt-2.5 px-3 py-2 rounded-xl flex items-start gap-2"
-                      style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}
-                    >
-                      <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" aria-hidden="true" />
-                      <p className="text-xs text-orange-800 leading-relaxed">
-                        This will be referred to <strong>{basis.agency}</strong>.
-                      </p>
-                    </div>
-                  )}
-                </div>
+    <div className="border-t border-line px-[18px] py-3.5 space-y-2 text-[13px] leading-[1.55] text-body">
+      {basis.law && (
+        <p>
+          <strong className="text-brand-strong">{basis.law}{basis.sections ? `, ${basis.sections}` : ''}</strong> · {basis.lawTitle}
+        </p>
+      )}
+      {/* What the cited provision actually says. Without this the citation
+          is decoration — residents (and officials on review) can check the claim. */}
+      {basis.provision && <p className="text-muted-foreground">{basis.provision}</p>}
+      {basis.source && (
+        <a href={basis.source} target="_blank" rel="noopener noreferrer" className="inline-block font-bold text-brand-strong hover:text-brand-deep">Read the law</a>
+      )}
+      <p>{basis.reason}</p>
+      {basis.responseMode === 'refer_to_agency' && basis.agency && (
+        <Notice tone="warn">This will be referred to <strong>{basis.agency}</strong>.</Notice>
+      )}
+    </div>
   )
 }
+
+// Plain words for the category grid (R02): a short name and a hint.
+// The categories' own labels ("Medical Emergency") don't fit three across
+// on a phone; the report still stores the category key, unchanged.
+const CATEGORY_BLURB = {
+  Fire: { label: 'Fire', desc: 'BFP leads · RA 9514' },
+  Medical: { label: 'Medical', desc: 'Ambulance and first aid' },
+  Flood: { label: 'Flood', desc: 'Rising water, blocked drains' },
+  Violence: { label: 'Violence', desc: 'Fights, threats, abuse' },
+  Theft: { label: 'Theft', desc: 'Stolen property, break-ins' },
+  Noise: { label: 'Noise', desc: 'Karaoke, loud parties' },
+  Traffic: { label: 'Traffic', desc: 'Accidents, blocked roads' },
+  // A soft hyphen: three across on a phone, "Infra-" / "structure" wraps cleanly.
+  Infrastructure: { label: 'Infra­structure', desc: 'Streetlights, roads, wires' },
+  Garbage: { label: 'Garbage', desc: 'Missed collection, dumping' },
+  Animals: { label: 'Animals', desc: 'Strays, bites' },
+  Drugs: { label: 'Drugs', desc: 'Suspected drug activity' },
+  Vandalism: { label: 'Vandalism', desc: 'Graffiti, damaged property' },
+  Other: { label: 'Something else', desc: 'Describe it yourself' },
+}
+
+// Priority as a tag tone: red only for critical (DESIGN.md §7).
+const PRIORITY_TONE = { Critical: 'danger', High: 'warn', Medium: 'quiet', Low: 'quiet' }
 
 export default function ReportIncident() {
   const router = useRouter()
@@ -157,6 +124,7 @@ export default function ReportIncident() {
   // complaint from being filed as "Critical" and displacing a real
   // emergency in the officials' response queue.
   const [form, setForm] = useState({ title: '', description: '', location: '', category: '' })
+  const [step, setStep] = useState(1) // 1: what happened, 2: details and location
   const [loading, setLoading] = useState(false)
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -442,397 +410,178 @@ export default function ReportIncident() {
     }
   }
 
+  // The report is two steps on screen (R02 what happened, R03 details);
+  // one form and one submit, exactly as before.
+  const chosen = CATEGORIES.find(c => c.value === form.category)
+  const back = () => {
+    if (outcome) return router.replace('/resident')
+    if (step === 2) return setStep(1)
+    goBack(router, '/resident')
+  }
+
+  if (outcome) {
+    return (
+      <PageShell title="Report sent" sub="What happens next" onBack={back} backLabel="Back to home">
+        <ReportOutcome
+          incident={outcome}
+          availability={availability}
+          barangayPhone={barangayPhone}
+          onDone={() => router.replace('/resident')}
+        />
+      </PageShell>
+    )
+  }
+
+  if (step === 1) {
+    return (
+      <PageShell
+        title="Report an incident"
+        sub="Step 1 of 2 · What happened?"
+        onBack={back}
+        maxWidth={720}
+        bandContent={(
+          <a href="tel:911" className="flex items-center gap-2.5 rounded-[12px] bg-danger-soft px-3.5 py-3 shadow-[var(--shadow-lift)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+            <Phone size={16} strokeWidth={2} className="shrink-0 text-danger" aria-hidden="true" />
+            <span className="flex-1 text-sm font-bold text-danger">Life in danger? Call 911 first.</span>
+            <span className="text-sm font-extrabold text-danger">Call</span>
+          </a>
+        )}
+        footer={
+          <Button size="lg" full disabled={!form.category} onClick={() => setStep(2)}>Continue</Button>
+        }>
+        {/* Who is actually available to receive this, right now. Often
+            this says "nobody" — that is deliberate. A resident who
+            knows nobody is on duty calls 911 in seconds; one who
+            assumes a tanod is coming waits twenty minutes. */}
+        <AvailabilityStrip availability={availability} compact />
+
+        <fieldset>
+          <legend className="sr-only">What happened?</legend>
+          <div className="grid grid-cols-2 min-[380px]:grid-cols-3 gap-2.5">
+            {CATEGORIES.map(cat => {
+              const selected = form.category === cat.value
+              return (
+                <button key={cat.value} type="button" aria-pressed={selected}
+                  onClick={() => setForm(prev => ({ ...prev, category: cat.value }))}
+                  className={`flex min-h-[118px] flex-col items-start rounded-[12px] bg-surface text-left transition-colors outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong ${selected ? 'border-2 border-brand-strong p-[11px]' : 'border border-line p-3 hover:border-line-strong'}`}>
+                  <CategoryIcon category={cat.value} size={22} active={selected} style={{ color: categoryColor(cat.value) }} />
+                  <span className="mt-2.5 max-w-full text-[15px] max-[419px]:text-[14px] font-extrabold leading-tight text-ink hyphens-manual">{CATEGORY_BLURB[cat.value]?.label || cat.label}</span>
+                  <span className="mt-1 text-xs leading-[1.4] text-muted-foreground">{CATEGORY_BLURB[cat.value]?.desc || ''}</span>
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
+      </PageShell>
+    )
+  }
+
   return (
-    <div className="min-h-dvh relative overflow-clip bg-brand">
-      <AnimatedDots />
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-      </div>
+    <PageShell
+      title="Report an incident"
+      sub="Step 2 of 2 · Details and location"
+      onBack={back}
+      maxWidth={720}
+      bandContent={chosen && (
+        <div className="flex items-center gap-3 rounded-[12px] bg-surface px-3.5 py-2.5 shadow-[var(--shadow-lift)]">
+          <CategoryIcon category={chosen.value} size={22} style={{ color: categoryColor(chosen.value) }} />
+          <span className="flex-1 text-[15px] font-extrabold text-ink">{CATEGORY_BLURB[chosen.value]?.label || chosen.label}</span>
+          <Button variant="ghost" size="sm" className="-mr-2" onClick={() => setStep(1)}>Change</Button>
+        </div>
+      )}
+      footer={
+        <>
+          <p className="text-center text-xs text-muted-foreground">Saved on your phone if you lose signal. It sends when you are back online.</p>
+          <Button type="submit" form="report-form" variant="danger" size="lg" full
+            disabled={loading || compressing || !form.category} aria-busy={loading || undefined}>
+            {loading ? <><Loader2 className="animate-spin" aria-hidden="true" />{uploading ? 'Uploading the photo…' : 'Sending…'}</> : 'Send report'}
+          </Button>
+        </>
+      }>
+      <form id="report-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-      <PageHeader
-        title={outcome ? 'Report submitted' : 'Report an Incident'}
-        description={outcome ? 'What happens next' : 'Notify the barangay immediately'}
-        icon={AlertTriangle}
-        onBack={() => (outcome ? router.replace('/resident') : goBack(router, '/resident'))}
-        backLabel={outcome ? 'Back to dashboard' : 'Go back'}
-        maxWidth={outcome ? 688 : 1376}
-      />
-
-      <main className={`relative z-10 max-w-2xl mx-auto px-4 py-8 ${!outcome ? styles.main : ''}`}>
-        {!outcome && (
-          <>
-            <div className={`glass-card p-4 mb-4 flex items-start gap-3 ${styles.introBanner}`}>
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: 'rgba(255,255,255,0.2)' }}
-              >
-                <AlertTriangle size={18} className="text-white" />
-              </div>
-              <div>
-                <p className="text-white text-sm font-semibold">Report an incident</p>
-                <p className="text-purple-200 text-xs mt-0.5">
-                  Just describe what happened — priority is assigned using configured incident rules informed by relevant Philippine laws.
-                </p>
-              </div>
+        {/* Priority is assigned from the category by the law that governs
+            it — never chosen by the resident. */}
+        {basis && priorityStyle && (
+          <Card role="status" aria-live="polite">
+            <div className="flex items-center gap-2 px-[18px] pt-3.5">
+              <span className="flex-1 text-xs font-bold tracking-[0.06em] text-muted-foreground uppercase">Priority, set by the law</span>
+              <Tag tone={PRIORITY_TONE[assignedPriority] || 'quiet'}>{priorityStyle.label}</Tag>
             </div>
-
-            {/* Who is actually available to receive this, right now. Often
-                this says "nobody" — that is deliberate. A resident who
-                knows nobody is on duty calls 911 in seconds; one who
-                assumes a tanod is coming waits twenty minutes. */}
-            <div className={`mb-6 ${styles.availability}`}>
-              <AvailabilityStrip availability={availability} />
-            </div>
-          </>
+            <details className="group">
+              <summary className="cursor-pointer list-none px-[18px] pt-1 pb-3.5 text-[13px] text-body outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-strong">
+                {priorityStyle.desc}. <span className="font-bold text-brand-strong group-open:hidden">Why?</span>
+              </summary>
+              <PriorityGuidance basis={basis} />
+            </details>
+          </Card>
         )}
 
-        <div className={`white-card p-6 ${!outcome ? styles.card : ''}`}>
-          {outcome ? (
-            <ReportOutcome
-              incident={outcome}
-              availability={availability}
-              barangayPhone={barangayPhone}
-              onDone={() => router.replace('/resident')}
-            />
-          ) : (
-          <form onSubmit={handleSubmit} className={`space-y-5 ${styles.form}`}>
-            <div className={`space-y-5 ${styles.column}`}>
-              <div className={styles.sectionHeading}>
-                <span className={styles.sectionIcon}><FileText size={19} aria-hidden="true" /></span>
-                <div>
-                  <h2>Incident details</h2>
-                  <p>Choose a category and tell us what happened.</p>
-                </div>
-              </div>
+        {/* Emergency numbers — shown when the barangay legally cannot
+            handle this (fire, medical) or when nobody is on duty */}
+        <EmergencyContacts category={form.category} availability={availability} barangayPhone={barangayPhone} />
 
-            <div className={`space-y-5 ${styles.selectionGroup}`}>
-            {/* Category Selection — this alone determines priority */}
-            <fieldset>
-              <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Tag size={11} /> What happened? <span className="text-red-500">*</span>
-              </legend>
-              <select
-                aria-label="Incident category"
-                value={form.category}
-                onChange={event => setForm(prev => ({ ...prev, category: event.target.value }))}
-                className={`input-field w-full rounded-2xl px-3 py-2 text-sm text-gray-800 ${styles.desktopCategory}`}
-              >
-                <option value="" disabled>Select what happened...</option>
-                {CATEGORIES.map(cat => (
-                  <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
-                ))}
-              </select>
-              <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 ${styles.categoryGrid}`}>
-                {CATEGORIES.map(cat => {
-                  const selected = form.category === cat.value
-                  return (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => setForm(prev => ({ ...prev, category: cat.value }))}
-                      className={`p-3 rounded-2xl flex flex-col items-center gap-1.5 text-center transition-all hover:scale-105 ${styles.categoryButton}`}
-                      style={{
-                        background: selected ? cat.bg : 'var(--app-surface)',
-                        border: `2px solid ${selected ? cat.color : 'var(--brand-soft)'}`,
-                        boxShadow: selected ? `0 4px 12px ${cat.color}25` : 'none',
-                      }}
-                    >
-                      <span className="text-2xl" aria-hidden="true">{cat.icon}</span>
-                      <span className="text-xs font-bold leading-tight" style={{ color: selected ? cat.color : '#6b7280' }}>
-                        {cat.label}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </fieldset>
+        <Field id="incident-title" label="Short title" name="title" value={form.title} onChange={handleChange}
+          required maxLength={TITLE_MAX} placeholder="What happened, in a few words" />
 
-            {/* ── Automated priority assignment ──────────────────────────
-                Replaces the old resident-selected priority picker.
-                Shows the assigned level, the governing law, the reasoning,
-                and (for referral categories) which agency handles it. */}
-            {basis && priorityStyle && (
-              <div
-                className={`rounded-2xl overflow-hidden fade-up ${styles.priority}`}
-                style={{ border: `2px solid ${priorityStyle.color}30` }}
-                role="status"
-                aria-live="polite"
-              >
-                <div className={`px-4 py-3 flex items-center gap-3 ${styles.priorityHeader}`} style={{ background: priorityStyle.bg }}>
-                  <span className="text-2xl" aria-hidden="true">{priorityStyle.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: priorityStyle.color }}>
-                      Priority assigned automatically
-                    </p>
-                    <p className="text-base font-black leading-tight" style={{ color: priorityStyle.color }}>
-                      {priorityStyle.label}
-                      <span className="text-xs font-semibold opacity-70"> · {priorityStyle.desc}</span>
-                    </p>
-                  </div>
-                </div>
+        <Field id="incident-description" label="What did you see?" hint={`${form.description.length} of ${DESC_MAX}`}>
+          <Textarea name="description" value={form.description} onChange={handleChange} required rows={4} maxLength={DESC_MAX}
+            placeholder="Who, what, and anything a tanod should know before arriving" />
+        </Field>
 
-                <div className={styles.mobileGuidance}>
-                  <PriorityGuidance basis={basis} />
-                </div>
-                <details className={styles.desktopGuidance}>
-                  <summary>Why this priority? View response guidance</summary>
-                  <PriorityGuidance basis={basis} />
-                </details>
+        {/* Photo */}
+        <div>
+          <p className="mb-1.5 text-[13px] font-bold text-ink">Photo<span className="font-normal text-muted-foreground"> · optional</span></p>
+          <div className="flex flex-wrap gap-2.5">
+            {imagePreview && (
+              <div className="relative size-[72px] overflow-hidden rounded-[10px] border border-line">
+                <img src={imagePreview} alt="Selected photo" className="size-full object-cover" />
+                <button type="button" onClick={removeImage} aria-label="Remove photo"
+                  className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-[rgba(26,24,48,0.7)] text-white">
+                  <X size={13} strokeWidth={2.2} aria-hidden="true" />
+                </button>
               </div>
             )}
-
-            </div>
-
-            {/* Emergency numbers — shown when the barangay legally cannot
-                handle this (fire, medical) or when nobody is on duty */}
-            <div className={styles.emergency}>
-              <EmergencyContacts
-                category={form.category}
-                availability={availability}
-                barangayPhone={barangayPhone}
-              />
-            </div>
-
-            {/* Title */}
-            <div>
-              <label htmlFor="incident-title" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
-                Incident Title <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <AlertTriangle size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                <input
-                  id="incident-title"
-                  name="title"
-                  value={form.title}
-                  onChange={handleChange}
-                  required
-                  maxLength={TITLE_MAX}
-                  className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
-                  placeholder="Brief title for the incident..."
-                />
-              </div>
-            </div>
-
-            {/* Description */}
-            <div>
-              <label htmlFor="incident-description" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
-                Description <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <FileText size={15} className="absolute left-3.5 top-3.5 text-gray-500" aria-hidden="true" />
-                <textarea
-                  id="incident-description"
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  required
-                  rows={4}
-                  maxLength={DESC_MAX}
-                  className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800 resize-none"
-                  placeholder="Describe the incident in detail..."
-                />
-              </div>
-              <p className="text-xs text-gray-500 text-right mt-1">{form.description.length}/{DESC_MAX}</p>
-            </div>
-
-            </div>
-
-            <div className={`space-y-5 ${styles.column} ${styles.locationColumn}`}>
-              <div className={styles.sectionHeading}>
-                <span className={styles.sectionIcon}><MapPin size={19} aria-hidden="true" /></span>
-                <div>
-                  <h2>Location &amp; photo</h2>
-                  <p>Help responders find and understand the scene.</p>
-                </div>
-              </div>
-
-            {/* Location */}
-            <div>
-              <label htmlFor="incident-location" className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
-                Location Description <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <MapPin size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                <input
-                  id="incident-location"
-                  name="location"
-                  value={form.location}
-                  onChange={handleChange}
-                  required
-                  maxLength={LOCATION_MAX}
-                  className="input-field w-full rounded-2xl pl-10 pr-4 py-3 text-sm text-gray-800"
-                  placeholder="e.g. Near Sitio 3 basketball court..."
-                />
-              </div>
-            </div>
-
-            {/* Map Picker */}
-            <div className={styles.mapSection}>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <MapPin size={11} /> Pin on Map <span className="text-gray-500 font-normal">(Optional but helpful)</span>
-              </p>
-
-              <div className="flex gap-2 mb-3 flex-wrap">
-                <button
-                  type="button"
-                  onClick={useMyLocation}
-                  disabled={gettingLocation}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-50"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', color: 'white', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-                >
-                  {gettingLocation ? <Loader2 size={12} className="animate-spin" /> : <Crosshair size={12} />}
-                  {gettingLocation ? 'Getting location...' : 'Use My Location'}
-                </button>
-                {coords && (
-                  <button
-                    type="button"
-                    onClick={() => setCoords(null)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors hover:bg-red-50"
-                    style={{ color: '#ef4444', border: '1px solid #fecaca' }}
-                  >
-                    <X size={12} /> Clear
-                  </button>
-                )}
-              </div>
-
-              <div className={styles.mapFrame}>
-                <MapPicker coords={coords} setCoords={setCoords} height="var(--report-map-height, 280px)" />
-              </div>
-
-              {coords && (
-                <div className="mt-2 flex items-center justify-between flex-wrap gap-2 fade-up">
-                  <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--brand)' }}>
-                    📍 <strong>Pinned:</strong> {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
-                  </p>
-                  {coords.accuracy != null && (
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full font-bold"
-                      style={{
-                        background: coords.accuracy > 1000 ? '#fef3c7' : coords.accuracy > 100 ? '#dbeafe' : '#d1fae5',
-                        color: coords.accuracy > 1000 ? '#92400e' : coords.accuracy > 100 ? '#1e40af' : '#065f46',
-                      }}
-                    >
-                      {coords.accuracy > 1000 ? `~${(coords.accuracy / 1000).toFixed(1)}km` : `±${coords.accuracy}m`}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Image Upload */}
-            <div className={styles.photoSection}>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Camera size={11} /> Photo Evidence <span className="text-gray-500 font-normal">(Optional)</span>
-              </p>
-
-              {compressing ? (
-                <div
-                  className={`rounded-2xl p-8 text-center ${styles.uploadPanel}`}
-                  style={{ background: 'var(--app-surface)', border: '2px dashed var(--brand-border)' }}
-                  role="status"
-                >
-                  <div
-                    className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
-                  >
-                    <Loader2 size={20} className="animate-spin text-white" />
-                  </div>
-                  <p className="text-sm font-bold text-gray-800 mb-1">Optimizing photo...</p>
-                  <p className="text-xs text-gray-500">Shrinking the file so it uploads faster</p>
-                </div>
-              ) : !imagePreview ? (
-                <label className="block cursor-pointer">
-                  <div
-                    className={`rounded-2xl p-8 text-center transition-all hover:scale-[1.01] ${styles.uploadPanel}`}
-                    style={{ background: 'var(--app-surface)', border: '2px dashed var(--brand-border)' }}
-                  >
-                    <div
-                      className="w-14 h-14 mx-auto rounded-2xl flex items-center justify-center mb-3"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}
-                    >
-                      <Upload size={20} className="text-white" />
-                    </div>
-                    <p className="text-sm font-bold text-gray-800 mb-1">Click to upload photo</p>
-                    <p className="text-xs text-gray-500">JPG, PNG, GIF, WebP — large photos are optimized automatically</p>
-                    <p className="text-xs text-gray-500 mt-2">A photo helps officials respond faster</p>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                </label>
-              ) : (
-                <div className="relative rounded-2xl overflow-hidden group fade-up" style={{ border: '2px solid var(--brand-border)' }}>
-                  <img src={imagePreview} alt="Selected photo preview" className={`w-full max-h-80 object-cover ${styles.photoPreview}`} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="absolute top-3 right-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={removeImage}
-                      aria-label="Remove photo"
-                      className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
-                      style={{ background: 'rgba(239,68,68,0.95)', color: 'white', boxShadow: '0 4px 12px rgba(239,68,68,0.4)' }}
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                  <div
-                    className="absolute bottom-0 left-0 right-0 px-4 py-3 flex items-center gap-2"
-                    style={{ background: 'linear-gradient(180deg, transparent, rgba(0,0,0,0.7))' }}
-                  >
-                    <ImageIcon size={14} className="text-white" aria-hidden="true" />
-                    <p className="text-xs text-white font-semibold truncate">{imageFile?.name}</p>
-                    <span className="ml-auto text-xs text-white/80 flex-shrink-0">
-                      {imageFile && originalSize && originalSize > imageFile.size ? (
-                        <>
-                          <s className="opacity-60">{(originalSize / 1024 / 1024).toFixed(1)} MB</s>
-                          {' → '}
-                          {imageFile.size > 1024 * 1024
-                            ? `${(imageFile.size / 1024 / 1024).toFixed(2)} MB`
-                            : `${Math.round(imageFile.size / 1024)} KB`}
-                        </>
-                      ) : (
-                        imageFile
-                          ? imageFile.size > 1024 * 1024
-                            ? `${(imageFile.size / 1024 / 1024).toFixed(2)} MB`
-                            : `${Math.round(imageFile.size / 1024)} KB`
-                          : '0 KB'
-                      )}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || compressing || !form.category}
-              className={`btn-primary w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold text-sm mt-2 disabled:opacity-50 disabled:cursor-not-allowed ${styles.submit}`}
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 size={16} className="animate-spin" />
-                  {uploading ? 'Uploading image...' : 'Submitting...'}
-                </span>
-              ) : 'Submit Report'}
-            </button>
-          </form>
+            <label className={`flex size-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-[10px] border border-dashed border-line-strong bg-surface text-brand-strong ${compressing ? 'opacity-70' : 'hover:border-brand-strong'}`}>
+              {compressing ? <Loader2 size={18} className="animate-spin" aria-hidden="true" /> : <Camera size={18} strokeWidth={1.9} aria-hidden="true" />}
+              <span className="text-xs font-bold">{compressing ? 'Shrinking' : imagePreview ? 'Replace' : 'Add'}</span>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageSelect} className="sr-only" />
+            </label>
+          </div>
+          {imageFile && originalSize && originalSize > imageFile.size && (
+            <p className="mt-1.5 text-xs text-muted-foreground">Shrunk from {(originalSize / 1024 / 1024).toFixed(1)} MB to {imageFile.size > 1024 * 1024 ? `${(imageFile.size / 1024 / 1024).toFixed(2)} MB` : `${Math.round(imageFile.size / 1024)} KB`} so it sends faster.</p>
           )}
         </div>
-      </main>
-    </div>
+
+        {/* Location */}
+        <div>
+          <p className="mb-1.5 text-[13px] font-bold text-ink">Location</p>
+          <Card>
+            <div className="relative">
+              <MapPicker bare coords={coords} setCoords={setCoords} height="var(--report-map-height, 200px)" />
+              <div className="absolute bottom-2.5 left-2.5 z-[3] flex gap-2">
+                <Button type="button" variant="secondary" size="sm" onClick={useMyLocation} disabled={gettingLocation} className="shadow-[var(--shadow-lift)]">
+                  {gettingLocation ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Crosshair aria-hidden="true" />}
+                  {gettingLocation ? 'Finding you…' : 'Use my location'}
+                </Button>
+                {coords && (
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setCoords(null)} className="shadow-[var(--shadow-lift)]">Clear pin</Button>
+                )}
+              </div>
+            </div>
+            <div className="border-t border-line px-3.5 pt-3 pb-3.5">
+              <label htmlFor="incident-location" className="sr-only">Where it happened</label>
+              <Input id="incident-location" name="location" value={form.location} onChange={handleChange}
+                required maxLength={LOCATION_MAX} placeholder="Street, landmark, purok" />
+              <p className={`mt-1.5 text-xs ${coords ? 'text-ok' : 'text-muted-foreground'}`}>
+                {coords
+                  ? `Pinned at ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}${coords.accuracy != null ? ` · GPS accurate to ${coords.accuracy > 1000 ? `${(coords.accuracy / 1000).toFixed(1)} km` : `${coords.accuracy} m`}` : ''}`
+                  : 'Tap the map or use your location so the tanod finds it fast.'}
+              </p>
+            </div>
+          </Card>
+        </div>
+      </form>
+    </PageShell>
   )
 }
