@@ -10,313 +10,52 @@ import { useUrlSection } from '@/lib/useUrlSection'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { Bell, AlertTriangle, FileText, Plus, ChevronRight, Star, FileCheck2, ShieldCheck, Clock, Scale, Gavel } from 'lucide-react'
-import Image from 'next/image'
+import { ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
 import DashboardFrame from '@/components/crafted/DashboardFrame'
 import TabBar from '@/components/crafted/TabBar'
+import { ReportRows, TicketRows, DocumentRows, AnnouncementRows, CaseCard, PressingCard, HomeLinks, HomeHotlines, BandAction } from '@/components/resident/ResidentSections'
+import { Card } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Notice } from '@/components/ui/notice'
+import { Segmented } from '@/components/ui/segmented'
+import { SectionLabel, Muted } from '@/components/ui/text'
 import { AiIcon, AnnouncementsIcon, BlotterIcon, DocumentsIcon, HomeIcon, IncidentsIcon, TicketsIcon } from '@/components/icons/BhIcons'
-import { timeAgo, timeAgoLong, fullDate } from '@/lib/timeAgo'
+import { timeAgoLong, fullDate } from '@/lib/timeAgo'
 import RatingModal from '@/components/RatingModal'
 import NotificationBanner from '@/components/NotificationBanner'
 import { notifyNewAnnouncement, notifyStatusUpdate } from '@/lib/notifications'
-import RecordCard, { RecordGroup, Chip, PriorityChip } from '@/components/RecordCard'
-import { HomeSummary, ActivityTile, TileGrid } from '@/components/HomeSummary'
 import { greeting, activityCounts, summarySentence, mostPressing } from '@/lib/homeSummary'
-import { isSettled, toneFor, progressOf, partitionByLiveness } from '@/lib/recordState'
+import { partitionByLiveness } from '@/lib/recordState'
 import { useNotifications } from '@/lib/useNotifications'
 import { notify } from '@/components/Toast'
 import { firstRealError } from '@/lib/dbError'
-import { DOCUMENT_TYPES, DOC_STATUS_STYLE, DEADLINE_STYLE, deadlineState, formatDeadline } from '@/lib/documents'
+import { deadlineState, formatDeadline } from '@/lib/documents'
 import { canRequestDocuments, documentBlockReason, verificationStyle, isVerified } from '@/lib/verification'
-import { CASE_STATUS, KP_DEADLINE_STYLE, stageDeadline, isOpen as caseIsOpen } from '@/lib/katarungan'
+import { isOpen as caseIsOpen } from '@/lib/katarungan'
 import { useNow } from '@/lib/useNow'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
 import { useLiveAnnouncements } from '@/lib/useLiveAnnouncements'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
-// Hoisted — these were recreated on every render
-const priorityConfig = {
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
-}
-
-const INCIDENT_STEPS = ['Reported', 'Tanod assigned', 'Resolved']
-
-const STATUS_CHIP = {
-  pending:     { label: 'Waiting for a tanod', bg: '#fef3c7', color: '#b45309' },
-  assigned:    { label: 'Tanod on the way',    bg: '#dbeafe', color: '#1d4ed8' },
-  resolved:    { label: 'Resolved',            bg: '#d1fae5', color: '#047857' },
-  open:        { label: 'Open',                bg: '#fef3c7', color: '#b45309' },
-  in_progress: { label: 'Being handled',       bg: '#dbeafe', color: '#1d4ed8' },
-  closed:      { label: 'Closed',              bg: '#d1fae5', color: '#047857' },
-}
-
-function StatusChip({ status }) {
-  const c = STATUS_CHIP[status]
-  if (!c) return null
-  return <Chip bg={c.bg} color={c.color} dot>{c.label}</Chip>
-}
-
-/**
- * A report still in progress gets the full card and its place in the queue
- * drawn out; a resolved one collapses to a row. Nine of fourteen reports
- * being finished is the normal case, and giving those the same height as
- * the two still open buries the two that matter.
- */
-const TICKET_STEPS = ['Submitted', 'Being handled', 'Closed']
-
-function TicketCard({ t, live, onOpen }) {
-  return (
-    <RecordCard
-      live={live}
-      tone={toneFor(t.status)}
-      icon={<FileText size={live ? 16 : 14} className="text-white" />}
-      iconBg={isSettled(t.status) ? '#9ca3af' : 'linear-gradient(135deg, #5B54E8, #7C75F0)'}
-      title={t.title}
-      description={live ? t.description : undefined}
-      meta={!live && t.category ? <span className="truncate">{t.category}</span> : null}
-      status={live ? <StatusChip status={t.status} /> : null}
-      badges={!live ? <StatusChip status={t.status} /> : null}
-      when={live ? timeAgoLong(t.created_at) : timeAgo(t.created_at)}
-      steps={live ? TICKET_STEPS : undefined}
-      at={progressOf(t.status)}
-      onClick={onOpen}
-      ariaLabel={`${t.title} — ${STATUS_CHIP[t.status]?.label || t.status}`}
-    />
-  )
-}
-
-const DOCUMENT_STEPS = ['Filed', 'Being processed', 'Released']
-
-/**
- * The RA 11032 clock is the whole point of this card while a request is
- * open, so a live one keeps every deadline notice. Once it is released or
- * denied the clock has stopped and the row only has to say which.
- */
-function DocumentCard({ req, live }) {
-  const doc = DOCUMENT_TYPES[req.document_type]
-  const st = DOC_STATUS_STYLE[req.status] || DOC_STATUS_STYLE.pending
-  const state = deadlineState(req)
-  const dl = DEADLINE_STYLE[state.level]
-
-  return (
-    <RecordCard
-      live={live}
-      tone={toneFor(req.status, { breached: state.level === 'breached' })}
-      icon={<span aria-hidden="true">{doc?.icon || '📄'}</span>}
-      iconBg={doc?.bg || '#f9fafb'}
-      title={doc?.label || req.document_type}
-      description={live ? req.purpose : undefined}
-      meta={
-        <span className="font-mono text-xs" style={{ color: 'var(--brand)' }}>
-          {req.reference_code}
-        </span>
-      }
-      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
-      badges={
-        live
-          ? (state.label ? <Chip bg={dl.bg} color={dl.color}>{state.label}</Chip> : null)
-          : <Chip bg={st.bg} color={st.color}>{st.label}</Chip>
-      }
-      when={live ? undefined : timeAgo(req.released_at || req.created_at)}
-      steps={live ? DOCUMENT_STEPS : undefined}
-      at={progressOf(req.status)}
-      ariaLabel={`${doc?.label || req.document_type} — ${st.label}`}
-      footer={live ? (
-        <>
-          <span className="flex items-center gap-1.5 mt-2">
-            <Clock size={11} className="flex-shrink-0" style={{ color: dl.color }} aria-hidden="true" />
-            <span className="text-xs" style={{ color: dl.color }}>
-              Due {formatDeadline(req.due_at)}
-            </span>
-          </span>
-          {state.deemedApproved && (
-            <span className="block text-xs mt-2 px-2.5 py-2 rounded-lg leading-relaxed"
-              style={{ background: '#fef2f2', color: '#b91c1c' }}>
-              The deadline passed without a decision. Under <strong>RA 11032 Sec. 10</strong> this
-              request is deemed approved — show this reference at the barangay hall.
-            </span>
-          )}
-          {req.extension_reason && (
-            <span className="block text-xs text-gray-500 mt-1.5">
-              <strong>Extended once (Sec. 9(b)(1)):</strong> {req.extension_reason}
-            </span>
-          )}
-          <span className="block text-xs mt-1.5" style={{ color: 'var(--app-text-muted)' }}
-            title={fullDate(req.created_at)}>
-            Filed {timeAgo(req.created_at)}
-          </span>
-        </>
-      ) : req.denial_reason ? (
-        <span className="block text-xs mt-1 truncate" style={{ color: '#b91c1c' }}>
-          {req.denial_reason}
-        </span>
-      ) : null}
-    />
-  )
-}
-
-const CASE_STEPS = ['Filed', 'Mediation', 'Concluded']
-
-/** Which of the three points a KP case has reached. */
-function caseProgress(kase) {
-  if (!caseIsOpen(kase)) return 2
-  return kase.status === 'filed' ? 0 : 1
-}
-
-function BlotterCard({ kase, live }) {
-  const st = CASE_STATUS[kase.status] || CASE_STATUS.filed
-  const deadline = stageDeadline(kase)
-  const dl = KP_DEADLINE_STYLE[deadline.level]
-
-  return (
-    <RecordCard
-      live={live}
-      tone={live ? toneFor(kase.status, { breached: deadline.level === 'breach' }) : 'done'}
-      icon={<Gavel size={live ? 16 : 14} style={{ color: st.color }} />}
-      iconBg={st.bg}
-      title={`vs ${kase.respondent_name}`}
-      description={live ? kase.nature : undefined}
-      meta={
-        <span className="font-mono text-xs font-bold" style={{ color: 'var(--brand)' }}>
-          {kase.case_number}
-        </span>
-      }
-      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
-      badges={
-        live
-          ? (deadline.label ? <Chip bg={dl.bg} color={dl.color}>{deadline.label}</Chip> : null)
-          : <Chip bg={st.bg} color={st.color}>{st.label}</Chip>
-      }
-      when={live ? undefined : timeAgo(kase.filed_at)}
-      steps={live ? CASE_STEPS : undefined}
-      at={caseProgress(kase)}
-      ariaLabel={`Case ${kase.case_number} against ${kase.respondent_name} — ${st.label}`}
-      footer={live ? (
-        <>
-          <span className="block text-xs text-gray-500 mt-1.5">{st.desc}</span>
-          <span className="block text-xs mt-1.5" style={{ color: 'var(--app-text-muted)' }}
-            title={fullDate(kase.filed_at)}>
-            Filed {timeAgo(kase.filed_at)}
-          </span>
-        </>
-      ) : null}
-    />
-  )
-}
-
-/**
- * A concluded case still carries the outcome the law attaches to it — the
- * settlement terms, the repudiation window, the Certificate to File Action.
- * Those are the reason someone opens the list, so they stay visible under
- * the collapsed row rather than moving behind a tap.
- */
-function CaseOutcome({ kase }) {
-  const deadline = stageDeadline(kase)
-  if (kase.settlement_terms) {
-    return (
-      <div className="text-xs px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
-        style={{ background: '#f0fdf4', color: '#166534' }}>
-        <strong>Settled:</strong> {kase.settlement_terms}
-        {deadline.level === 'window' && (
-          <span className="block mt-1">
-            You may still repudiate this within the window above if your consent was obtained by
-            fraud, violence or intimidation (Sec. 418).
-          </span>
-        )}
-      </div>
-    )
-  }
-  if (kase.cfa_reason) {
-    return (
-      <div className="text-xs px-3 py-2 rounded-xl leading-relaxed ml-[22px] -mt-1"
-        style={{ background: '#fef2f2', color: '#b91c1c' }}>
-        <strong>Certificate to File Action issued:</strong> {kase.cfa_reason}
-        <span className="block mt-1">You may now take this to court.</span>
-      </div>
-    )
-  }
-  if (kase.referred_to) {
-    return (
-      <p className="text-xs text-gray-500 ml-[22px] -mt-1">
-        <strong>Referred to:</strong> {kase.referred_to}
-      </p>
-    )
-  }
-  return null
-}
-
-function IncidentCard({ inc, live, onOpen, onRate }) {
-  const settled = isSettled(inc.status)
-  const meta = inc.location ? <span className="truncate">📍 {inc.location}</span> : null
-
-  return (
-    <RecordCard
-      live={live}
-      tone={toneFor(inc.status)}
-      icon={<AlertTriangle size={live ? 16 : 14} className="text-orange-500" />}
-      iconBg={settled ? '#f3f4f6' : (priorityConfig[inc.priority]?.bg || '#fff7ed')}
-      title={inc.title}
-      description={live ? inc.description : undefined}
-      meta={meta}
-      status={live ? <StatusChip status={inc.status} /> : null}
-      badges={<PriorityChip priority={inc.priority} config={priorityConfig} settled={settled} />}
-      when={live ? timeAgoLong(inc.created_at) : timeAgo(inc.created_at)}
-      steps={live ? INCIDENT_STEPS : undefined}
-      at={progressOf(inc.status)}
-      onClick={onOpen}
-      ariaLabel={`${inc.title} — ${STATUS_CHIP[inc.status]?.label || inc.status}`}
-      action={
-        settled && !inc.rating ? (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRate() }}
-            onKeyDown={(e) => e.stopPropagation()}
-            className={live
-              ? 'mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer'
-              : 'text-xs font-bold underline underline-offset-2 cursor-pointer whitespace-nowrap'}
-            style={live
-              ? { background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }
-              : { color: '#b45309' }}>
-            {live && <Star size={12} />} Rate this
-          </button>
-        ) : settled && inc.rating ? (
-          <Chip bg="#fffbeb" color="#b45309">★ {inc.rating}</Chip>
-        ) : null
-      }
-      footer={
-        live && inc.rating ? (
-          <span className="mt-3 p-3 rounded-xl flex items-center gap-3"
-            style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-            <span className="flex gap-0.5" role="img" aria-label={`${inc.rating} out of 5 stars`}>
-              {[1, 2, 3, 4, 5].map(n => (
-                <Star key={n} size={12} fill={n <= inc.rating ? '#f59e0b' : 'none'}
-                  color={n <= inc.rating ? '#f59e0b' : '#d1d5db'} aria-hidden="true" />
-              ))}
-            </span>
-            <span className="flex-1 min-w-0 block">
-              <span className="block text-xs font-bold text-amber-700">Your rating</span>
-              {inc.rating_feedback && (
-                <span className="block text-xs text-amber-900 truncate">&ldquo;{inc.rating_feedback}&rdquo;</span>
-              )}
-            </span>
-          </span>
-        ) : null
-      }
-    />
-  )
-}
-
 const sectionTitle = {
   home: 'Home', announcements: 'Announcements',
-  incidents: 'My Incidents', tickets: 'My Tickets',
-  documents: 'My Documents', blotter: 'My Blotter Cases', ai: 'AI Assistant',
+  incidents: 'My reports', tickets: 'My tickets',
+  documents: 'My documents', blotter: 'My cases', ai: 'AI Assistant',
+}
+
+// The line under the title on desktop.
+const sectionSub = {
+  announcements: 'News, alerts and events from your barangay',
+  incidents: 'Your reports and where they stand',
+  tickets: 'Your conversations with barangay officials',
+  documents: 'Clearances and certificates',
+  blotter: 'Katarungang Pambarangay',
+  ai: 'Quick answers about barangay services',
 }
 
 // Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
@@ -334,6 +73,9 @@ function ResidentDashboard() {
   const [documentRequests, setDocumentRequests] = useState([])
   const [blotterCases, setBlotterCases] = useState([])
   const [activeSection, setActiveSection] = useUrlSection(RESIDENT_SECTIONS, RESIDENT_HOME)
+  // In-page view switches on the band (My reports, My tickets).
+  const [reportFilter, setReportFilter] = useState('active')
+  const [ticketFilter, setTicketFilter] = useState('open')
   // Starts closed so a phone refresh never renders the drawer open; then
   // the remembered desktop choice (lib/useSidebarState).
   const [sidebarOpen, setSidebarOpen] = useSidebarState(false)
@@ -671,56 +413,6 @@ function ResidentDashboard() {
     return state.label || `due ${formatDeadline(open.due_at)}`
   }, [documentRequests])
 
-  // The tiles the home screen shows. Blotter only appears once a case
-  // exists — "0 blotter cases, none filed" is noise for the overwhelming
-  // majority of residents, and a lone fifth tile rebuilds the ragged grid
-  // this change set out to remove.
-  const homeTiles = useMemo(() => {
-    const tiles = [
-      {
-        key: 'incidents', icon: <AlertTriangle size={17} />, tone: 'waiting',
-        count: counts.incidents.open, quiet: counts.incidents.open === 0,
-        label: counts.incidents.open === 1 ? 'Report open' : 'Reports open',
-        caption: counts.incidents.total
-          ? `${counts.incidents.total - counts.incidents.open} resolved`
-          : 'none filed yet',
-        onClick: () => navClick('incidents'),
-      },
-      {
-        key: 'documents', icon: <FileCheck2 size={17} />, tone: 'active',
-        count: counts.documents.open, quiet: counts.documents.open === 0,
-        label: counts.documents.open === 1 ? 'Document pending' : 'Documents pending',
-        caption: nextDocumentDue || (counts.documents.total
-          ? `${counts.documents.total} requested`
-          : 'none requested yet'),
-        onClick: () => navClick('documents'),
-      },
-      {
-        key: 'tickets', icon: <FileText size={17} />, tone: 'active',
-        count: counts.tickets.open, quiet: counts.tickets.open === 0,
-        label: counts.tickets.open === 1 ? 'Ticket open' : 'Tickets open',
-        caption: counts.tickets.total ? `${counts.tickets.total} in total` : 'none opened yet',
-        onClick: () => navClick('tickets'),
-      },
-      {
-        key: 'announcements', icon: <Bell size={17} />, tone: 'info',
-        count: unreadAnnouncementCount, quiet: unreadAnnouncementCount === 0,
-        label: 'Unread',
-        caption: `${announcements.length} announcement${announcements.length === 1 ? '' : 's'}`,
-        onClick: () => navClick('announcements'),
-      },
-    ]
-    if (counts.cases.total > 0) {
-      tiles.push({
-        key: 'blotter', icon: <Gavel size={17} />, tone: 'waiting',
-        count: counts.cases.open, quiet: counts.cases.open === 0,
-        label: counts.cases.open === 1 ? 'Blotter case' : 'Blotter cases',
-        caption: `${counts.cases.total} in total`,
-        onClick: () => navClick('blotter'),
-      })
-    }
-    return tiles
-  }, [counts, nextDocumentDue, unreadAnnouncementCount, announcements.length, navClick])
 
 
 
@@ -741,6 +433,32 @@ function ResidentDashboard() {
   // Sections animate in when the user switches to one — not when the page
   // first loads (lib/useSectionEntrance.js).
   const entering = useSectionEntrance(activeSection, !loading)
+
+  const todayLabel = new Date(now).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric' })
+
+  // What sits on the band under the title, per section (R01, R04, R07).
+  const bandSlot = {
+    home: (
+      <PressingCard pressing={pressing}
+        incident={pressing?.kind === 'incident' ? incidents.find(i => i.id === pressing.id) : null}
+        allClearNote={unreadAnnouncementCount > 0
+          ? `${unreadAnnouncementCount} announcement${unreadAnnouncementCount === 1 ? '' : 's'} went up since you last looked`
+          : 'Everything you have filed has been dealt with'}
+        onOpen={() => pressing?.href && router.push(pressing.href)} />
+    ),
+    incidents: (
+      <Segmented onBand full size="lg" label="Show reports" value={reportFilter} onChange={setReportFilter}
+        items={[{ value: 'active', label: 'Active', count: liveIncidents.length }, { value: 'resolved', label: 'Resolved', count: doneIncidents.length }]} />
+    ),
+    tickets: (
+      <div className="flex flex-col gap-3">
+        <BandAction onClick={() => router.push('/resident/ticket/new')}>Ask the barangay</BandAction>
+        <Segmented onBand full size="lg" label="Show conversations" value={ticketFilter} onChange={setTicketFilter}
+          items={[{ value: 'open', label: 'Open', count: liveTickets.length }, { value: 'closed', label: 'Closed', count: doneTickets.length }]} />
+      </div>
+    ),
+    documents: <BandAction onClick={() => router.push('/resident/documents/new')}>Request a document</BandAction>,
+  }[activeSection]
 
   // While loading, the same frame the static HTML showed before JavaScript
   // ran — now with the real sidebar width and banner — so a refresh shows
@@ -769,13 +487,13 @@ function ResidentDashboard() {
             { key: 'announcements', label: 'Announcements', icon: AnnouncementsIcon, count: unreadAnnouncementCount, hasNew: unreadAnnouncementCount > 0 },
           ]},
           { section: 'MY ACTIVITY', items: [
-            { key: 'incidents', label: 'My Incidents', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length },
-            { key: 'tickets', label: 'My Tickets', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length },
-            { key: 'documents', label: 'My Documents', icon: DocumentsIcon, count: openDocumentCount },
-            { key: 'blotter', label: 'My Blotter Cases', icon: BlotterIcon, count: blotterCases.filter(caseIsOpen).length },
+            { key: 'incidents', label: 'My reports', icon: IncidentsIcon, count: incidents.filter(i => i.status === 'pending').length },
+            { key: 'tickets', label: 'My tickets', icon: TicketsIcon, count: tickets.filter(t => t.status === 'open').length },
+            { key: 'documents', label: 'My documents', icon: DocumentsIcon, count: openDocumentCount },
+            { key: 'blotter', label: 'My cases', icon: BlotterIcon, count: blotterCases.filter(caseIsOpen).length },
           ]},
           { section: 'SUPPORT', items: [
-            { key: 'ai', label: 'AI Assistant', icon: AiIcon, badge: 'AI' },
+            { key: 'ai', label: 'AI Assistant', icon: AiIcon },
           ]},
         ]}
       />}
@@ -785,15 +503,27 @@ function ResidentDashboard() {
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
           sectionTitle={sectionTitle[activeSection]}
-          sectionDesc="Stay connected with your barangay"
+          sectionDesc={sectionSub[activeSection]}
+          phoneTitle={profile?.barangays?.name ? `Brgy. ${profile.barangays.name}` : 'Home'}
+          heading={activeSection === 'home' ? (
+            <>
+              <p className="text-xs font-bold tracking-[0.08em] text-white/75 uppercase">{todayLabel}</p>
+              <h1 className="mt-1.5 text-[26px] font-extrabold leading-tight tracking-[-0.6px] text-white">
+                {greeting()}{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.
+              </h1>
+              <p className="mt-1.5 hidden desk:block text-sm text-white/88 max-w-[62ch]">{homeSummary.text}</p>
+            </>
+          ) : undefined}
+          bandExtend={activeSection === 'home' ? 8 : undefined}
           notificationCenter={notificationCenter}
           searchData={{ incidents, tickets, announcements }}
           onSearchResultClick={(type, item) => {
             if (type === 'incidents') router.push(`/resident/incident/${item.id}`)
             if (type === 'tickets') router.push(`/resident/ticket/${item.id}`)
             if (type === 'announcements') setActiveSection('announcements')
-          }}
-        />}>
+          }}>
+          {bandSlot && <div className="band-slot">{bandSlot}</div>}
+        </DashboardHeader>}>
 
           <div className="mx-auto w-full max-w-[100rem]">
           {/* In the same column as the section below it. */}
@@ -806,455 +536,170 @@ function ResidentDashboard() {
               above and components/SectionContent.jsx). */}
           <SectionContent key={activeSection} entering={entering}>
           {!loading && !profile?.barangay_id && (
-            <div className="white-card p-8 max-w-2xl mx-auto text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{ background: '#fff7ed' }}>
-                <AlertTriangle size={28} className="text-orange-500" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">No Barangay Assigned</h2>
-              <p className="text-gray-500 text-sm mb-4">Your account isn&apos;t linked to a barangay yet. Please contact support or update your profile.</p>
-              <button onClick={() => router.push('/profile')} className="btn-primary px-5 py-2.5 rounded-2xl text-white text-sm font-semibold">Go to Profile</button>
-            </div>
+            <Card lift className="max-w-2xl mx-auto px-[18px] py-5">
+              <h2 className="text-[15px] font-extrabold text-ink">No barangay on your account yet</h2>
+              <Muted className="mt-1">Your account isn’t linked to a barangay. Contact support or check your profile.</Muted>
+              <Button className="mt-3" onClick={() => router.push('/profile')}>Go to your profile</Button>
+            </Card>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'home' && (
-            <div className="space-y-6 max-w-4xl 2xl:max-w-5xl mx-auto">
-              <HomeSummary
-                greeting={greeting()}
-                name={profile?.full_name?.split(' ')[0]}
-                summary={homeSummary.text}
-                pressing={pressing}
-                allClearNote={
-                  unreadAnnouncementCount > 0
-                    ? `${unreadAnnouncementCount} announcement${unreadAnnouncementCount === 1 ? '' : 's'} went up since you last looked`
-                    : 'Everything you have filed has been dealt with'
-                }
-                onOpen={() => pressing?.href && router.push(pressing.href)}
-              />
-
+            <div className="flex flex-col gap-3.5 max-w-4xl 2xl:max-w-5xl mx-auto">
               {/* Account verification. Shown on Home rather than as a blocking
                   interstitial: an unverified resident can still do everything
                   urgent — report an incident, open a ticket — and only document
                   issuance waits on a barangay official. */}
-              {!isVerified(profile) && (() => {
-                const vs = verificationStyle(profile?.verification_status)
-                return (
-                  <div className="white-card p-5"
-                    style={{ borderLeft: `4px solid ${vs.color}` }}>
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
-                        style={{ background: vs.bg }}>
-                        <span aria-hidden="true">{vs.icon}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-gray-800 text-sm">{vs.label}</h3>
-                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                          {documentBlockReason(profile)}
-                        </p>
-                        {profile?.verification_note && (
-                          <p className="text-xs mt-2 px-2.5 py-1.5 rounded-lg leading-relaxed"
-                            style={{ background: vs.bg, color: vs.color }}>
-                            {profile.verification_note}
-                          </p>
-                        )}
-                        <button onClick={() => router.push('/profile')}
-                          className="mt-2.5 text-xs font-bold" style={{ color: 'var(--brand)' }}>
-                          Check your profile details →
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })()}
+              {!isVerified(profile) && (
+                <Notice tone={profile?.verification_status === 'rejected' ? 'danger' : 'warn'} title={`${verificationStyle(profile?.verification_status).label}.`}>
+                  {documentBlockReason(profile)}
+                  {profile?.verification_note && <span className="block mt-1">{profile.verification_note}</span>}
+                  <button onClick={() => router.push('/profile')} className="mt-1.5 block text-xs font-bold text-brand-strong hover:text-brand-deep">Check your profile details</button>
+                </Notice>
+              )}
+
+              <HomeLinks items={[
+                {
+                  key: 'documents', icon: DocumentsIcon, title: 'Request a document',
+                  sub: counts.documents.open ? `${counts.documents.open} in progress${nextDocumentDue ? ` · ${nextDocumentDue}` : ''}` : 'Clearance, residency, indigency',
+                  onClick: () => router.push('/resident/documents/new'),
+                },
+                {
+                  key: 'tickets', icon: TicketsIcon, title: 'Ask the barangay',
+                  sub: counts.tickets.open ? `${counts.tickets.open} open ${counts.tickets.open === 1 ? 'conversation' : 'conversations'}` : 'Chat with an official',
+                  count: counts.tickets.open,
+                  onClick: () => (tickets.length ? navClick('tickets') : router.push('/resident/ticket/new')),
+                },
+                {
+                  key: 'blotter', icon: BlotterIcon, title: 'My cases',
+                  sub: counts.cases.open ? `${counts.cases.open} ongoing · Lupon hearings and status` : 'Lupon hearings and status',
+                  count: counts.cases.open,
+                  onClick: () => navClick('blotter'),
+                },
+                {
+                  key: 'announcements', icon: AnnouncementsIcon, title: 'Announcements',
+                  sub: unreadAnnouncementCount ? `${unreadAnnouncementCount} unread` : 'News and alerts from the hall',
+                  count: unreadAnnouncementCount,
+                  onClick: () => navClick('announcements'),
+                },
+              ]} />
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">
-                  {homeSummary.allClear ? 'Your activity' : 'Needs you'}
-                </p>
-                <TileGrid tiles={homeTiles} render={(tile, className) => (
-                  <ActivityTile {...tile} className={className} />
-                )} />
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3 text-white/85">Quick actions</p>
-                {/* Reporting an emergency used to look exactly like asking the
-                    AI a question. It is the primary now — in BH360 purple, not
-                    red: red on this screen is reserved for the thing that is
-                    actually wrong, or it stops meaning anything. */}
-                <button onClick={() => router.push('/resident/report')}
-                  className="white-card relative w-full text-left p-4 pl-[22px] flex items-center gap-3.5
-                    cursor-pointer focus:outline-none focus-visible:ring-2"
-                  style={{ '--tw-ring-color': '#ffffff' }}>
-                  <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r"
-                    style={{ background: 'var(--brand)' }} aria-hidden="true" />
-                  <span className="w-11 h-11 rounded-2xl grid place-items-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
-                    <AlertTriangle size={20} className="text-white" />
-                  </span>
-                  <span className="flex-1 min-w-0 block">
-                    <span className="block text-[15px] font-extrabold text-gray-800">Report an incident</span>
-                    <span className="block text-xs mt-0.5" style={{ color: '#6b7280' }}>
-                      Fire, flood, injury, crime — the barangay is told at once
-                    </span>
-                  </span>
-                  <ChevronRight size={18} className="flex-shrink-0" style={{ color: 'var(--brand)' }} aria-hidden="true" />
-                </button>
-
-                {/* AI Assistant and Announcements were here too, but they are
-                    sidebar destinations rather than things you do. */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                  {[
-                    { label: 'Request a document', desc: 'Clearance, indigency, ID', icon: FileCheck2, action: () => router.push('/resident/documents/new') },
-                    { label: 'Open a ticket', desc: 'Ask the barangay for help', icon: FileText, action: () => router.push('/resident/ticket/new') },
-                  ].map(({ label, desc, icon: Icon, action }) => (
-                    <button key={label} onClick={action}
-                      className="white-card p-4 flex items-center gap-3 text-left cursor-pointer
-                        focus:outline-none focus-visible:ring-2"
-                      style={{ '--tw-ring-color': 'var(--brand)' }}>
-                      <span className="w-10 h-10 rounded-2xl grid place-items-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }} aria-hidden="true">
-                        <Icon size={18} className="text-white" />
-                      </span>
-                      <span className="block min-w-0">
-                        <span className="block text-[13.5px] font-semibold text-gray-800">{label}</span>
-                        <span className="block text-xs" style={{ color: 'var(--app-text-muted)' }}>{desc}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <SectionLabel>Emergency hotlines</SectionLabel>
+                <HomeHotlines hallPhone={profile?.barangays?.phone} />
               </div>
 
               {announcements.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-white/85">Latest announcements</p>
-                    <button onClick={() => navClick('announcements')}
-                      className="text-xs font-semibold text-white/75 hover:text-white transition-colors">
-                      View all →
-                    </button>
+                  <div className="flex items-center justify-between">
+                    <SectionLabel>Latest announcements</SectionLabel>
+                    <button onClick={() => navClick('announcements')} className="mb-2 text-xs font-bold text-brand-strong hover:text-brand-deep">View all</button>
                   </div>
-                  <div className="space-y-2.5">
-                    {announcements.slice(0, 3).map(n => {
-                      // Two posts sharing a title were indistinguishable before
-                      // — there was no date on the card at all, and no sign of
-                      // which you had already read.
-                      const unread = unreadAnnouncementIds.has(n.id)
-                      return (
-                        <button key={n.id} onClick={() => navClick('announcements')}
-                          className="white-card px-4 py-3 flex items-center gap-3 w-full text-left cursor-pointer
-                            focus:outline-none focus-visible:ring-2"
-                          style={{ '--tw-ring-color': 'var(--brand)' }}>
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                            style={{ background: unread ? 'var(--brand)' : 'transparent' }}
-                            aria-hidden="true" />
-                          <span className="w-8 h-8 rounded-xl grid place-items-center flex-shrink-0"
-                            style={{ background: unread
-                              ? 'linear-gradient(135deg, var(--brand), var(--brand-light))'
-                              : '#e5e7eb' }} aria-hidden="true">
-                            <Bell size={14} className={unread ? 'text-white' : 'text-gray-500'} />
-                          </span>
-                          <span className="flex-1 min-w-0 block">
-                            <span className={`block text-[13.5px] truncate ${unread ? 'font-semibold text-gray-800' : 'font-medium text-gray-600'}`}>
-                              {n.title}
+                  <Card>
+                    <Rows>
+                      {announcements.slice(0, 2).map(n => {
+                        const unread = unreadAnnouncementIds.has(n.id)
+                        return (
+                          <Row key={n.id} as="button" interactive onClick={() => navClick('announcements')} className="flex items-center gap-3">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-ink">{n.title}</span>
+                              <span className="block truncate text-xs text-muted-foreground" title={fullDate(n.created_at)}>
+                                {unread && <span className="mr-1.5 inline-block size-[7px] rounded-full bg-brand-strong align-middle" aria-hidden="true" />}
+                                {timeAgoLong(n.created_at)} · {n.content}
+                              </span>
+                              <span className="sr-only">{unread ? 'Unread' : 'Read'}</span>
                             </span>
-                            <span className="block text-xs text-gray-500 truncate">
-                              {n.content}
-                            </span>
-                            <span className="block text-xs mt-0.5" style={{ color: 'var(--app-text-muted)' }}
-                              title={fullDate(n.created_at)}>
-                              {timeAgoLong(n.created_at)}
-                            </span>
-                          </span>
-                          <ChevronRight size={14} className="text-gray-300 flex-shrink-0" aria-hidden="true" />
-                          <span className="sr-only">{unread ? 'Unread' : 'Read'}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
+                            <ChevronRight size={16} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+                          </Row>
+                        )
+                      })}
+                    </Rows>
+                  </Card>
                 </div>
               )}
             </div>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (
-            <div className="space-y-3 max-w-3xl mx-auto">
-
-              {/* Header card */}
-              {announcements.length > 0 && (
-                <div className="white-card p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }}>
-                      <Bell size={20} className="text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-800">Community Updates</h3>
-                      <p className="text-xs text-gray-500">
-                        {announcements.length} {announcements.length === 1 ? 'announcement' : 'announcements'} from {profile?.barangays?.name}
-                      </p>
-                    </div>
-                    {recentAnnouncementCount > 0 && (
-                      <span className="text-xs px-2 py-1 rounded-full font-bold flex-shrink-0"
-                        style={{ background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite' }}>
-                        {recentAnnouncementCount} NEW
-                      </span>
-                    )}
-                  </div>
-                </div>
+            <div className="flex flex-col gap-3.5 max-w-3xl mx-auto">
+              <AnnouncementRows announcements={announcements} unreadIds={unreadAnnouncementIds}
+                emptyText="No announcements yet. Your barangay posts news, alerts and events here." />
+              {recentAnnouncementCount > 0 && (
+                <Muted className="text-center text-xs">{recentAnnouncementCount} posted in the last day.</Muted>
               )}
-
-              {/* Empty state */}
-              {announcements.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                    style={{ background: 'var(--brand-soft)' }}>
-                    <Bell size={28} style={{ color: 'var(--brand)', opacity: 0.5 }} />
-                  </div>
-                  <p className="text-gray-700 font-semibold text-sm">No announcements yet</p>
-                  <p className="text-gray-500 text-xs mt-1">Check back later — your barangay will post updates here</p>
-                </div>
-              )}
-
-              {/* Announcement cards */}
-              {announcements.map((a) => {
-                const daysAgo = (now - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
-                const isNew = daysAgo <= 1
-                const isThisWeek = daysAgo <= 7
-
-                return (
-                  <div key={a.id} className="white-card p-5 relative overflow-hidden">
-                    {/* New badge accent bar */}
-                    {isNew && (
-                      <div className="absolute top-0 left-0 right-0 h-1"
-                        style={{ background: 'linear-gradient(90deg, var(--brand), var(--brand-light), var(--brand))', animation: 'shimmer 2s linear infinite' }} />
-                    )}
-
-                    <div className="flex items-start gap-3">
-                      <div className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}>
-                        <Bell size={18} className="text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <h3 className="font-bold text-gray-800 text-sm break-words flex-1">{a.title}</h3>
-                          {isNew && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
-                              style={{ background: '#fef2f2', color: '#dc2626', animation: 'pulse 2s ease-in-out infinite' }}>
-                              NEW
-                            </span>
-                          )}
-                          {!isNew && isThisWeek && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full font-bold flex-shrink-0"
-                              style={{ background: '#f0fdf4', color: '#16a34a' }}>
-                              THIS WEEK
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap break-words">{a.content}</p>
-
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50 text-xs text-gray-500">
-                          <span title={fullDate(a.created_at)}>📅 {timeAgoLong(a.created_at)}</span>
-                          <span>·</span>
-                          <span className="font-semibold" style={{ color: 'var(--brand)' }}>From Barangay Office</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
             </div>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'incidents' && (
-            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{incidents.length} total</p>
-                <button onClick={() => router.push('/resident/report')}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white"
-                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
-                  <Plus size={14} /> Report Incident
-                </button>
-              </div>
-              {incidents.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <AlertTriangle size={36} className="mx-auto mb-3 text-orange-300" />
-                  <p className="text-gray-500 text-sm">No incidents reported yet.</p>
-                  <button onClick={() => router.push('/resident/report')} className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>Report your first →</button>
-                </div>
-              )}
-              <RecordGroup label="In progress" count={liveIncidents.length}>
-                {liveIncidents.map(inc => (
-                  <IncidentCard key={inc.id} inc={inc} live
-                    onOpen={() => router.push(`/resident/incident/${inc.id}`)}
-                    onRate={() => setRatingModal(inc)} />
-                ))}
-              </RecordGroup>
-              <RecordGroup label="Resolved" count={doneIncidents.length}>
-                {doneIncidents.map(inc => (
-                  <IncidentCard key={inc.id} inc={inc}
-                    onOpen={() => router.push(`/resident/incident/${inc.id}`)}
-                    onRate={() => setRatingModal(inc)} />
-                ))}
-              </RecordGroup>
+            <div className="flex flex-col gap-3.5 max-w-3xl 2xl:max-w-6xl mx-auto">
+              <ReportRows
+                incidents={reportFilter === 'active' ? liveIncidents : doneIncidents}
+                onOpen={inc => router.push(`/resident/incident/${inc.id}`)}
+                onRate={inc => setRatingModal(inc)}
+                emptyText={reportFilter === 'active'
+                  ? (incidents.length ? 'Nothing in progress. Your resolved reports are under Resolved.' : 'You haven’t sent a report yet. Use the red Report button whenever something needs the barangay.')
+                  : 'No resolved reports yet.'}
+                emptyAction={reportFilter === 'active' ? <Button size="sm" onClick={() => router.push('/resident/report')}>Report an incident</Button> : null}
+              />
             </div>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tickets' && (
-            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">{tickets.length} total</p>
-                <button onClick={() => router.push('/resident/ticket/new')}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white"
-                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
-                  <Plus size={14} /> New Ticket
-                </button>
-              </div>
-              {tickets.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <FileText size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
-                  <p className="text-gray-500 text-sm">No tickets created yet.</p>
-                  <button onClick={() => router.push('/resident/ticket/new')} className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>Create your first →</button>
-                </div>
-              )}
-              <RecordGroup label="Open" count={liveTickets.length}>
-                {liveTickets.map(t => (
-                  <TicketCard key={t.id} t={t} live
-                    onOpen={() => router.push(`/resident/ticket/${t.id}`)} />
-                ))}
-              </RecordGroup>
-              <RecordGroup label="Closed" count={doneTickets.length}>
-                {doneTickets.map(t => (
-                  <TicketCard key={t.id} t={t}
-                    onOpen={() => router.push(`/resident/ticket/${t.id}`)} />
-                ))}
-              </RecordGroup>
+            <div className="flex flex-col gap-3.5 max-w-3xl 2xl:max-w-6xl mx-auto">
+              <TicketRows
+                tickets={ticketFilter === 'open' ? liveTickets : doneTickets}
+                onOpen={t => router.push(`/resident/ticket/${t.id}`)}
+                emptyText={ticketFilter === 'open'
+                  ? 'No open conversations. Ask the barangay a question and an official answers here.'
+                  : 'No closed conversations yet.'}
+              />
             </div>
           )}
-
 
           {/* MY DOCUMENTS — barangay certifications, and the clock RA 11032
               puts the barangay on for each one. */}
           {!loading && profile?.barangay_id && activeSection === 'documents' && (
-            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
-
-              <div className="flex items-center justify-between mb-2 gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-white opacity-60">
-                  {documentRequests.length} request{documentRequests.length === 1 ? '' : 's'}
-                </p>
-                <button onClick={() => router.push('/resident/documents/new')}
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl text-sm font-semibold bg-white flex-shrink-0"
-                  style={{ color: 'var(--brand)', boxShadow: '0 4px 16px rgba(91,84,232,0.2)' }}>
-                  <Plus size={14} /> Request Document
-                </button>
-              </div>
-
-              {/* The promise, stated up front. */}
-              <div className="white-card p-4">
-                <div className="flex items-start gap-2">
-                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    <strong style={{ color: 'var(--brand)' }}>RA 11032, Secs. 9(b)(1) and 10</strong> — the
-                    barangay has <strong>3 working days</strong> to act on a simple request (7 for a
-                    complex one, 20 for a highly technical one), extendable once. Past that with no
-                    decision, your request is <strong>deemed approved</strong> and your
-                    acknowledgement carries the same force as the document.
-                  </p>
-                </div>
-              </div>
-
+            <div className="flex flex-col gap-3.5 max-w-3xl 2xl:max-w-6xl mx-auto">
               {!canRequestDocuments(profile) && (
-                <div className="white-card p-4">
-                  <div className="flex items-start gap-2.5">
-                    <ShieldCheck size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
-                    <p className="text-xs text-gray-600 leading-relaxed">{documentBlockReason(profile)}</p>
-                  </div>
-                </div>
+                <Notice tone="warn">{documentBlockReason(profile)}</Notice>
               )}
-
-              {documentRequests.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <FileCheck2 size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
-                  <p className="text-gray-500 text-sm">You haven’t requested any documents yet.</p>
-                  <button onClick={() => router.push('/resident/documents/new')}
-                    className="mt-4 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
-                    See what the barangay issues →
-                  </button>
-                </div>
-              )}
-
-              <RecordGroup label="In progress" count={liveDocuments.length}>
-                {liveDocuments.map(req => (
-                  <DocumentCard key={req.id} req={req} live />
-                ))}
-              </RecordGroup>
-              <RecordGroup label="Decided" count={doneDocuments.length}>
-                {doneDocuments.map(req => (
-                  <DocumentCard key={req.id} req={req} />
-                ))}
-              </RecordGroup>
+              <DocumentRows requests={[...liveDocuments, ...doneDocuments]}
+                emptyText="You haven’t requested a document yet. Clearances, residency and indigency certificates are issued here." />
+              {/* The promise, stated plainly. */}
+              <Muted className="text-xs">
+                Processing times follow the barangay’s Citizen’s Charter (RA 11032, Secs. 9(b)(1) and 10): 3 working days for a simple request, 7 for a complex one, 20 for a highly technical one, extendable once. If no decision comes in time, your request is deemed approved. You’ll get a notification when a document is ready.
+              </Muted>
             </div>
           )}
-
 
           {/* MY BLOTTER CASES — read-only. The blotter is the barangay's
               record, kept by the secretary; a complainant does not edit it,
               but they should be able to see where their case has got to and
               what the law says happens next. */}
           {!loading && profile?.barangay_id && activeSection === 'blotter' && (
-            <div className="space-y-3 max-w-3xl 2xl:max-w-6xl mx-auto">
-
-              <div className="white-card p-4">
-                <div className="flex items-start gap-2">
-                  <Scale size={13} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    <strong style={{ color: 'var(--brand)' }}>RA 7160, Secs. 408–418</strong> — the barangay
-                    summons the other party by the <strong>next working day</strong> and has{' '}
-                    <strong>15 days</strong> from your first meeting to mediate. If that fails, a
-                    Pangkat gets 15 more. Only when conciliation fails does the barangay issue a{' '}
-                    <strong>Certificate to File Action</strong>, which is what lets you go to court
-                    (Sec. 412). To open a case, go to the barangay hall.
-                  </p>
-                </div>
-              </div>
-
+            <div className="flex flex-col gap-3.5 max-w-3xl 2xl:max-w-6xl mx-auto">
               {blotterCases.length === 0 && (
-                <div className="white-card p-10 text-center">
-                  <Gavel size={36} className="mx-auto mb-3" style={{ color: 'var(--brand)', opacity: 0.3 }} />
-                  <p className="text-gray-500 text-sm">You have no blotter cases on record.</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Cases are recorded at the barangay hall by the secretary.
-                  </p>
-                </div>
+                <Card lift className="px-[18px] py-5">
+                  <Muted>You have no cases on record. Cases are filed at the barangay hall by the secretary.</Muted>
+                </Card>
               )}
-
-              <RecordGroup label="Ongoing" count={liveCases.length}>
-                {liveCases.map(kase => <BlotterCard key={kase.id} kase={kase} live />)}
-              </RecordGroup>
-              <RecordGroup label="Concluded" count={doneCases.length}>
-                {doneCases.map(kase => (
-                  <div key={kase.id} className="space-y-2">
-                    <BlotterCard kase={kase} />
-                    <CaseOutcome kase={kase} />
-                  </div>
-                ))}
-              </RecordGroup>
+              {[...liveCases, ...doneCases].map(kase => <CaseCard key={kase.id} kase={kase} />)}
+              <Card className="px-[18px] py-4">
+                <SectionLabel as="h2">What happens next</SectionLabel>
+                <p className="text-sm leading-[1.55] text-body">
+                  The barangay summons the other party by the next working day. The Punong Barangay then has 15 days from your first meeting to help you settle (RA 7160, Sec. 410). If it isn’t settled, a Pangkat gets 15 more. Only when conciliation fails does the barangay issue a Certificate to File Action, which lets you go to court (Sec. 412). To open a case, go to the barangay hall.
+                </p>
+              </Card>
             </div>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'ai' && (
-            <div className="max-w-3xl mx-auto space-y-4">
-              <div className="white-card p-8 text-center">
-                <div className="w-24 h-24 rounded-3xl mx-auto mb-4 flex items-center justify-center">
-                  <Image src="/logo.png" alt="AI Assistant" width={64} height={64} className="object-contain" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">AI Assistant</h2>
-                <p className="text-gray-500 text-sm mb-6">Ask any barangay question — available 24/7</p>
-                <button onClick={() => router.push('/resident/ai')}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)' }}>
-                  Start Chatting <ChevronRight size={16} />
-                </button>
-              </div>
+            <div className="max-w-3xl mx-auto">
+              <Card lift className="px-[18px] py-5">
+                <AiIcon size={24} className="text-brand-strong" />
+                <h2 className="mt-3 text-[17px] font-extrabold text-ink">Ask the assistant</h2>
+                <Muted className="mt-1">Quick answers about barangay services, documents and your reports, any time. For an emergency, call 911.</Muted>
+                <Button className="mt-4" onClick={() => router.push('/resident/ai')}>Start a conversation</Button>
+              </Card>
             </div>
           )}
 

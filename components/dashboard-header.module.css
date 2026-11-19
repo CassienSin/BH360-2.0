@@ -140,6 +140,11 @@
 .menuItem:hover, .menuItem:focus-visible { background: var(--brand-soft); color: var(--brand-strong); outline: none; }
 .menuItem:hover svg, .menuItem:focus-visible svg { color: var(--brand-strong); }
 
+/* A custom heading (resident Home): on both layouts, under the bar. */
+.customHeading { margin-top: 18px; }
+/* Band content under the heading (segmented controls, the first card). */
+.inner > :global(.band-slot) { margin-top: 14px; }
+
 /* Eyebrow, title, subtitle and actions: desktop only. */
 .heading { display: none; }
 .eyebrow { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
@@ -158,6 +163,7 @@
   .context { display: block; }
   .searchPill { display: flex; }
   .heading { display: flex; align-items: flex-end; gap: 16px; margin-top: 22px; }
+  .customHeading { margin-top: 22px; }
 }
 @media (min-width: 768px) and (max-width: 1023px) and (min-height: 500px) {
   .searchPill { width: 220px; }

@@ -65,9 +65,11 @@ function ResultRow({ idx, highlighted, onHighlight, icon, title, subtitle, onCli
  *          the section's actions.
  * Phone:   a menu button (opens the drawer), the title, search and the bell.
  *
- * `children` go under the title on both layouts (a greeting, a segmented
- * control on the band…). `columnClass` keeps the header in the same column
- * as a centred section (resident, tanod).
+ * `children` go under the title on both layouts (a segmented control, a
+ * card that sits on the band…). `heading` replaces the title block on both
+ * layouts (the resident Home greeting); the phone bar then shows
+ * `phoneTitle` as plain text. `columnClass` keeps the header in the same
+ * column as a centred section (resident, tanod).
  */
 export default function DashboardHeader({
   profile,
@@ -77,6 +79,8 @@ export default function DashboardHeader({
   sectionDesc,
   eyebrow,
   actions,
+  heading,
+  phoneTitle,
   children,
   columnClass = '',
   bandExtend,
@@ -256,7 +260,9 @@ export default function DashboardHeader({
               aria-expanded={false} aria-controls="dashboard-navigation" className={`${styles.onband} ${styles.phoneOnly}`}>
               <Menu size={18} strokeWidth={1.9} aria-hidden="true" />
             </button>
-            <h1 className={styles.phoneTitle}>{sectionTitle}</h1>
+            {heading
+              ? <p className={styles.phoneTitle}>{phoneTitle ?? sectionTitle}</p>
+              : <h1 className={styles.phoneTitle}>{sectionTitle}</h1>}
 
             <p className={styles.context}>
               {place}
@@ -319,6 +325,7 @@ export default function DashboardHeader({
             </div>
           </div>
 
+          {heading ? <div className={styles.customHeading}>{heading}</div> : (
           <div className={styles.heading}>
             <div className="min-w-0 flex-1">
               {eyebrow && <p className={styles.eyebrow}>{eyebrow}</p>}
@@ -327,6 +334,7 @@ export default function DashboardHeader({
             </div>
             {actions && <div className={styles.actions}>{actions}</div>}
           </div>
+          )}
 
           {children}
         </div>
