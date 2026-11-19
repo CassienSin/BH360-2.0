@@ -10,7 +10,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, BarChart2, Plus, ChevronRight, Map, Calendar } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -28,8 +28,10 @@ import { WaitingCard, RecentIncidentsCard } from '@/components/official/Official
 import TicketsSection from '@/components/official/TicketsSection'
 import UsersSection from '@/components/official/UsersSection'
 import AnnouncementsSection from '@/components/official/AnnouncementsSection'
+import { SectionLauncher } from '@/components/official/OfficialSections'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { isSettled } from '@/lib/recordState'
 import { greeting, officialSummary, unassignedIncidents, plural } from '@/lib/homeSummary'
@@ -986,13 +988,10 @@ function OfficialDashboard() {
               above and components/SectionContent.jsx). */}
           <SectionContent key={activeSection} entering={entering}>
           {!loading && !profile?.barangay_id && (
-            <div className="white-card p-8 max-w-2xl mx-auto text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-3xl flex items-center justify-center" style={{background: '#fff7ed'}}>
-                <AlertTriangle size={28} className="text-orange-500" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">No Barangay Assigned</h2>
-              <p className="text-gray-500 text-sm">Your official account isn&apos;t linked to a barangay. Please contact your system administrator.</p>
-            </div>
+            <Card className="mx-auto max-w-2xl px-[18px] py-5">
+              <h2 className="text-[15px] font-extrabold text-ink">No barangay on this account</h2>
+              <p className="mt-1 text-[13px] text-muted-foreground">Your official account isn&apos;t linked to a barangay yet. Ask your system administrator to link it.</p>
+            </Card>
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'dashboard' && (
@@ -1045,21 +1044,8 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'analytics' && (
-            <div className="space-y-4">
-              <div className="white-card p-8 text-center">
-                <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
-                  <BarChart2 size={28} className="text-white" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">AI-Powered Analytics</h2>
-                <p className="text-gray-500 text-sm mb-6">Get deep insights from your barangay data</p>
-                <button onClick={() => router.push('/official/analytics')}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
-                  View Analytics <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
+            <SectionLauncher icon={AnalyticsIcon} title="Analytics" href="/official/analytics" cta="Open analytics"
+              body="Reports by category and place, response times, the tanod leaderboard and an AI summary." onOpen={href => router.push(href)} />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'users' && (
@@ -1107,39 +1093,13 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'map' && (
-            <div className="space-y-4">
-              <div className="white-card p-8 text-center">
-                <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
-                  <Map size={28} className="text-white" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Incident Map View</h2>
-                <p className="text-gray-500 text-sm mb-6">Visualize all incidents geographically on an interactive map</p>
-                <button onClick={() => router.push('/official/map')}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
-                  Open Map View <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
+            <SectionLauncher icon={MapIcon} title="Incident map" href="/official/map" cta="Open the map"
+              body="Every open report and on-duty tanod on the map, live, with dispatch from the map." onOpen={href => router.push(href)} />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'calendar' && (
-            <div className="space-y-4">
-              <div className="white-card p-8 text-center">
-                <div className="w-16 h-16 rounded-3xl mx-auto mb-4 flex items-center justify-center"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 8px 24px rgba(91,84,232,0.4)'}}>
-                  <Calendar size={28} className="text-white" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Calendar View</h2>
-                <p className="text-gray-500 text-sm mb-6">View incidents and announcements plotted by date</p>
-                <button onClick={() => router.push('/official/calendar')}
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-white text-sm font-semibold"
-                  style={{background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 20px rgba(91,84,232,0.35)'}}>
-                  Open Calendar <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
+            <SectionLauncher icon={CalendarIcon} title="Calendar" href="/official/calendar" cta="Open the calendar"
+              body="Hearings, appointments, reports and announcements by day, with reminders." onOpen={href => router.push(href)} />
           )}
           </SectionContent>
           </div>

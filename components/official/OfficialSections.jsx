@@ -108,3 +108,20 @@ export function RecentIncidentsCard({ incidents, onOpen, onViewAll }) {
     </Card>
   )
 }
+
+/** A dashboard section whose tool is its own page (map, calendar,
+ *  analytics): what it is, and one way in. */
+export function SectionLauncher({ icon: Icon, title, body, href, cta, onOpen }) {
+  return (
+    <Card lift className="flex flex-col gap-4 px-[18px] py-5 sm:flex-row sm:items-center">
+      <span className="flex size-12 shrink-0 items-center justify-center rounded-[12px] bg-brand-soft text-brand-strong" aria-hidden="true">
+        <Icon size={24} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h2 className="text-[15px] font-extrabold text-ink">{title}</h2>
+        <Muted className="mt-0.5">{body}</Muted>
+      </div>
+      <Button onClick={() => onOpen(href)} className="shrink-0">{cta}<ChevronRight aria-hidden="true" /></Button>
+    </Card>
+  )
+}
