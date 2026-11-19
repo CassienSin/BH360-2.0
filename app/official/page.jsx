@@ -1,5 +1,4 @@
 'use client'
-import { PageState } from '@/components/AppUI'
 import { DashboardShellSkeleton } from '@/components/Skeletons'
 import ClientBoundary from '@/components/ClientBoundary'
 import DashboardBackdrop from '@/components/DashboardBackdrop'
@@ -11,7 +10,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { createClient } from '@/lib/supabase'
-import { AlertTriangle, FileText, Bell, BarChart2, Plus, ChevronRight, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar } from 'lucide-react'
+import { AlertTriangle, Bell, BarChart2, Plus, ChevronRight, Users, KeyRound, Copy, Search, X, Map, Download, FileSpreadsheet, Calendar } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DashboardHeader from '@/components/DashboardHeader'
 import DashboardSidebar from '@/components/DashboardSidebar'
@@ -25,12 +24,12 @@ import { exportToCSV, exportToPDF } from '@/lib/export'
 import NotificationBanner from '@/components/NotificationBanner'
 import AppointmentReminderWatcher from '@/components/AppointmentReminderWatcher'
 import { useNotifications } from '@/lib/useNotifications'
-import RecordCard, { RecordGroup, Chip } from '@/components/RecordCard'
 import { WaitingCard, RecentIncidentsCard } from '@/components/official/OfficialSections'
+import TicketsSection from '@/components/official/TicketsSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { StatStrip } from '@/components/ui/stat-strip'
 import { Button } from '@/components/ui/button'
-import { toneFor, progressOf, partitionByLiveness, isSettled } from '@/lib/recordState'
+import { isSettled } from '@/lib/recordState'
 import { greeting, officialSummary, unassignedIncidents, plural } from '@/lib/homeSummary'
 import { notifyCriticalIncident, notifyNewIncident } from '@/lib/notifications'
 import IncidentsSection from '@/components/IncidentsSection'
@@ -98,48 +97,6 @@ const roleConfig = {
   resident: { color: '#5B54E8', bg: '#f0effe', label: 'Resident' },
   official: { color: '#f97316', bg: '#fff7ed', label: 'Official' },
   tanod: { color: '#22c55e', bg: '#f0fdf4', label: 'Tanod' },
-}
-
-const TICKET_STATUS = {
-  open:        { label: 'Open',         bg: '#fef3c7', color: '#b45309' },
-  in_progress: { label: 'Being handled', bg: '#dbeafe', color: '#1d4ed8' },
-  closed:      { label: 'Closed',       bg: '#d1fae5', color: '#047857' },
-}
-const OFFICIAL_TICKET_STEPS = ['Received', 'Being handled', 'Closed']
-
-/**
- * Six tickets all titled "Request for Barangay Clearance" were
- * indistinguishable in the old list — same icon, same title, and the only
- * thing separating them was "1mo ago" in grey on grey. The sender and the
- * category now carry that weight, and the ones already closed collapse to
- * rows so the queue is what fills the screen.
- */
-function OfficialTicketCard({ t, live, onOpen }) {
-  const st = TICKET_STATUS[t.status] || TICKET_STATUS.open
-  const from = t.profiles?.full_name || 'a resident'
-
-  return (
-    <RecordCard
-      live={live}
-      tone={toneFor(t.status)}
-      icon={<FileText size={live ? 16 : 14} className="text-white" />}
-      iconBg={isSettled(t.status) ? '#9ca3af' : 'linear-gradient(135deg, #5B54E8, #7C75F0)'}
-      title={t.title}
-      description={live ? t.description : undefined}
-      meta={
-        <span className="truncate">
-          {from}{t.category ? ` · ${t.category}` : ''}
-        </span>
-      }
-      status={live ? <Chip bg={st.bg} color={st.color} dot>{st.label}</Chip> : null}
-      badges={!live ? <Chip bg={st.bg} color={st.color}>{st.label}</Chip> : null}
-      when={live ? timeAgoLong(t.created_at) : timeAgo(t.created_at)}
-      steps={live ? OFFICIAL_TICKET_STEPS : undefined}
-      at={progressOf(t.status)}
-      onClick={onOpen}
-      ariaLabel={`${t.title} from ${from} — ${st.label}`}
-    />
-  )
 }
 
 // Sections, and the placeholder each shows while loading: lib/dashboardSkeletons.js
@@ -666,12 +623,6 @@ function OfficialDashboard() {
     }
   }
 
-    // An official works the queue; the closed ones are a record. Splitting
-  // them is what stops a month of finished tickets burying today's.
-  const { live: liveTickets, done: doneTickets } = useMemo(
-    () => partitionByLiveness(filteredTickets),
-    [filteredTickets]
-  )
 
   // Older incidents, fetched by CURSOR rather than by offset: the realtime
   // subscription prepends new rows as they arrive, which would shift every
@@ -1102,105 +1053,11 @@ function OfficialDashboard() {
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'tickets' && (
-            <div className="space-y-3">
-
-              {tickets.length > 0 && (
-                <div className="white-card p-4 mb-2">
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                      <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" aria-hidden="true" />
-                      <input
-                        value={ticketSearch}
-                        onChange={e => setTicketSearch(e.target.value)}
-                        type="search"
-                        aria-label="Search tickets"
-                        placeholder="Search tickets by title or sender..."
-                        className="input-field w-full rounded-2xl pl-10 pr-10 py-2.5 text-sm text-gray-800"
-                      />
-                      {ticketSearch && (
-                        <button onClick={() => setTicketSearch('')}
-                          aria-label="Clear search"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                    <div className="flex gap-2 flex-wrap" role="group" aria-label="Filter tickets by status">
-                      {[
-                        { value: 'all', label: 'All', count: tickets.length, color: '#5B54E8' },
-                        { value: 'open', label: 'Open', count: tickets.filter(t => t.status === 'open').length, color: '#f97316' },
-                        { value: 'in_progress', label: 'In Progress', count: tickets.filter(t => t.status === 'in_progress').length, color: '#3b82f6' },
-                        { value: 'closed', label: 'Closed', count: tickets.filter(t => t.status === 'closed').length, color: '#22c55e' },
-                      ].map(f => (
-                        <button key={f.value} onClick={() => setTicketFilter(f.value)}
-                          aria-pressed={ticketFilter === f.value}
-                          className="px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
-                          style={{
-                            background: ticketFilter === f.value ? f.color : 'var(--app-surface)',
-                            color: ticketFilter === f.value ? 'white' : '#6b7280',
-                            border: ticketFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
-                            boxShadow: ticketFilter === f.value ? `0 4px 12px ${f.color}40` : 'none',
-                          }}>
-                          {f.label}
-                          <span className="px-1.5 py-0.5 rounded-md text-xs"
-                            style={{
-                              background: ticketFilter === f.value ? 'rgba(255,255,255,0.25)' : 'rgba(91,84,232,0.1)',
-                              color: ticketFilter === f.value ? 'white' : 'var(--brand)',
-                            }}>
-                            {f.count}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {(ticketSearch || ticketFilter !== 'all') && (
-                    <p className="text-xs text-gray-500 mt-3">
-                      Showing {filteredTickets.length} of {tickets.length} tickets
-                      <button onClick={() => { setTicketSearch(''); setTicketFilter('all') }}
-                        className="ml-2 font-semibold" style={{color: 'var(--brand)'}}>
-                        Clear filters
-                      </button>
-                    </p>
-                  )}
-
-                  {/* Export buttons */}
-                  <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-xs text-gray-500 mr-auto">Export {filteredTickets.length} {filteredTickets.length === 1 ? 'ticket' : 'tickets'}</p>
-                    <button onClick={() => handleExportTickets('csv')} disabled={filteredTickets.length === 0}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
-                      style={{background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7'}}>
-                      <FileSpreadsheet size={12} /> CSV
-                    </button>
-                    <button onClick={() => handleExportTickets('pdf')} disabled={filteredTickets.length === 0}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 disabled:opacity-40 disabled:hover:scale-100"
-                      style={{background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)'}}>
-                      <Download size={12} /> PDF
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {tickets.length === 0 && (
-                <PageState icon={FileText} title="No support tickets yet" description="Resident inquiries, requests, complaints, and feedback will appear here." />
-              )}
-
-              {tickets.length > 0 && filteredTickets.length === 0 && (
-                <PageState icon={Search} title="No matching tickets" description="Try another search term or clear your filters to see all tickets." actionLabel="Clear filters" onAction={() => { setTicketSearch(''); setTicketFilter('all') }} />
-              )}
-
-              <RecordGroup label="Needs a reply" count={liveTickets.length}>
-                {liveTickets.map(t => (
-                  <OfficialTicketCard key={t.id} t={t} live
-                    onOpen={() => router.push(`/official/ticket/${t.id}`)} />
-                ))}
-              </RecordGroup>
-              <RecordGroup label="Closed" count={doneTickets.length}>
-                {doneTickets.map(t => (
-                  <OfficialTicketCard key={t.id} t={t}
-                    onOpen={() => router.push(`/official/ticket/${t.id}`)} />
-                ))}
-              </RecordGroup>
-            </div>
+            <TicketsSection tickets={tickets} filtered={filteredTickets} now={now}
+              search={ticketSearch} onSearch={setTicketSearch}
+              filter={ticketFilter} onFilter={setTicketFilter}
+              onOpen={t => router.push(`/official/ticket/${t.id}`)}
+              onExport={handleExportTickets} />
           )}
 
           {!loading && profile?.barangay_id && activeSection === 'announcements' && (

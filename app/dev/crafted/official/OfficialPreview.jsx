@@ -14,6 +14,7 @@ import IncidentsSection from '@/components/IncidentsSection'
 import DocumentQueue from '@/components/DocumentQueue'
 import VerificationQueue from '@/components/VerificationQueue'
 import BlotterQueue from '@/components/BlotterQueue'
+import TicketsSection from '@/components/official/TicketsSection'
 import { waitingOnOfficial } from '@/lib/officialQueue'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { PROFILE, TANODS, INCIDENTS, TICKETS, USERS, DOCUMENTS, CASES, ANNOUNCEMENTS } from './fixtures'
@@ -66,6 +67,9 @@ export default function OfficialPreview({ initial }) {
   }), [])
 
   const home = section === 'dashboard'
+  const [ticketSearch, setTicketSearch] = useState('')
+  const [ticketFilter, setTicketFilter] = useState('all')
+  const tickets = TICKETS.filter(t => (ticketFilter === 'all' || t.status === ticketFilter) && t.title.toLowerCase().includes(ticketSearch.toLowerCase()))
   return (
     <DashboardFrame sidebarOpen={sidebarOpen}
       sidebar={<DashboardSidebar profile={PROFILE} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen}
@@ -115,10 +119,14 @@ export default function OfficialPreview({ initial }) {
           <IncidentsSection incidents={INCIDENTS} tanods={TANODS} hasMore={false} loadingMore={false}
             onLoadMore={noop} onDispatch={noop} onResolve={noop} onExport={noop} onPriorityChange={noop} />
         )}
+        {section === 'tickets' && (
+          <TicketsSection tickets={TICKETS} filtered={tickets} now={Date.now()} search={ticketSearch} onSearch={setTicketSearch}
+            filter={ticketFilter} onFilter={setTicketFilter} onOpen={noop} onExport={noop} />
+        )}
         {section === 'documents' && <DocumentQueue profile={PROFILE} requests={DOCUMENTS} onUpdated={noop} />}
         {section === 'verifications' && <VerificationQueue profile={PROFILE} users={USERS} onUpdated={noop} />}
         {section === 'blotter' && <BlotterQueue profile={PROFILE} cases={CASES} incidents={INCIDENTS} residents={USERS} onChanged={noop} />}
-        {!['dashboard', 'incidents', 'documents', 'verifications', 'blotter'].includes(section) && (
+        {!['dashboard', 'incidents', 'tickets', 'documents', 'verifications', 'blotter'].includes(section) && (
           <p className="text-sm text-muted-foreground">Not in the preview yet: {section}. ({TICKETS.length} tickets, {ANNOUNCEMENTS.length} announcements in the fixtures.)</p>
         )}
       </div>

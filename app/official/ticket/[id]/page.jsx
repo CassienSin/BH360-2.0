@@ -1,27 +1,34 @@
 'use client'
 import { TicketDetailSkeleton } from '@/components/Skeletons'
-import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Send, X, User, Clock, CheckCircle, AlertCircle, Sparkles, FileQuestion, FileText, AlertCircle as AlertIcon, Star, MapPin, Phone, Loader2, RotateCcw } from 'lucide-react'
+import { ChevronLeft, Send, CheckCircle, MoreHorizontal, Phone, Loader2, RotateCcw } from 'lucide-react'
+import Band from '@/components/crafted/Band'
+import PageShell from '@/components/crafted/PageShell'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Avatar } from '@/components/ui/avatar'
+import { Notice } from '@/components/ui/notice'
+import { Muted, SectionLabel } from '@/components/ui/text'
 import toast from 'react-hot-toast'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
 const CATEGORY_CONFIG = {
-  inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
-  request: { label: 'Request', icon: FileText, color: '#5B54E8', bg: '#f0effe' },
-  complaint: { label: 'Complaint', icon: AlertIcon, color: '#f97316', bg: '#fff7ed' },
-  feedback: { label: 'Feedback', icon: Star, color: '#22c55e', bg: '#f0fdf4' },
+  inquiry: { label: 'Inquiry' },
+  request: { label: 'Request' },
+  complaint: { label: 'Complaint' },
+  feedback: { label: 'Feedback' },
 }
 
 const STATUS_CONFIG = {
-  open: { color: '#f59e0b', bg: '#fef3c7', label: 'Open', icon: AlertCircle, desc: 'Awaiting response' },
-  in_progress: { color: '#3b82f6', bg: '#dbeafe', label: 'In Progress', icon: Clock, desc: 'Being handled' },
-  closed: { color: '#22c55e', bg: '#dcfce7', label: 'Closed', icon: CheckCircle, desc: 'Resolved' },
+  open: { label: 'Open' },
+  in_progress: { label: 'In progress' },
+  closed: { label: 'Closed' },
 }
 
 const MESSAGE_SELECT = '*, profiles(full_name, avatar_url, role)'
@@ -32,7 +39,7 @@ const QUICK_REPLIES = [
   'Thank you for reaching out. We are looking into this now.',
   'Please visit the barangay hall during office hours (8AM–5PM) to process this.',
   'Please bring a valid ID and proof of residency.',
-  'This has been resolved. Let us know if you need anything else!',
+  'This has been resolved. Let us know if you need anything else.',
 ]
 
 /** "Today", "Yesterday", or a formatted date — for day separators between messages. */
@@ -221,9 +228,10 @@ export default function OfficialTicketChat() {
   }
 
   const sc = STATUS_CONFIG[ticket?.status] || STATUS_CONFIG.open
-  const StatusIcon = sc.icon
   const cat = CATEGORY_CONFIG[ticket?.category] || null
-  const CategoryIcon = cat?.icon
+  const residentName = ticket?.profiles?.full_name || 'Unknown resident'
+  const firstName = residentName.split(' ')[0]
+  const opened = ticket ? new Date(ticket.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
 
   // ---- Loading state ----
   if (pageLoading) return <TicketDetailSkeleton />
@@ -231,315 +239,163 @@ export default function OfficialTicketChat() {
   // ---- Not found state ----
   if (notFound) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-4">
-        <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
-          <AlertCircle size={28} className="text-white opacity-90" />
-          <p className="text-white text-sm font-bold">Ticket not found</p>
-          <p className="text-purple-200 text-xs">It may have been deleted, or you may not have access to it.</p>
-          <button
-            onClick={() => goBack(router, '/official?section=tickets')}
-            className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: 'white', color: 'var(--brand)' }}
-          >
-            Go back
-          </button>
-        </div>
-      </div>
+      <PageShell title="Ticket" onBack={() => goBack(router, '/official?section=tickets')}>
+        <Card className="px-[18px] py-5">
+          <h2 className="text-[15px] font-extrabold text-ink">Ticket not found</h2>
+          <Muted className="mt-1">It may have been deleted, or you may not have access to it.</Muted>
+          <Button variant="secondary" className="mt-4" onClick={() => goBack(router, '/official?section=tickets')}>Back to tickets</Button>
+        </Card>
+      </PageShell>
     )
   }
 
   return (
-    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
-
-      {/* Background effects */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute inset-0 opacity-5"
-          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px)', backgroundSize: '60px 60px' }}
-        />
-      </div>
-
-      {/* Header */}
-      <header
-        className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
-      >
-        <button
-          onClick={() => goBack(router, '/official?section=tickets')}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft size={18} />
-        </button>
-
-        <div
-          className="w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-        >
-          {ticket?.profiles?.avatar_url ? (
-            <img loading="lazy" decoding="async" src={ticket.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
+    <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page">
+      {/* Header on the band: the right pane's head (O04). */}
+      <header className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3 text-white sm:px-7">
+        <Band extend={0} fade={56} dots={10} seed={4} />
+        <div className="relative z-[1] mx-auto flex max-w-3xl items-center gap-2.5">
+          <IconButton kind="onband" label="Back to tickets" onClick={() => goBack(router, '/official?section=tickets')}>
+            <ChevronLeft size={18} strokeWidth={1.9} />
+          </IconButton>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[17px] font-extrabold sm:text-xl">{ticket?.title}</h1>
+            <p className="truncate text-xs text-white/80 sm:text-[13px]">
+              {[residentName, cat?.label, sc.label, `opened ${opened}`].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+          <IconButton kind="onband" label="Ticket details" aria-expanded={showDetails} onClick={() => setShowDetails(v => !v)}>
+            <MoreHorizontal size={18} strokeWidth={1.9} />
+          </IconButton>
+          {ticket?.status !== 'closed' ? (
+            <Button variant="white" onClick={() => setCloseConfirm(true)} aria-label="Close ticket">
+              <CheckCircle aria-hidden="true" /><span className="hidden sm:inline">Close ticket</span>
+            </Button>
           ) : (
-            ticket?.profiles?.full_name?.[0]?.toUpperCase() || '?'
+            <Button variant="onband" onClick={reopenTicket}><RotateCcw aria-hidden="true" />Reopen</Button>
           )}
         </div>
-
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm sm:text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>
-            {ticket?.title}
-          </h1>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <p className="text-xs text-gray-500 truncate">
-              <span className="text-gray-500 font-semibold">{ticket?.profiles?.full_name || 'Unknown resident'}</span>
-            </p>
-            {ticket && (
-              <span
-                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
-                style={{ background: sc.bg, color: sc.color }}
-              >
-                <StatusIcon size={9} />
-                <span>{sc.label}</span>
-              </span>
-            )}
-            {cat && (
-              <span
-                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
-                style={{ background: cat.bg, color: cat.color }}
-              >
-                <CategoryIcon size={9} />
-                <span className="hidden sm:inline">{cat.label}</span>
-              </span>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={() => setShowDetails(v => !v)}
-          aria-label="Toggle ticket details"
-          aria-expanded={showDetails}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-          title="Ticket details"
-        >
-          <Sparkles size={14} />
-        </button>
-
-        {ticket?.status !== 'closed' && (
-          <button
-            onClick={() => setCloseConfirm(true)}
-            className="flex items-center gap-1.5 px-2.5 sm:px-4 py-2 rounded-xl text-xs font-bold text-white transition-all hover:scale-105 flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)' }}
-            title="Close Ticket"
-          >
-            <X size={13} />
-            <span className="hidden sm:inline">Close</span>
-          </button>
-        )}
       </header>
 
-      {/* Details panel (collapsible) */}
+      {/* Details (collapsible): what they asked and who they are. */}
       {showDetails && ticket && (
-        <div className={`bg-white relative z-10 px-4 sm:px-6 py-3 fade-up ${desktop.chatDetails}`} style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Original Description</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{ticket.description}</p>
-
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Resident Info</p>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2 text-xs">
-                <User size={11} className="text-gray-500 flex-shrink-0" />
-                <span className="font-semibold text-gray-700">{ticket.profiles?.full_name || 'Unknown resident'}</span>
-              </div>
+        <div className="relative z-[2] mx-auto w-full max-w-3xl px-4 sm:px-7">
+          <Card lift className="grid gap-3 px-[18px] py-3.5 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div>
+              <SectionLabel as="h2" className="mb-1">What they asked</SectionLabel>
+              <p className="text-sm leading-[1.55] text-body whitespace-pre-wrap">{ticket.description}</p>
+            </div>
+            <div className="space-y-1 text-sm">
+              <SectionLabel as="h2" className="mb-1">Resident</SectionLabel>
+              <p className="font-bold text-ink">{residentName}</p>
               {ticket.profiles?.phone && (
-                <a href={`tel:${ticket.profiles.phone}`} className="flex items-center gap-2 text-xs hover:underline" style={{ color: 'var(--brand)' }}>
-                  <Phone size={11} className="text-gray-500 flex-shrink-0" />
-                  <span>{ticket.profiles.phone}</span>
+                <a href={`tel:${ticket.profiles.phone}`} className="flex items-center gap-1.5 font-bold text-brand-strong hover:underline">
+                  <Phone size={14} aria-hidden="true" />{ticket.profiles.phone}
                 </a>
               )}
-              {ticket.profiles?.address && (
-                <div className="flex items-start gap-2 text-xs">
-                  <MapPin size={11} className="text-gray-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-gray-600">{ticket.profiles.address}</span>
-                </div>
-              )}
+              {ticket.profiles?.address && <p className="text-body">{ticket.profiles.address}</p>}
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <Clock size={11} />
-              Created {new Date(ticket.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-            <span>·</span>
-            <span>{sc.desc}</span>
-          </div>
+          </Card>
         </div>
       )}
 
       {/* Messages */}
-      <main className={`flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden ${desktop.chatPage}`}>
-        <div className="flex-1 space-y-3 overflow-y-auto pb-4 px-1" role="log" aria-live="polite" aria-label="Ticket messages">
+      <main className="relative z-[1] flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 pt-2 pb-4 sm:px-7" role="log" aria-live="polite" aria-label="Ticket messages">
           {messages.length === 0 && (
-            <div className="text-center mt-12">
-              <div className="glass-card inline-block px-6 py-4">
-                <div
-                  className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}
-                >
-                  <Send size={20} className="text-white" />
-                </div>
-                <p className="text-white text-sm font-bold">No messages yet</p>
-                <p className="text-purple-200 text-xs mt-1">Reply to start helping the resident!</p>
-              </div>
-            </div>
+            <Card className="mx-auto mt-8 max-w-xs px-5 py-4 text-center">
+              <p className="text-sm font-bold text-ink">No messages yet</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Reply below to start helping {firstName}.</p>
+            </Card>
           )}
 
           {messages.map((msg, i) => {
             const isMe = msg.sender_id === user?.id
             const prevMsg = messages[i - 1]
+            const nextMsg = messages[i + 1]
             const showSender = !prevMsg || prevMsg.sender_id !== msg.sender_id
+            const lastInRun = !nextMsg || nextMsg.sender_id !== msg.sender_id
             const isResident = msg.profiles?.role === 'resident'
             const showDaySeparator = !prevMsg || dayLabel(prevMsg.created_at) !== dayLabel(msg.created_at)
+            const time = new Date(msg.created_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
 
             return (
               <div key={msg.id}>
                 {showDaySeparator && (
-                  <div className="flex items-center justify-center my-4">
-                    <span
-                      className="text-xs font-bold px-3 py-1 rounded-full text-white"
-                      style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}
-                    >
+                  <div className="my-2 flex justify-center">
+                    <span className="rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-bold tracking-[0.06em] text-muted-foreground uppercase">
                       {dayLabel(msg.created_at)}
                     </span>
                   </div>
                 )}
 
-                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                  {!isMe && showSender && (
-                    <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0 overflow-hidden mb-1"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
-                    >
-                      {msg.profiles?.avatar_url ? (
-                        <img loading="lazy" decoding="async" src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        msg.profiles?.full_name?.[0]?.toUpperCase() || '?'
-                      )}
-                    </div>
-                  )}
-                  {!isMe && !showSender && <div className="w-7 flex-shrink-0" />}
-
-                  <div
-                    className={`max-w-[75%] sm:max-w-md lg:max-w-2xl px-4 py-2.5 rounded-2xl text-sm ${
-                      isMe ? 'text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md'
-                    }`}
-                    style={
-                      isMe
-                        ? { background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }
-                        : { boxShadow: '0 4px 16px rgba(91,84,232,0.08)' }
-                    }
-                  >
-                    {!isMe && showSender && (
-                      <p className="text-xs font-bold mb-1 flex items-center gap-1" style={{ color: 'var(--brand)' }}>
-                        {msg.profiles?.full_name || 'Unknown user'}
-                        {isResident && (
-                          <span className="text-xs px-1 py-0.5 rounded-md font-bold" style={{ background: 'var(--brand-soft)', color: 'var(--brand)' }}>
-                            Resident
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.message}</p>
-                    <p className={`text-xs mt-1 ${isMe ? 'text-purple-200' : 'text-gray-500'}`}>
-                      {new Date(msg.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                {isMe ? (
+                  <div className="flex flex-col items-end">
+                    <p className="max-w-[78%] rounded-[16px] rounded-br-[6px] bg-[var(--brand-fill)] px-4 py-2.5 text-[15px] leading-[1.5] text-white break-words whitespace-pre-wrap">
+                      {msg.message}
                     </p>
+                    {lastInRun && <p className="mt-1 text-xs text-muted-foreground">You · {time}</p>}
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <span className="w-8 shrink-0">
+                      {lastInRun && <Avatar name={msg.profiles?.full_name} src={msg.profiles?.avatar_url} size="sm" />}
+                    </span>
+                    <div className="flex min-w-0 max-w-[78%] flex-col items-start">
+                      {showSender && !isResident && (
+                        <p className="mb-1 text-xs font-bold text-muted-foreground">{msg.profiles?.full_name || 'Unknown user'}</p>
+                      )}
+                      <p className="rounded-[16px] rounded-bl-[6px] border border-line bg-surface px-4 py-2.5 text-[15px] leading-[1.5] text-ink break-words whitespace-pre-wrap">
+                        {msg.message}
+                      </p>
+                      {lastInRun && <p className="mt-1 text-xs text-muted-foreground">{msg.profiles?.full_name || 'Unknown user'} · {time}</p>}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
           <div ref={bottomRef} />
         </div>
-
-        {ticket?.status !== 'closed' ? (
-          <div className="mt-3 sticky bottom-0 space-y-2 pb-[env(safe-area-inset-bottom,0px)]">
-            {/* Quick replies — one tap for the phrases officials type all day */}
-            {newMessage === '' && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 rail-fade" style={{ scrollbarWidth: 'none' }}>
-                {QUICK_REPLIES.map((reply, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => applyQuickReply(reply)}
-                    className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold text-white transition-all hover:scale-105 max-w-[240px] truncate"
-                    style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(10px)' }}
-                    title={reply}
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <form onSubmit={sendMessage} className="flex gap-2">
-              <input
-                ref={inputRef}
-                value={newMessage}
-                onChange={e => setNewMessage(e.target.value)}
-                maxLength={MAX_MESSAGE_LENGTH}
-                aria-label="Reply to resident"
-                className="flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition-all"
-                style={{
-                  background: 'rgba(255,255,255,0.15)',
-                  border: '1px solid rgba(255,255,255,0.25)',
-                  color: 'white',
-                  backdropFilter: 'blur(10px)',
-                }}
-                placeholder="Reply to resident..."
-                onFocus={e => {
-                  e.target.style.background = 'rgba(255,255,255,0.25)'
-                  e.target.style.borderColor = 'rgba(255,255,255,0.4)'
-                }}
-                onBlur={e => {
-                  e.target.style.background = 'rgba(255,255,255,0.15)'
-                  e.target.style.borderColor = 'rgba(255,255,255,0.25)'
-                }}
-              />
-              <button
-                type="submit"
-                disabled={sending || !newMessage.trim()}
-                aria-label="Send message"
-                className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-50 transition-all hover:scale-105"
-                style={{ background: 'white', color: 'var(--brand)', boxShadow: '0 8px 24px rgba(255,255,255,0.3)' }}
-              >
-                {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-              </button>
-            </form>
-          </div>
-        ) : (
-          <div className="mt-4">
-            <div className="glass-card px-6 py-3 flex items-center justify-center gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <CheckCircle size={14} className="text-white opacity-80" />
-                <p className="text-white text-sm font-semibold">This ticket is closed</p>
-              </div>
-              <button
-                onClick={reopenTicket}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all hover:scale-105"
-                style={{ background: 'rgba(255,255,255,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.3)' }}
-              >
-                <RotateCcw size={11} /> Reopen
-              </button>
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* Composer: quick replies, then the reply box */}
+      <footer className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))] sm:px-7">
+        <div className="mx-auto max-w-3xl">
+          {ticket?.status !== 'closed' ? (
+            <>
+              {newMessage === '' && (
+                <div className="mb-2.5 flex gap-2 overflow-x-auto rail-fade [scrollbar-width:none]!" role="group" aria-label="Quick replies">
+                  {QUICK_REPLIES.map(reply => (
+                    <button key={reply} type="button" onClick={() => applyQuickReply(reply)} title={reply}
+                      className="h-8 max-w-[260px] shrink-0 truncate rounded-[9px] border border-line bg-surface px-3 text-[13px] font-bold text-brand-strong outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
+                      {reply}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <form onSubmit={sendMessage} className="flex gap-2">
+                <label htmlFor="ticket-reply" className="sr-only">Reply to {firstName}</label>
+                <input
+                  id="ticket-reply"
+                  ref={inputRef}
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  maxLength={MAX_MESSAGE_LENGTH}
+                  placeholder={`Reply to ${firstName}`}
+                  className="h-11 min-w-0 flex-1 rounded-[10px] border border-line bg-surface px-4 text-[15px] text-ink outline-none placeholder:text-muted-foreground focus:border-brand-strong"
+                />
+                <Button type="submit" className="h-11" disabled={sending || !newMessage.trim()} aria-label="Send message">
+                  {sending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
+                  <span className="hidden sm:inline">Send</span>
+                </Button>
+              </form>
+            </>
+          ) : (
+            <Notice tone="ok" title="This ticket is closed.">Reopen it from the top if {firstName} needs more help.</Notice>
+          )}
+        </div>
+      </footer>
 
       {/* Confirm Close Dialog */}
       <ConfirmDialog
@@ -547,9 +403,9 @@ export default function OfficialTicketChat() {
         onClose={() => setCloseConfirm(false)}
         onConfirm={closeTicket}
         title="Close this ticket?"
-        message="Are you sure you want to close this ticket? The resident will no longer be able to send messages."
-        confirmText={closing ? 'Closing...' : 'Yes, Close Ticket'}
-        cancelText="Keep Open"
+        message={`${firstName} won't be able to send more messages on it. You can reopen it later.`}
+        confirmText={closing ? 'Closing…' : 'Close ticket'}
+        cancelText="Keep open"
         variant="danger"
       />
     </div>

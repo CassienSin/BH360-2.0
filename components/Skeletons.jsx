@@ -21,7 +21,6 @@ import { ArrowLeft, Bell, Menu, Search } from 'lucide-react'
 import { NotificationBannerView } from '@/components/NotificationBanner'
 import { DASHBOARD_SKELETONS, dashboardKinds, dashboardColumn } from '@/lib/dashboardSkeletons'
 import ui from '@/components/app-ui.module.css'
-import desktop from '@/components/desktop-pages.module.css'
 import header from '@/components/dashboard-header.module.css'
 import Band from '@/components/crafted/Band'
 import DashboardFrame from '@/components/crafted/DashboardFrame'
@@ -777,60 +776,30 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
  *  avatar, title and status), the message column, the composer at the
  *  bottom of the screen. */
 export function TicketDetailSkeleton({ variant = 'official' }) {
-  if (variant === 'resident') {
-    // app/resident/ticket/[id]: the band header, the thread, the composer.
-    const runs = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5']]
-    return (
-      <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page" role="status" aria-label="Loading" aria-busy="true">
-        <div className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3" aria-hidden="true">
-          <Band extend={0} fade={56} dots={10} seed={4} />
-          <div className="relative z-[1] mx-auto flex max-w-2xl items-center gap-2.5">
-            <span className="flex size-10 items-center justify-center rounded-[10px] bg-[var(--onband)] text-white"><ArrowLeft size={18} strokeWidth={1.9} /></span>
-            <div className="flex-1 space-y-2"><Skeleton tone="brand" className="h-4 w-48 max-w-full" /><Skeleton tone="brand" className="h-3 w-36" /></div>
-          </div>
-        </div>
-        <div className="relative z-[1] mx-auto flex w-full max-w-2xl flex-1 flex-col gap-3 overflow-hidden px-4 pt-2">
-          {runs.map(([side, w], i) => (
-            <div key={i} className={`flex ${side === 'right' ? 'justify-end' : 'items-end gap-2'}`}>
-              {side === 'left' && <Skeleton className="size-8 rounded-lg flex-shrink-0" />}
-              <div className={`${w} h-14 rounded-[16px] ${side === 'right' ? 'bg-[var(--brand-soft)]' : 'border border-line bg-surface'}`} />
-            </div>
-          ))}
-        </div>
-        <div className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
-          <div className="mx-auto flex max-w-2xl gap-2"><Skeleton className="h-11 flex-1 rounded-[10px]" /><Skeleton className="size-11 rounded-[10px]" /></div>
-        </div>
-        <div id="page-shell-end" hidden />
-      </div>
-    )
-  }
-  const bubbles = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5'], ['left', 'w-1/2']]
+  // app/resident/ticket/[id] and app/official/ticket/[id]: the band
+  // header, the thread, the composer (officials: a wider column).
+  const col = variant === 'resident' ? 'max-w-2xl' : 'max-w-3xl'
+  const runs = [['left', 'w-3/5'], ['right', 'w-1/2'], ['left', 'w-2/3'], ['right', 'w-2/5']]
   return (
-    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand" role="status" aria-label="Loading" aria-busy="true">
-      <div className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 ${desktop.header}`}
-        style={{ borderBottom: '1px solid var(--brand-soft)' }} aria-hidden="true">
-        <span className={ui.back}><ArrowLeft size={18} strokeWidth={1.9} /></span>
-        <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
-        <div className="flex-1 min-w-0 space-y-2">
-          <Skeleton className="h-4 w-40 max-w-full" />
-          <Skeleton className="h-3 w-56 max-w-full" />
+    <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page" role="status" aria-label="Loading" aria-busy="true">
+      <div className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3" aria-hidden="true">
+        <Band extend={0} fade={56} dots={10} seed={4} />
+        <div className={`relative z-[1] mx-auto flex ${col} items-center gap-2.5`}>
+          <span className="flex size-10 items-center justify-center rounded-[10px] bg-[var(--onband)] text-white"><ArrowLeft size={18} strokeWidth={1.9} /></span>
+          <div className="flex-1 space-y-2"><Skeleton tone="brand" className="h-4 w-48 max-w-full" /><Skeleton tone="brand" className="h-3 w-36" /></div>
         </div>
-        <Skeleton className="h-9 w-20 rounded-xl flex-shrink-0" />
       </div>
-      <main className={`flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden ${desktop.chatPage}`}>
-        <div className="flex-1 flex flex-col gap-3 overflow-hidden">
-          <Skeleton tone="brand" className="h-6 w-24 rounded-full self-center" />
-          {bubbles.map(([side, w], i) => (
-            <div key={i} className={`flex items-end gap-2 ${side === 'right' ? 'flex-row-reverse' : ''}`}>
-              {side === 'left' && <Skeleton tone="brand" className="w-7 h-7 rounded-full flex-shrink-0" />}
-              <div className={`${w} h-16 rounded-[10px] ${side === 'left' ? 'bg-white/90 p-3 space-y-2' : 'skeleton-shimmer skeleton-on-brand'}`}>
-                {side === 'left' && <><Skeleton className="h-3 w-1/2" /><Skeleton className="h-3 w-4/5" /></>}
-              </div>
-            </div>
-          ))}
-        </div>
-        <Skeleton tone="brand" className="h-12 w-full rounded-[10px] mt-3 flex-shrink-0" />
-      </main>
+      <div className={`relative z-[1] mx-auto flex w-full ${col} flex-1 flex-col gap-3 overflow-hidden px-4 pt-2`}>
+        {runs.map(([side, w], i) => (
+          <div key={i} className={`flex ${side === 'right' ? 'justify-end' : 'items-end gap-2'}`}>
+            {side === 'left' && <Skeleton className="size-8 rounded-lg flex-shrink-0" />}
+            <div className={`${w} h-14 rounded-[16px] ${side === 'right' ? 'bg-[var(--brand-soft)]' : 'border border-line bg-surface'}`} />
+          </div>
+        ))}
+      </div>
+      <div className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
+        <div className={`mx-auto flex ${col} gap-2`}><Skeleton className="h-11 flex-1 rounded-[10px]" /><Skeleton className="size-11 rounded-[10px]" /></div>
+      </div>
       <div id="page-shell-end" hidden />
     </div>
   )
