@@ -12,18 +12,26 @@ import { DashboardIcon, IncidentsIcon, ResidentIcon, UsersIcon, VerificationsIco
 import { Button } from '@/components/ui/button'
 import { StatStrip } from '@/components/ui/stat-strip'
 import ApplicationsSection from '@/components/admin/ApplicationsSection'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Tag, Status } from '@/components/ui/tag'
+import { Segmented } from '@/components/ui/segmented'
+import { Muted } from '@/components/ui/text'
+import { Avatar } from '@/components/ui/avatar'
+import { SearchBox, FilterSelect } from '@/components/official/Toolbar'
+import { CategoryIcon, categoryColor } from '@/lib/categoryIcons'
 import { useSidebarState } from '@/lib/useSidebarState'
 import { isPhoneLayout } from '@/lib/layout'
 import { useNotifications } from '@/lib/useNotifications'
 import { useSectionEntrance } from '@/lib/useSectionEntrance'
 import { useUrlSection } from '@/lib/useUrlSection'
 import { createClient } from '@/lib/supabase'
-import { XCircle, MapPin, Copy, Search, Users, Building2, Loader2, KeyRound, RefreshCw, AlertTriangle, Scale, X, BarChart3 } from 'lucide-react'
+import { Copy, Loader2, RefreshCw, AlertTriangle } from 'lucide-react'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
-import { PRIORITY_STYLE, getCategoryMeta, getBasis } from '@/lib/legalBasis'
-import { computeStanding, STANDING_STYLE } from '@/lib/triage'
+import { getBasis } from '@/lib/legalBasis'
+import { computeStanding } from '@/lib/triage'
 import { firstRealError } from '@/lib/dbError'
 import { SITE_URL } from '@/lib/siteUrl'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
@@ -53,16 +61,26 @@ const INCIDENT_ANALYTICS_PAGE_SIZE = 500
 const APPLICATION_LIMIT = 300
 const BARANGAY_PAGE_SIZE = 20
 
-const INCIDENT_STATUS_STYLE = {
-  pending:  { label: 'Pending',  color: '#f97316', bg: '#fff7ed' },
-  assigned: { label: 'Assigned', color: '#3b82f6', bg: '#eff6ff' },
-  resolved: { label: 'Resolved', color: '#22c55e', bg: '#f0fdf4' },
-}
+const PRIORITY_TONE = { Critical: 'danger', High: 'warn' }
+const ROLE_LABEL = { official: 'Official', tanod: 'Tanod', resident: 'Resident' }
 
-const ROLE_CONFIG = {
-  resident: { color: '#5B54E8', bg: '#f0effe' },
-  official: { color: '#f97316', bg: '#fff7ed' },
-  tanod: { color: '#22c55e', bg: '#f0fdf4' },
+/** A3 rows: where a report stands, in one plain label (read-only view). */
+function adminIncidentRow(inc) {
+  const resolved = inc.status === 'resolved'
+  const standing = resolved ? null : computeStanding(inc)
+  let status = 'Waiting'
+  let tone = inc.priority === 'Critical' ? 'danger' : 'warn'
+  if (resolved) { status = 'Resolved'; tone = 'quiet' }
+  else if (inc.arrived_at) { status = 'On scene'; tone = 'ok' }
+  else if (inc.acknowledged_at) { status = 'On the way'; tone = 'ok' }
+  else if (inc.status === 'assigned') { status = 'Dispatched'; tone = 'info' }
+  if (standing?.aged) { status = standing.label; tone = standing.level >= 2 ? 'danger' : 'warn' }
+  const basis = getBasis(inc.category)
+  return {
+    status, tone,
+    critical: inc.priority === 'Critical' && !resolved,
+    basis: inc.legal_basis || (basis?.law ? `${basis.law}${basis.sections ? `, ${basis.sections}` : ''}: ${basis.lawTitle}` : null),
+  }
 }
 
 // The invite email, ready to send from the admin's own inbox — the app
@@ -101,16 +119,6 @@ function emailLinks(app) {
   }
 }
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
-
-// A broken photo link falls back to the initial instead of an empty tile.
-function UserAvatar({ src, name }) {
-  const [failedSrc, setFailedSrc] = useState(null)
-  const initial = name?.trim()?.[0]?.toUpperCase() || '?'
-  if (!src || failedSrc === src) return initial
-  return <img loading="lazy" decoding="async" src={src} alt="" onError={() => setFailedSrc(src)} className="w-full h-full object-cover" />
-}
-
 const ADMIN_TABS = ['applications', 'incidents', 'codes', 'barangays', 'users']
 
 function AdminPanel() {
@@ -140,10 +148,12 @@ function AdminPanel() {
   // Platform-wide incident feed — every barangay, not just one.
   const [incidents, setIncidents] = useState([])
   const [incidentSearch, setIncidentSearch] = useState('')
-  const [incidentStatusFilter, setIncidentStatusFilter] = useState('all')
+  const [incidentStatusFilter, setIncidentStatusFilter] = useState('open')
   const [incidentPriorityFilter, setIncidentPriorityFilter] = useState('all')
   const [incidentBarangayFilter, setIncidentBarangayFilter] = useState('all')
   const [incidentView, setIncidentView] = useState('list')
+  const [userRole, setUserRole] = useState('all')
+  const [userSearch, setUserSearch] = useState('')
   const [analyticsIncidents, setAnalyticsIncidents] = useState(null)
   const [loadingIncidentAnalytics, setLoadingIncidentAnalytics] = useState(false)
   const [incidentAnalyticsError, setIncidentAnalyticsError] = useState('')
@@ -520,10 +530,16 @@ function AdminPanel() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [incidents])
 
+  const shownUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase()
+    return users.filter(u => (userRole === 'all' || u.role === userRole) &&
+      (!q || u.full_name?.toLowerCase().includes(q) || u.barangays?.name?.toLowerCase().includes(q)))
+  }, [users, userRole, userSearch])
+
   const filteredIncidents = useMemo(() => {
     const q = incidentSearch.trim().toLowerCase()
     return incidents.filter(i => {
-      if (incidentStatusFilter !== 'all' && i.status !== incidentStatusFilter) return false
+      if (incidentStatusFilter === 'open' ? i.status === 'resolved' : incidentStatusFilter !== 'all' && i.status !== incidentStatusFilter) return false
       if (incidentPriorityFilter !== 'all' && i.priority !== incidentPriorityFilter) return false
       if (incidentBarangayFilter !== 'all' && i.barangay_id !== incidentBarangayFilter) return false
       if (!q) return true
@@ -683,6 +699,12 @@ function AdminPanel() {
         searchData={{ incidents, tickets: [], announcements: [] }}
         onSearchResultClick={() => setActiveTab('incidents')}>
         {activeTab === 'barangays' && <div className="band-slot"><StatStrip stats={platformStats} /></div>}
+        {activeTab === 'incidents' && (
+          <div className="band-slot">
+            <Segmented onBand label="Incident views" value={incidentView} onChange={v => { setIncidentView(v); if (v === 'analytics') loadIncidentAnalytics() }}
+              items={[{ value: 'list', label: 'Reports' }, { value: 'analytics', label: 'Barangay analytics' }]} />
+          </div>
+        )}
       </DashboardHeader>}>
       <div className="mx-auto w-full min-w-0 max-w-[100rem] space-y-3.5">
 
@@ -704,250 +726,142 @@ function AdminPanel() {
         {activeTab === 'incidents' && (
           <div className={`w-full min-w-0 space-y-3 ${tabEnter}`}>
 
-            <div className="white-card flex w-full min-w-0 flex-wrap gap-2 p-2" role="tablist" aria-label="Incident views">
-              <button role="tab" aria-selected={incidentView === 'list'} onClick={() => setIncidentView('list')}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
-                style={{ background: incidentView === 'list' ? 'var(--brand)' : 'var(--app-surface)', color: incidentView === 'list' ? 'white' : '#6b7280' }}>
-                <AlertTriangle size={14} /> Incident List
-              </button>
-              <button role="tab" aria-selected={incidentView === 'analytics'} onClick={() => {
-                setIncidentView('analytics')
-                loadIncidentAnalytics()
-              }}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-colors"
-                style={{ background: incidentView === 'analytics' ? 'var(--brand)' : 'var(--app-surface)', color: incidentView === 'analytics' ? 'white' : '#6b7280' }}>
-                <BarChart3 size={14} /> Barangay Analytics
-              </button>
-            </div>
-
             {incidentView === 'list' ? <>
+            <StatStrip stats={[
+              { label: 'In the feed', value: incidentStats.total, note: `the latest ${INCIDENT_FEED_LIMIT}` },
+              { label: 'Unassigned', value: incidentStats.pending, note: 'waiting for a tanod' },
+              { label: 'Critical open', value: incidentStats.critical, tone: incidentStats.critical ? 'danger' : 'default', note: 'not resolved' },
+              { label: 'Past response time', value: incidentStats.overdue, tone: incidentStats.overdue ? 'danger' : 'default', note: 'waiting too long' },
+            ]} />
 
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                { label: 'Total in feed', value: incidentStats.total, color: '#5B54E8', sub: `Latest ${INCIDENT_FEED_LIMIT}` },
-                { label: 'Pending', value: incidentStats.pending, color: '#f97316', sub: 'Awaiting dispatch' },
-                { label: 'Critical open', value: incidentStats.critical, color: '#dc2626', sub: 'Unresolved' },
-                { label: 'Past response time', value: incidentStats.overdue, color: '#b45309', sub: 'Pending too long' },
-              ].map(stat => (
-                <div key={stat.label} className="white-card p-4">
-                  <p className="text-xs text-gray-500">{stat.label}</p>
-                  <p className="text-2xl font-black mt-1" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{stat.sub}</p>
+            <Card className="@container !overflow-visible">
+              <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-3 sm:px-[18px]">
+                <Segmented label="Filter by status" value={incidentStatusFilter} onChange={setIncidentStatusFilter}
+                  items={[
+                    { value: 'open', label: 'Open', count: incidents.filter(i => i.status !== 'resolved').length },
+                    { value: 'pending', label: 'Unassigned' },
+                    { value: 'resolved', label: 'Resolved' },
+                    { value: 'all', label: 'All' },
+                  ]}
+                  className="w-full @3xl:w-auto [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" />
+                <SearchBox value={incidentSearch} onChange={setIncidentSearch} label="Search all reports" className="min-w-48 flex-1 @5xl:max-w-64" />
+                <div className="flex w-full flex-wrap gap-2 @3xl:ml-auto @3xl:w-auto">
+                  <FilterSelect label="Barangay" value={incidentBarangayFilter} onChange={setIncidentBarangayFilter} className="min-w-0 flex-1 @3xl:flex-none"
+                    options={[{ value: 'all', label: `All barangays · ${incidentBarangays.length}` }, ...incidentBarangays.map(b => ({ value: b.id, label: b.name }))]} />
+                  <FilterSelect label="Priority" value={incidentPriorityFilter} onChange={setIncidentPriorityFilter} className="min-w-0 flex-1 @3xl:flex-none"
+                    options={[{ value: 'all', label: 'Priority' }, ...['Critical', 'High', 'Medium', 'Low'].map(p => ({ value: p, label: p }))]} />
                 </div>
-              ))}
-            </div>
+              </div>
 
-            {/* Filters */}
-            <div className="white-card p-4 space-y-3">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                  <input value={incidentSearch} onChange={e => setIncidentSearch(e.target.value)}
-                    type="search"
-                    aria-label="Search incidents"
-                    placeholder="Search by title, barangay, city, category, or reporter..."
-                    className="input-field w-full rounded-2xl pl-10 pr-9 py-2.5 text-sm text-gray-800" />
-                  {incidentSearch && (
-                    <button onClick={() => setIncidentSearch('')} aria-label="Clear search"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600">
-                      <X size={13} />
-                    </button>
+              {filteredIncidents.length === 0 ? (
+                <div className="border-t border-line px-[18px] py-6">
+                  <p className="text-sm font-bold text-ink">{incidents.length === 0 ? 'No reports on the platform yet' : 'Nothing matches'}</p>
+                  {incidents.length > 0 && (
+                    <Button variant="secondary" size="sm" className="mt-3" onClick={() => {
+                      setIncidentSearch(''); setIncidentStatusFilter('all')
+                      setIncidentPriorityFilter('all'); setIncidentBarangayFilter('all')
+                    }}>Clear filters</Button>
                   )}
                 </div>
-                <select
-                  value={incidentBarangayFilter}
-                  onChange={e => setIncidentBarangayFilter(e.target.value)}
-                  aria-label="Filter by barangay"
-                  className="input-field rounded-2xl px-4 py-2.5 text-sm text-gray-800 sm:max-w-[240px]">
-                  <option value="all">All barangays ({incidentBarangays.length})</option>
-                  {incidentBarangays.map(b => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by status">
-                  {[
-                    { value: 'all', label: 'All', color: '#5B54E8' },
-                    { value: 'pending', label: 'Pending', color: '#f97316' },
-                    { value: 'assigned', label: 'Assigned', color: '#3b82f6' },
-                    { value: 'resolved', label: 'Resolved', color: '#22c55e' },
-                  ].map(f => (
-                    <button key={f.value} onClick={() => setIncidentStatusFilter(f.value)}
-                      aria-pressed={incidentStatusFilter === f.value}
-                      className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                      style={{
-                        background: incidentStatusFilter === f.value ? f.color : 'var(--app-surface)',
-                        color: incidentStatusFilter === f.value ? 'white' : '#6b7280',
-                        border: incidentStatusFilter === f.value ? 'none' : '1px solid var(--brand-soft)',
-                      }}>
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="w-px self-stretch hidden sm:block" style={{ background: 'var(--brand-soft)' }} />
-                <div className="flex gap-1.5 flex-wrap" role="group" aria-label="Filter by priority">
-                  {['all', 'Critical', 'High', 'Medium', 'Low'].map(level => {
-                    const style = PRIORITY_STYLE[level]
-                    const color = style?.color || '#5B54E8'
-                    const active = incidentPriorityFilter === level
-                    return (
-                      <button key={level} onClick={() => setIncidentPriorityFilter(level)}
-                        aria-pressed={active}
-                        className="px-3 py-2 rounded-xl text-xs font-bold transition-all"
-                        style={{
-                          background: active ? color : 'var(--app-surface)',
-                          color: active ? 'white' : '#6b7280',
-                          border: active ? 'none' : '1px solid var(--brand-soft)',
-                        }}>
-                        {style ? `${style.icon} ${style.label}` : 'All priorities'}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* List */}
-            {filteredIncidents.length === 0 ? (
-              <div className="white-card p-12 text-center">
-                <AlertTriangle size={36} className="mx-auto mb-3 text-gray-300" />
-                <p className="text-gray-500 text-sm">
-                  {incidents.length === 0
-                    ? 'No incidents have been reported on the platform yet.'
-                    : 'No incidents match your filters'}
-                </p>
-                {incidents.length > 0 && (
-                  <button onClick={() => {
-                    setIncidentSearch(''); setIncidentStatusFilter('all')
-                    setIncidentPriorityFilter('all'); setIncidentBarangayFilter('all')
-                  }} className="mt-2 text-xs font-semibold" style={{ color: 'var(--brand)' }}>
-                    Clear filters →
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                <p className="text-xs text-white/70 px-1">
-                  Showing {filteredIncidents.length} of {incidents.length} incidents
-                  {incidents.length >= INCIDENT_FEED_LIMIT && ` (most recent ${INCIDENT_FEED_LIMIT})`}
-                </p>
-                <div className="space-y-2">
-                  {filteredIncidents.map(inc => {
-                    const cat = getCategoryMeta(inc.category)
-                    const pri = PRIORITY_STYLE[inc.priority] || PRIORITY_STYLE.Medium
-                    const st = INCIDENT_STATUS_STYLE[inc.status] || INCIDENT_STATUS_STYLE.pending
-                    const standing = computeStanding(inc)
-                    const standingStyle = STANDING_STYLE[standing.level]
-                    const basis = getBasis(inc.category)
-                    return (
-                      <div key={inc.id} className="white-card p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg flex-shrink-0"
-                            style={{ background: cat.bg }}>
-                            <span aria-hidden="true">{cat.icon}</span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="font-bold text-gray-800 text-sm truncate">{inc.title}</h3>
-                              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                                style={{ background: pri.bg, color: pri.color }}>
-                                {pri.icon} {pri.label}
-                              </span>
-                              <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                                style={{ background: st.bg, color: st.color }}>
-                                {st.label}
-                              </span>
-                              {standing.aged && standingStyle && (
-                                <span className="text-xs px-2 py-0.5 rounded-full font-bold"
-                                  style={{ background: standingStyle.bg, color: standingStyle.color, border: `1px solid ${standingStyle.border}` }}>
-                                  {standing.label}
+              ) : (
+                <>
+                  <table className="hidden w-full table-fixed border-collapse text-left @3xl:table">
+                    <thead>
+                      <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
+                        <th scope="col" className="py-2.5 pl-[18px] font-bold">Report</th>
+                        <th scope="col" className="w-[28%] px-3 py-2.5 font-bold">Barangay</th>
+                        <th scope="col" className="w-[96px] px-3 py-2.5 font-bold">Priority</th>
+                        <th scope="col" className="w-[150px] px-3 py-2.5 font-bold">Status</th>
+                        <th scope="col" className="w-[96px] py-2.5 pr-[18px] font-bold">Age</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredIncidents.map(inc => {
+                        const row = adminIncidentRow(inc)
+                        return (
+                          <tr key={inc.id} className={`border-t border-line ${row.critical ? 'bg-[color-mix(in_srgb,var(--danger-soft)_60%,var(--surface))]' : ''}`}
+                            title={row.basis || undefined}>
+                            <td className="min-w-0 py-3 pl-[18px]">
+                              <span className="flex min-w-0 items-center gap-2.5">
+                                <span className="shrink-0" style={{ color: categoryColor(inc.category) }}><CategoryIcon category={inc.category} size={18} /></span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-bold text-ink">{inc.title}</span>
+                                  <span className="block truncate text-xs text-muted-foreground">{[inc.location, inc.profiles?.full_name && `by ${inc.profiles.full_name}`].filter(Boolean).join(' · ')}</span>
                                 </span>
-                              )}
-                            </div>
-
-                            {/* The cross-barangay line — this is what the
-                                barangay-scoped dashboards cannot show. */}
-                            <div className="flex items-center gap-1.5 mt-1.5">
-                              <Building2 size={11} className="text-gray-500 flex-shrink-0" />
-                              <p className="text-xs font-semibold truncate" style={{ color: 'var(--brand)' }}>
-                                {inc.barangays?.name || 'Unassigned barangay'}
-                                {inc.barangays?.city && (
-                                  <span className="font-normal text-gray-500">
-                                    {' · '}{inc.barangays.city}, {inc.barangays.province}
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <MapPin size={11} className="text-gray-500 flex-shrink-0" />
-                              <p className="text-xs text-gray-500 truncate">{inc.location}</p>
-                            </div>
-
-                            {basis?.law && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <Scale size={11} className="flex-shrink-0" style={{ color: 'var(--brand)' }} />
-                                <p className="text-xs text-gray-500 truncate">
-                                  {inc.legal_basis || `${basis.law}${basis.sections ? `, ${basis.sections}` : ''} — ${basis.lawTitle}`}
-                                </p>
-                              </div>
-                            )}
-
-                            <p className="text-xs text-gray-500 mt-1.5" title={fullDate(inc.created_at)}>
-                              Reported {timeAgo(inc.created_at)}
-                              {inc.profiles?.full_name && ` by ${inc.profiles.full_name}`}
-                            </p>
+                              </span>
+                            </td>
+                            <td className="truncate px-3 py-3 text-[13px] text-body">{[inc.barangays?.name || 'No barangay', inc.barangays?.city].filter(Boolean).join(' · ')}</td>
+                            <td className="px-3 py-3"><Tag tone={PRIORITY_TONE[inc.priority] || 'quiet'}>{inc.priority || 'Medium'}</Tag></td>
+                            <td className="px-3 py-3"><Status tone={row.tone} className="max-w-full">{row.status}</Status></td>
+                            <td className="py-3 pr-[18px] text-[13px] text-body" title={fullDate(inc.created_at)}>{timeAgo(inc.created_at)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <Rows className="border-t border-line @3xl:hidden">
+                    {filteredIncidents.map(inc => {
+                      const row = adminIncidentRow(inc)
+                      return (
+                        <Row key={inc.id} critical={row.critical} className="flex items-start gap-3">
+                          <span className="mt-0.5 shrink-0" style={{ color: categoryColor(inc.category) }}><CategoryIcon category={inc.category} size={20} /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-ink">{inc.title}</p>
+                            <p className="mt-0.5 truncate text-xs text-muted-foreground">{[inc.barangays?.name || 'No barangay', timeAgo(inc.created_at)].join(' · ')}</p>
+                            <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                              <Tag tone={PRIORITY_TONE[inc.priority] || 'quiet'}>{inc.priority || 'Medium'}</Tag>
+                              <Status tone={row.tone}>{row.status}</Status>
+                            </span>
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+                        </Row>
+                      )
+                    })}
+                  </Rows>
+                </>
+              )}
+              <p className="border-t border-line px-[18px] py-3 text-xs text-muted-foreground">
+                Read-only: each barangay&rsquo;s officials handle dispatch. Showing {filteredIncidents.length} of {incidents.length}
+                {incidents.length >= INCIDENT_FEED_LIMIT ? ` (the most recent ${INCIDENT_FEED_LIMIT})` : ''}.
+              </p>
+            </Card>
             </> : (
               <div className="space-y-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-bold text-white">Incident analytics</h2>
-                    <p className="text-xs text-white/75">Platform-wide summary grouped by barangay, category, and month.</p>
+                    <h2 className="text-[15px] font-extrabold text-ink">Incident analytics</h2>
+                    <p className="text-xs text-muted-foreground">Platform-wide summary grouped by barangay, category, and month.</p>
                   </div>
                   <button onClick={() => loadIncidentAnalytics(true)} disabled={loadingIncidentAnalytics}
-                    className="inline-flex w-fit items-center gap-2 rounded-xl bg-white px-3 py-2 text-xs font-bold disabled:opacity-60"
-                    style={{ color: 'var(--brand)' }}>
+                    className="inline-flex w-fit items-center gap-2 rounded-[10px] border border-line bg-surface px-3 py-2 text-xs font-bold text-ink disabled:opacity-60">
                     <RefreshCw size={13} className={loadingIncidentAnalytics ? 'animate-spin' : ''} />
                     Refresh analytics
                   </button>
                 </div>
 
                 {loadingIncidentAnalytics ? (
-                  <div className="white-card flex items-center justify-center gap-3 p-12 text-sm text-gray-500">
+                  <div className="white-card flex items-center justify-center gap-3 p-12 text-sm text-muted-foreground">
                     <Loader2 size={18} className="animate-spin" style={{ color: 'var(--brand)' }} />
                     Loading all incident records…
                   </div>
                 ) : incidentAnalyticsError ? (
                   <div className="white-card p-8 text-center">
                     <AlertTriangle size={28} className="mx-auto mb-2 text-red-500" />
-                    <p className="text-sm font-semibold text-gray-700">Analytics could not be loaded</p>
-                    <p className="mt-1 text-xs text-gray-500">{incidentAnalyticsError}</p>
-                    <button onClick={() => loadIncidentAnalytics(true)} className="mt-3 rounded-xl px-4 py-2 text-xs font-bold text-white" style={{ background: 'var(--brand)' }}>
-                      Try again
-                    </button>
+                    <p className="text-sm font-semibold text-body">Analytics could not be loaded</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{incidentAnalyticsError}</p>
+                    <Button size="sm" className="mt-3" onClick={() => loadIncidentAnalytics(true)}>Try again</Button>
                   </div>
                 ) : incidentAnalytics ? (
                   <>
-                    <p className="px-1 text-xs text-white/75">All {incidentAnalytics.total} incident records, across {incidentAnalytics.barangays.length} barangays using the app.</p>
+                    <p className="px-1 text-xs text-muted-foreground">All {incidentAnalytics.total} incident records, across {incidentAnalytics.barangays.length} barangays using the app.</p>
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       {[
-                        { label: 'All reports', value: incidentAnalytics.total, color: '#5B54E8' },
-                        { label: 'Open reports', value: incidentAnalytics.open, color: '#f97316' },
-                        { label: 'Resolved', value: incidentAnalytics.resolved, color: '#22c55e' },
-                        { label: 'Critical open', value: incidentAnalytics.critical, color: '#dc2626' },
+                        { label: 'All reports', value: incidentAnalytics.total, color: 'var(--ink)' },
+                        { label: 'Open reports', value: incidentAnalytics.open, color: 'var(--warn)' },
+                        { label: 'Resolved', value: incidentAnalytics.resolved, color: 'var(--ok)' },
+                        { label: 'Critical open', value: incidentAnalytics.critical, color: 'var(--danger)' },
                       ].map(stat => (
                         <div key={stat.label} className="white-card min-w-0 p-4">
-                          <p className="text-xs text-gray-500">{stat.label}</p>
+                          <p className="text-xs text-muted-foreground">{stat.label}</p>
                           <p className="mt-1 text-2xl font-black" style={{ color: stat.color }}>{stat.value}</p>
                         </div>
                       ))}
@@ -955,17 +869,17 @@ function AdminPanel() {
 
                     <div className="grid min-w-0 gap-3 lg:grid-cols-2">
                       <section className="white-card min-w-0 p-5">
-                        <h3 className="font-bold text-gray-800">Reports by month</h3>
-                        <p className="mb-4 mt-1 text-xs text-gray-500">Created during the latest six calendar months</p>
+                        <h3 className="text-[15px] font-extrabold text-ink">Reports by month</h3>
+                        <p className="mb-4 mt-1 text-xs text-muted-foreground">Created during the latest six calendar months</p>
                         <div className="flex h-36 items-end gap-2" role="img" aria-label="Incident reports by month for the latest six months">
                           {incidentAnalytics.monthly.map(month => {
                             const maximum = Math.max(1, ...incidentAnalytics.monthly.map(item => item.total))
                             const height = month.total ? Math.max(8, (month.total / maximum) * 100) : 3
                             return (
                               <div key={month.key} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                                <span className="text-xs font-semibold text-gray-500">{month.total}</span>
-                                <div className="w-full rounded-t-lg" style={{ height: `${height}%`, minHeight: 3, background: 'linear-gradient(180deg, var(--brand-light), var(--brand))' }} />
-                                <span className="text-center text-[11px] text-gray-500">{month.label}</span>
+                                <span className="text-xs font-semibold text-muted-foreground">{month.total}</span>
+                                <div className="w-full rounded-t-lg" style={{ height: `${height}%`, minHeight: 3, background: 'var(--brand-strong)' }} />
+                                <span className="text-center text-[11px] text-muted-foreground">{month.label}</span>
                               </div>
                             )
                           })}
@@ -973,15 +887,15 @@ function AdminPanel() {
                       </section>
 
                       <section className="white-card min-w-0 p-5">
-                        <h3 className="font-bold text-gray-800">Reports by category</h3>
-                        <p className="mb-4 mt-1 text-xs text-gray-500">All reported incident categories</p>
-                        {incidentAnalytics.categories.length === 0 ? <p className="text-sm text-gray-500">No category data yet.</p> : (
+                        <h3 className="text-[15px] font-extrabold text-ink">Reports by category</h3>
+                        <p className="mb-4 mt-1 text-xs text-muted-foreground">All reported incident categories</p>
+                        {incidentAnalytics.categories.length === 0 ? <p className="text-sm text-muted-foreground">No category data yet.</p> : (
                           <div className="space-y-3">
                             {incidentAnalytics.categories.slice(0, 8).map(category => (
                               <div key={category.name}>
                                 <div className="mb-1 flex justify-between gap-3 text-xs">
-                                  <span className="min-w-0 truncate text-gray-600">{category.name}</span>
-                                  <span className="font-bold text-gray-700">{category.total}</span>
+                                  <span className="min-w-0 truncate text-body">{category.name}</span>
+                                  <span className="font-bold text-body">{category.total}</span>
                                 </div>
                                 <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                                   <div className="h-full rounded-full" style={{ width: `${Math.max(3, (category.total / incidentAnalytics.total) * 100)}%`, background: 'var(--brand)' }} />
@@ -994,12 +908,12 @@ function AdminPanel() {
                     </div>
 
                     <section className="white-card min-w-0 overflow-hidden p-5">
-                      <h3 className="font-bold text-gray-800">Incident reports by barangay</h3>
-                      <p className="mb-4 mt-1 text-xs text-gray-500">Every barangay with registered users or reports, ranked by total reports</p>
-                      {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-gray-500">No incident reports yet.</p> : (
+                      <h3 className="text-[15px] font-extrabold text-ink">Incident reports by barangay</h3>
+                      <p className="mb-4 mt-1 text-xs text-muted-foreground">Every barangay with registered users or reports, ranked by total reports</p>
+                      {incidentAnalytics.barangays.length === 0 ? <p className="text-sm text-muted-foreground">No incident reports yet.</p> : (
                         <div className="max-h-[480px] overflow-auto">
                           <table className="stack-table w-full md:min-w-[600px] text-left text-xs">
-                            <thead className="sticky top-0 bg-white text-gray-500">
+                            <thead className="sticky top-0 bg-surface-sunk text-muted-foreground">
                               <tr>
                                 <th className="py-2 pr-3 font-semibold">Barangay</th>
                                 <th className="py-2 pr-3 font-semibold">City / Municipality</th>
@@ -1011,9 +925,9 @@ function AdminPanel() {
                             <tbody>
                               {incidentAnalytics.barangays.map(barangay => (
                                 <tr key={barangay.id} className="border-t border-gray-100">
-                                  <td className="py-3 pr-3 font-semibold text-gray-700">{barangay.name}</td>
-                                  <td data-span="full" className="py-3 pr-3 text-gray-500">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
-                                  <td data-label="Reports" className="py-3 pr-3 text-right font-bold text-gray-700">{barangay.total}</td>
+                                  <td className="py-3 pr-3 font-semibold text-body">{barangay.name}</td>
+                                  <td data-span="full" className="py-3 pr-3 text-muted-foreground">{[barangay.city, barangay.province].filter(Boolean).join(', ') || '—'}</td>
+                                  <td data-label="Reports" className="py-3 pr-3 text-right font-bold text-body">{barangay.total}</td>
                                   <td data-label="Open" className="py-3 pr-3 text-right text-orange-600">{barangay.open}</td>
                                   <td data-label="Critical open" className="py-3 text-right text-red-600">{barangay.critical}</td>
                                 </tr>
@@ -1025,7 +939,7 @@ function AdminPanel() {
                     </section>
                   </>
                 ) : (
-                  <div className="white-card p-8 text-center text-sm text-gray-500">Open this view to load analytics for all incidents.</div>
+                  <div className="white-card p-8 text-center text-sm text-muted-foreground">Open this view to load analytics for all incidents.</div>
                 )}
               </div>
             )}
@@ -1034,292 +948,198 @@ function AdminPanel() {
 
         {/* INVITE CODES TAB */}
         {activeTab === 'codes' && (
-          <div className={`space-y-4 ${tabEnter}`}>
-            <div className="white-card p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'var(--brand-soft)' }}>
-                  <KeyRound size={18} style={{ color: 'var(--brand)' }} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-gray-800">Quick Code Generator</h3>
-                  <p className="text-xs text-gray-500">Generate invite codes for any barangay</p>
-                </div>
-              </div>
-
-              {/* Search by barangay name, then narrow by location. */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
-                <label className="block">
-                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">Barangay name</span>
-                  <div className="relative">
-                    <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input value={barangaySearch} onChange={e => {
-                      setBarangaySearch(e.target.value)
-                      setBarangayPage(1)
-                      setBarangayResults([])
-                      setBarangayHasMore(false)
-                    }}
-                      aria-label="Search by barangay name"
-                      placeholder="e.g. Poblacion"
-                      className="input-field w-full rounded-2xl pl-10 pr-4 py-2.5 text-sm text-gray-800" />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">City / Municipality</span>
-                  <input value={barangayCitySearch} onChange={e => {
-                    setBarangayCitySearch(e.target.value)
-                    setBarangayPage(1)
-                    setBarangayResults([])
-                    setBarangayHasMore(false)
-                  }}
-                    aria-label="Filter by city or municipality"
-                    placeholder="e.g. Toledo"
-                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800" />
-                </label>
-                <label className="block">
-                  <span className="block text-xs font-semibold text-gray-500 mb-1.5">Province</span>
-                  <input value={barangayProvinceSearch} onChange={e => {
-                    setBarangayProvinceSearch(e.target.value)
-                    setBarangayPage(1)
-                    setBarangayResults([])
-                    setBarangayHasMore(false)
-                  }}
-                    aria-label="Filter by province"
-                    placeholder="Optional, e.g. Cebu"
-                    className="input-field w-full rounded-2xl px-4 py-2.5 text-sm text-gray-800" />
-                </label>
-              </div>
-              <div className="flex items-center justify-between gap-3 mb-3 min-h-5">
-                <p className="text-xs text-gray-500">
-                  Fill in multiple fields to narrow the results. For example: Poblacion + Toledo + Cebu.
-                </p>
-                {searchingBarangays && <Loader2 size={15} className="text-gray-500 animate-spin flex-shrink-0" aria-label="Searching barangays" />}
-              </div>
-
-              <div className="space-y-2">
-                {barangayResults.length === 0 && !searchingBarangays && (
-                  <div className="text-center py-6">
-                    <Building2 size={28} className="mx-auto text-gray-300 mb-2" />
-                    <p className="text-xs text-gray-500">
-                      {barangaySearch || barangayCitySearch || barangayProvinceSearch
-                        ? 'No barangays match these filters. Try removing a filter or checking the spelling.'
-                        : 'No barangays found'}
-                    </p>
-                  </div>
-                )}
-                {barangayResults.map(b => (
-                  <div key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 rounded-xl"
-                    style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
-                    <Building2 size={14} className="text-gray-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-[160px]">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{b.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{b.city}, {b.province}</p>
-                    </div>
-                    <div className="flex gap-1.5 flex-shrink-0 ml-auto">
-                      <button onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
-                        style={{ background: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa' }}>
-                        + Official
-                      </button>
-                      <button onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing || searchingBarangays}
-                        className="px-3 py-1.5 pointer-coarse:min-h-11 rounded-lg text-xs font-bold transition-all hover:scale-105 disabled:opacity-60"
-                        style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                        + Tanod
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {(barangayPage > 1 || barangayHasMore) && (
-                  <div className="flex items-center justify-between gap-3 pt-3">
-                    <button onClick={() => setBarangayPage(page => Math.max(1, page - 1))}
-                      disabled={barangayPage === 1 || searchingBarangays}
-                      className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
-                      style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                      ← Previous
-                    </button>
-                    <p className="text-xs text-gray-500" aria-live="polite">
-                      Page {barangayPage}{searchingBarangays ? ' · Loading…' : ''}
-                    </p>
-                    <button onClick={() => setBarangayPage(page => page + 1)}
-                      disabled={!barangayHasMore || searchingBarangays}
-                      className="px-3 py-2 rounded-xl text-xs font-bold transition-colors disabled:opacity-40"
-                      style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                      Next →
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="white-card p-5">
-              <h3 className="font-bold text-gray-800 mb-4">Recent Invite Codes</h3>
-              <div className="space-y-2">
-                {inviteCodes.slice(0, 30).map(code => (
-                  <div key={code.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                    style={{ background: code.used ? '#f9fafb' : 'var(--brand-soft)', border: `1px solid ${code.used ? '#e5e7eb' : 'var(--brand-border)'}` }}>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-bold" style={{ color: code.used ? '#9ca3af' : 'var(--brand)' }}>
-                          {code.code}
-                        </span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                          code.role === 'official' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-                        }`}>{code.role}</span>
-                        {code.used && <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-500">used</span>}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-0.5">{code.barangays?.name}</p>
-                    </div>
-                    {!code.used && (
-                      <button onClick={() => copyToClipboard(code.code)}
-                        className="w-8 h-8 pointer-coarse:w-11 pointer-coarse:h-11 rounded-lg flex items-center justify-center transition-colors hover:bg-white flex-shrink-0">
-                        <Copy size={12} style={{ color: 'var(--brand)' }} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* BARANGAYS TAB */}
-        {activeTab === 'barangays' && (
-          <div className={`white-card p-5 ${tabEnter}`}>
-            <h3 className="font-bold text-gray-800 mb-4">Active Barangays ({totalBarangaysWithUsers})</h3>
-            <div className="space-y-2">
-              {Array.from(new Set(users.map(u => u.barangay_id))).filter(Boolean).map(bId => {
-                const b = users.find(u => u.barangay_id === bId)?.barangays
-                const usersInBarangay = users.filter(u => u.barangay_id === bId)
-                const officialsCount = usersInBarangay.filter(u => u.role === 'official').length
-                const tanodCount = usersInBarangay.filter(u => u.role === 'tanod').length
-                const residentCount = usersInBarangay.filter(u => u.role === 'resident').length
-
-                return (
-                  <div key={bId} className="flex items-center gap-3 px-3 py-3 rounded-xl"
-                    style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
-                    <Building2 size={16} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-gray-800 truncate">{b?.name}</p>
-                      <div className="flex items-center gap-3 mt-0.5 text-xs">
-                        <span className="text-orange-700 font-semibold">{plural(officialsCount, 'official')}</span>
-                        <span className="text-green-700 font-semibold">{plural(tanodCount, 'tanod')}</span>
-                        <span className="text-purple-700 font-semibold">{plural(residentCount, 'resident')}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* USERS TAB */}
-        {activeTab === 'users' && (
-          <div className={`space-y-4 ${tabEnter}`}>
-
-            {/* Stats by role */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { role: 'resident', label: 'Residents' },
-                { role: 'official', label: 'Officials' },
-                { role: 'tanod', label: 'Tanods' },
-              ].map(r => {
-                const rc = ROLE_CONFIG[r.role]
-                const count = users.filter(u => u.role === r.role).length
-                return (
-                  <div key={r.role} className="white-card p-4 text-center">
-                    <div className="w-10 h-10 rounded-2xl mx-auto mb-2 flex items-center justify-center"
-                      style={{ background: rc.bg }}>
-                      <Users size={16} style={{ color: rc.color }} />
-                    </div>
-                    <p className="text-2xl font-black" style={{ color: rc.color }}>{count}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{r.label}</p>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Users list */}
-            <div className="white-card p-5">
-              <h3 className="font-bold text-gray-800 mb-4">Barangay Users ({users.length}{users.length >= 100 ? '+' : ''})</h3>
-              {users.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users size={32} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-sm text-gray-500">No users yet</p>
-                </div>
+          <div className={`grid items-start gap-3.5 xl:grid-cols-[minmax(0,1fr)_380px] ${tabEnter}`}>
+            {/* The codes (A04) */}
+            <Card>
+              <CardHead title="Recent invite codes" sub="The latest 30. Each works once." />
+              {inviteCodes.length === 0 ? (
+                <Muted className="border-t border-line px-[18px] py-5">No codes yet. Make one with New invite code.</Muted>
               ) : (
-                <div className="space-y-2">
-                  {users.map(u => {
-                    const rc = ROLE_CONFIG[u.role] || ROLE_CONFIG.resident
-                    return (
-                      <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                        style={{ background: '#fafafa', border: '1px solid var(--brand-soft)' }}>
-                        <div className="w-9 h-9 rounded-2xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0 overflow-hidden"
-                          style={{ background: `linear-gradient(135deg, ${rc.color}, ${rc.color}99)` }}>
-                          <UserAvatar src={u.avatar_url} name={u.full_name} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">{u.full_name}</p>
-                          <p className="text-xs text-gray-500 truncate">{u.barangays?.name || 'No barangay'}</p>
-                        </div>
-                        <span className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-                          style={{ background: rc.bg, color: rc.color }}>
-                          {u.role}
-                        </span>
+                <Rows className="border-t border-line">
+                  {inviteCodes.slice(0, 30).map(code => (
+                    <Row key={code.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <code className={`font-mono text-sm font-bold tracking-[0.06em] ${code.used ? 'text-muted-foreground line-through decoration-1' : 'text-ink'}`}>{code.code}</code>
+                      <Tag tone={code.role === 'official' ? 'brand' : 'quiet'}>{code.role === 'official' ? 'Official' : 'Tanod'}</Tag>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-body">{code.barangays?.name || '—'}</span>
+                      <Status tone={code.used ? 'ok' : 'quiet'}>{code.used ? 'Used' : 'Unused'}</Status>
+                      {!code.used && (
+                        <button type="button" onClick={() => copyToClipboard(code.code)} aria-label={`Copy code ${code.code}`}
+                          className="flex size-[34px] shrink-0 items-center justify-center rounded-[10px] border border-line bg-surface text-ink outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong">
+                          <Copy size={15} />
+                        </button>
+                      )}
+                    </Row>
+                  ))}
+                </Rows>
+              )}
+            </Card>
+
+            {/* Make a code for any barangay */}
+            <Card>
+              <CardHead title="New invite code" sub="Find the barangay, then make an official or tanod code." />
+              <div className="space-y-2.5 border-t border-line px-[18px] py-3.5">
+                <SearchBox value={barangaySearch} label="Barangay name" placeholder="Barangay name, e.g. Poblacion"
+                  onChange={v => { setBarangaySearch(v); setBarangayPage(1); setBarangayResults([]); setBarangayHasMore(false) }} />
+                <div className="grid grid-cols-2 gap-2">
+                  <SearchBox value={barangayCitySearch} label="City or municipality" placeholder="City, e.g. Toledo"
+                    onChange={v => { setBarangayCitySearch(v); setBarangayPage(1); setBarangayResults([]); setBarangayHasMore(false) }} />
+                  <SearchBox value={barangayProvinceSearch} label="Province" placeholder="Province"
+                    onChange={v => { setBarangayProvinceSearch(v); setBarangayPage(1); setBarangayResults([]); setBarangayHasMore(false) }} />
+                </div>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {searchingBarangays && <Loader2 size={13} className="animate-spin" aria-label="Searching barangays" />}
+                  Fill in more than one to narrow it down.
+                </p>
+              </div>
+              {barangayResults.length === 0 && !searchingBarangays ? (
+                <Muted className="border-t border-line px-[18px] py-4">
+                  {barangaySearch || barangayCitySearch || barangayProvinceSearch ? 'No barangays match. Remove a filter or check the spelling.' : 'No barangays found.'}
+                </Muted>
+              ) : (
+                <Rows className="border-t border-line">
+                  {barangayResults.map(b => (
+                    <Row key={b.id} className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-ink">{b.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{[b.city, b.province].filter(Boolean).join(', ')}</p>
                       </div>
-                    )
-                  })}
+                      <div className="flex shrink-0 gap-1.5">
+                        <Button size="sm" variant="secondary" onClick={() => generateCustomCode(b.id, 'official')} disabled={processing || searchingBarangays}>+ Official</Button>
+                        <Button size="sm" variant="secondary" onClick={() => generateCustomCode(b.id, 'tanod')} disabled={processing || searchingBarangays}>+ Tanod</Button>
+                      </div>
+                    </Row>
+                  ))}
+                </Rows>
+              )}
+              {(barangayPage > 1 || barangayHasMore) && (
+                <div className="flex items-center justify-between gap-3 border-t border-line px-[18px] py-3">
+                  <Button size="sm" variant="secondary" onClick={() => setBarangayPage(page => Math.max(1, page - 1))} disabled={barangayPage === 1 || searchingBarangays}>Previous</Button>
+                  <p className="text-xs text-muted-foreground" aria-live="polite">Page {barangayPage}{searchingBarangays ? ' · Loading…' : ''}</p>
+                  <Button size="sm" variant="secondary" onClick={() => setBarangayPage(page => page + 1)} disabled={!barangayHasMore || searchingBarangays}>Next</Button>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
+        )}
+
+        {/* BARANGAYS TAB (A02) */}
+        {activeTab === 'barangays' && (
+          <Card className={`@container ${tabEnter}`}>
+            <CardHead title="Barangays with people" sub="Counts from the accounts loaded here" />
+            {totalBarangaysWithUsers === 0 ? (
+              <Muted className="border-t border-line px-[18px] py-5">No barangay has people on the platform yet.</Muted>
+            ) : (
+              <table className="w-full table-fixed border-collapse text-left">
+                <thead>
+                  <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
+                    <th scope="col" className="py-2.5 pl-[18px] font-bold">Barangay</th>
+                    <th scope="col" className="w-[18%] px-3 py-2.5 font-bold">Residents</th>
+                    <th scope="col" className="hidden w-[22%] px-3 py-2.5 font-bold @md:table-cell">Officials · tanods</th>
+                    <th scope="col" className="hidden w-[18%] py-2.5 pr-[18px] font-bold @lg:table-cell">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(new Set(users.map(u => u.barangay_id))).filter(Boolean).map(bId => {
+                    const b = users.find(u => u.barangay_id === bId)?.barangays
+                    const inBarangay = users.filter(u => u.barangay_id === bId)
+                    const count = role => inBarangay.filter(u => u.role === role).length
+                    return (
+                      <tr key={bId} className="border-t border-line">
+                        <td className="min-w-0 py-3 pl-[18px]">
+                          <p className="truncate text-sm font-bold text-ink">{b?.name || 'Unnamed barangay'}</p>
+                          <p className="truncate text-xs text-muted-foreground">{[b?.city, b?.province].filter(Boolean).join(', ') || '—'}</p>
+                        </td>
+                        <td className="px-3 py-3 text-[13px] text-body tabular-nums">{count('resident')}</td>
+                        <td className="hidden px-3 py-3 text-[13px] text-body tabular-nums @md:table-cell">{count('official')} · {count('tanod')}</td>
+                        <td className="hidden py-3 pr-[18px] @lg:table-cell"><Status tone="ok">Active</Status></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        )}
+
+        {/* USERS TAB (A05) */}
+        {activeTab === 'users' && (
+          <Card className={`@container ${tabEnter}`}>
+            <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-3 sm:px-[18px]">
+              <Segmented label="Show" value={userRole} onChange={setUserRole}
+                items={[
+                  { value: 'all', label: 'Everyone' },
+                  { value: 'official', label: 'Officials', count: users.filter(u => u.role === 'official').length },
+                  { value: 'tanod', label: 'Tanods', count: users.filter(u => u.role === 'tanod').length },
+                  { value: 'resident', label: 'Residents', count: users.filter(u => u.role === 'resident').length },
+                ]}
+                className="w-full @2xl:w-auto [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" />
+              <SearchBox value={userSearch} onChange={setUserSearch} label="Search people" className="min-w-44 flex-1 @3xl:max-w-64" />
+            </div>
+            {shownUsers.length === 0 ? (
+              <Muted className="border-t border-line px-[18px] py-5">{users.length === 0 ? 'Nobody yet.' : 'Nobody matches.'}</Muted>
+            ) : (
+              <table className="w-full table-fixed border-collapse text-left">
+                <thead>
+                  <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
+                    <th scope="col" className="py-2.5 pl-[18px] font-bold">Name</th>
+                    <th scope="col" className="w-[110px] px-3 py-2.5 font-bold">Role</th>
+                    <th scope="col" className="hidden w-[30%] py-2.5 pr-[18px] font-bold @xl:table-cell">Barangay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownUsers.map(u => (
+                    <tr key={u.id} className="border-t border-line">
+                      <td className="min-w-0 py-2.5 pl-[18px]">
+                        <span className="flex min-w-0 items-center gap-3">
+                          <Avatar name={u.full_name} src={u.avatar_url} size="sm" tone={u.role === 'tanod' ? 'ok' : 'brand'} />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-bold text-ink">{u.full_name || 'No name given'}</span>
+                            <span className="block truncate text-xs text-muted-foreground @xl:hidden">{u.barangays?.name || 'No barangay'}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5"><Tag tone={u.role === 'resident' ? 'quiet' : u.role === 'tanod' ? 'ok' : 'brand'}>{ROLE_LABEL[u.role] || u.role}</Tag></td>
+                      <td className="hidden truncate py-2.5 pr-[18px] text-[13px] text-body @xl:table-cell">{u.barangays?.name || 'No barangay'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <p className="border-t border-line px-[18px] py-3 text-xs text-muted-foreground">
+              Showing {shownUsers.length} of {users.length}{users.length >= 100 ? '+ (the newest 100)' : ''}.
+            </p>
+          </Card>
         )}
 
       </div>
     </DashboardFrame>
 
-      {/* Rejection Modal */}
+      {/* Decline, with the reason the applicant will see */}
       {reviewing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}
+        <div className="fixed inset-0 z-50 sheet-overlay bg-[var(--scrim)] [animation:sheetFade_.2s_ease_both]"
           onClick={() => setReviewing(null)}>
-          <div className="w-full max-w-md rounded-3xl overflow-hidden fade-up-1"
-            style={{ background: 'white', boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}
+          <div role="dialog" aria-modal="true" aria-labelledby="decline-title"
+            className="sheet-panel relative flex max-w-md flex-col overflow-hidden bg-surface shadow-[var(--shadow-float)] [animation:sheetUp_.32s_var(--ease-sheet)_both] sm:border sm:border-line"
             onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}>
-                  <XCircle size={22} className="text-white" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-800">Reject Application</h2>
-                  <p className="text-xs text-gray-500">{reviewing.full_name}</p>
-                </div>
-              </div>
-
-              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
-                Rejection Reason <span className="text-red-500">*</span>
-              </label>
-              <textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+            <span aria-hidden="true" className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" />
+            <div className="px-[18px] pt-3.5 pb-1 sm:pt-[18px]">
+              <h2 id="decline-title" className="text-[17px] font-extrabold text-ink">Decline the application</h2>
+              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">{[reviewing.barangays?.name && `Brgy. ${reviewing.barangays.name}`, reviewing.full_name].filter(Boolean).join(' · ')}</p>
+            </div>
+            <div className="px-[18px] py-4">
+              <label htmlFor="decline-reason" className="mb-2 block text-[13px] font-bold text-ink">Why? The applicant sees this.</label>
+              <textarea id="decline-reason" value={rejectReason} onChange={e => setRejectReason(e.target.value)}
                 rows={4} maxLength={300}
-                placeholder="Explain why this application is being rejected..."
-                className="input-field w-full rounded-2xl px-4 py-3 text-sm text-gray-800 resize-none" />
-              <p className="text-xs text-gray-500 text-right mt-1">{rejectReason.length}/300</p>
-
-              <div className="flex gap-3 mt-5">
-                <button onClick={() => { setReviewing(null); setRejectReason('') }}
-                  className="flex-1 py-3 rounded-2xl text-sm font-bold transition-colors hover:bg-gray-50"
-                  style={{ background: 'var(--app-surface)', color: '#6b7280', border: '1px solid var(--brand-soft)' }}>
-                  Cancel
-                </button>
-                <button onClick={() => handleReject(reviewing, rejectReason)}
-                  disabled={!rejectReason.trim() || processing}
-                  className="flex-1 py-3 rounded-2xl text-sm font-bold text-white transition-all hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 8px 32px rgba(239,68,68,0.4)' }}>
-                  {processing ? 'Rejecting…' : 'Confirm Reject'}
-                </button>
-              </div>
+                placeholder="For example: we could not confirm the barangay resolution"
+                className="w-full resize-none rounded-[10px] border border-line bg-surface px-3.5 py-3 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-foreground focus:border-brand-strong" />
+              <p className="mt-1.5 text-xs text-muted-foreground">{rejectReason.length} of 300</p>
+            </div>
+            <div className="flex gap-2.5 border-t border-line px-[18px] pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
+              <Button variant="secondary" size="lg" onClick={() => { setReviewing(null); setRejectReason('') }}>Cancel</Button>
+              <Button variant="danger" size="lg" className="flex-1" onClick={() => handleReject(reviewing, rejectReason)}
+                disabled={!rejectReason.trim() || processing} aria-busy={processing || undefined}>
+                {processing ? 'Declining…' : 'Decline'}
+              </Button>
             </div>
           </div>
         </div>
