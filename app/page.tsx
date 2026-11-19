@@ -3,159 +3,94 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import {
-  ArrowRight, AlertTriangle, Shield, BarChart2, FileText, MessageCircle, Bell, CheckCircle,
-  TrendingUp, Activity, Map as MapIcon, Scale, Smartphone, WifiOff, BookOpen, Home, Star,
-  Building2, UserPlus, Send,
-} from 'lucide-react'
+import { Phone, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { dashboardPath } from '@/lib/roles'
+import Band from '@/components/crafted/Band'
+import { Button } from '@/components/ui/button'
+import {
+  IncidentsIcon, DocumentsIcon, AnnouncementsIcon, BlotterIcon, TicketsIcon, MapIcon, InfrastructureIcon,
+} from '@/components/icons/BhIcons'
 
-const dots = [...Array(30)].map((_, i) => ({
-  size: (((i * 7) % 6) + 3),
-  left: ((i * 17 + 13) % 100),
-  top: ((i * 23 + 7) % 100),
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
+// What the app does, in plain words (P01 "What you can do").
+const FEATURES = [
+  { icon: IncidentsIcon, title: 'Report and track', desc: 'Send a report with a photo and your location. See when a tanod is assigned and on the way.' },
+  { icon: DocumentsIcon, title: 'Documents without the line', desc: 'Request a clearance, residency or indigency certificate. The processing time comes from the Citizen’s Charter.' },
+  { icon: AnnouncementsIcon, title: 'Hear it first', desc: 'Water interruptions, typhoon alerts and events, sent straight to your phone.' },
+  { icon: BlotterIcon, title: 'Lupon cases, in the open', desc: 'Follow your Katarungang Pambarangay case and its hearing dates, with the deadlines the law sets.' },
+  { icon: TicketsIcon, title: 'Talk to the barangay', desc: 'Ask a question and get an answer from an official, in one thread.' },
+  { icon: MapIcon, title: 'Built for responders', desc: 'Officials dispatch from a live map. Tanods get the route on their phone.' },
+]
 
-const smallDots = [...Array(20)].map((_, i) => ({
-  left: ((i * 31 + 5) % 100),
-  top: ((i * 19 + 11) % 100),
-  duration: ((i * 4) % 8) + 5,
-  delay: (i * 0.9) % 6,
-}))
+const STEPS = [
+  { title: 'Sign up', desc: 'Create an account with your name and your barangay.' },
+  { title: 'Get verified', desc: 'An official checks that you live in the barangay.' },
+  { title: 'Use it', desc: 'Report, request and receive alerts from one app.' },
+]
 
-const AnimatedDots = () => (
-  <div className="absolute inset-0" style={{ overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true">
-    {dots.map((dot, i) => (
-      <div key={i} style={{
-        position: 'absolute',
-        width: `${dot.size}px`,
-        height: `${dot.size}px`,
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.4)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `float ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-        filter: 'blur(0.5px)',
-      }} />
-    ))}
-    {smallDots.map((dot, i) => (
-      <div key={`sm-${i}`} style={{
-        position: 'absolute',
-        width: '3px',
-        height: '3px',
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.25)',
-        left: `${dot.left}%`,
-        top: `${dot.top}%`,
-        animation: `floatReverse ${dot.duration}s ease-in-out infinite`,
-        animationDelay: `${dot.delay}s`,
-      }} />
-    ))}
-  </div>
-)
+// The laws the app already follows (DESIGN.md §7: cite the law where the app does).
+const LAWS = [
+  { code: 'RA 7160', name: 'Local Government Code', desc: 'Blotter cases follow the Katarungang Pambarangay process and its deadlines.' },
+  { code: 'RA 11032', name: 'Ease of Doing Business Act', desc: 'Each document request shows the time the barangay commits to in its Citizen’s Charter.' },
+  { code: 'RA 9514 and more', name: 'Fire Code and related laws', desc: 'Reports are classified by the law that applies, so a fire report shows that the BFP leads.' },
+]
 
-// Backgroundless logo; larger copies get a soft drop shadow.
-function Logo({ size, alt = 'BarangayHub 360' }: { size: number; alt?: string }) {
+function Logo({ size, alt = '' }: { size: number; alt?: string }) {
   return (
-    <span className="relative inline-block flex-shrink-0 align-middle" style={{ width: size, height: size }}>
-      <Image src="/logo.png" alt={alt} fill sizes={`${size}px`} loading="eager"
-        className={`object-contain ${size >= 60 ? 'drop-shadow-2xl' : ''}`} />
+    <span className="relative inline-block flex-shrink-0" style={{ width: size, height: size }}>
+      <Image src="/logo.png" alt={alt} fill sizes={`${size}px`} loading="eager" className="object-contain" />
     </span>
   )
 }
 
-// Tailwind can't see dynamically-built class names like `bg-${color}-100`,
-// so those classes never make it into the CSS build. Full literal class
-// strings keep the mockup's status pills styled.
-const MOCK_STATUS_CLASSES: Record<string, string> = {
-  pending: 'bg-amber-100 text-amber-700',
-  assigned: 'bg-blue-100 text-blue-700',
-  resolved: 'bg-emerald-100 text-emerald-700',
-}
-
-const FEATURES = [
-  { icon: AlertTriangle, title: 'Incident reporting', desc: 'Residents report from their phone with a photo and a map pin. Each report gets a priority based on the law that applies.', color: '#ea580c', bg: '#fff7ed' },
-  { icon: MapIcon, title: 'Dispatch and live map', desc: 'Officials see every open report on a live map, send the nearest on-duty tanod, and follow the response.', color: '#16a34a', bg: '#f0fdf4' },
-  { icon: FileText, title: 'Document requests', desc: 'Request a clearance, residency or indigency certificate online, with the processing time from the Citizen’s Charter.', color: '#0284c7', bg: '#f0f9ff' },
-  { icon: MessageCircle, title: 'Tickets and AI assistant', desc: 'Ask the AI assistant any time, or open a ticket to chat with a barangay official.', color: '#7c3aed', bg: '#f5f3ff' },
-  { icon: Scale, title: 'Blotter and Lupon cases', desc: 'Track Katarungang Pambarangay cases from filing to settlement, with the deadlines the law sets.', color: '#b45309', bg: '#fffbeb' },
-  { icon: Bell, title: 'Announcements and alerts', desc: 'Post once and every resident is notified, including push alerts on their phone.', color: '#e11d48', bg: '#fff1f2' },
-]
-
-const STEPS = [
-  { icon: Building2, title: 'Your barangay requests access', desc: 'A barangay official sends a request. Once it’s approved, the barangay is set up.' },
-  { icon: UserPlus, title: 'Officials invite the team', desc: 'Officials share invite codes with fellow officials and tanods. Residents sign up and choose their barangay.' },
-  { icon: Send, title: 'Reports come in and get handled', desc: 'Residents report and request. Officials dispatch tanods, who update each case from the field.' },
-  { icon: TrendingUp, title: 'See what needs attention', desc: 'Analytics show trends, hotspots and response times, with an AI summary for the barangay.' },
-]
-
-const ROLES = [
-  {
-    icon: Home, role: 'Resident', subtitle: 'Get help from your barangay', color: '#4A43D4', bg: '#f0effe',
-    perks: ['Report incidents with a photo and location', 'Request barangay documents', 'Chat with officials through tickets', 'Get announcements and alerts'],
-    cta: { href: '/register', label: 'Create an account' },
-  },
-  {
-    icon: Star, role: 'Barangay official', subtitle: 'Run the barangay from one place', color: '#c2410c', bg: '#fff7ed',
-    perks: ['See every report on a live map', 'Dispatch tanods and track responses', 'Process documents and blotter cases', 'Post announcements and view analytics'],
-    cta: { href: '/request-access', label: 'Request access' },
-    inviteNote: true,
-  },
-  {
-    icon: Shield, role: 'Tanod', subtitle: 'Respond faster in the field', color: '#15803d', bg: '#f0fdf4',
-    perks: ['Get assignments as they come in', 'Navigate to the scene', 'Update status and mark cases resolved', 'Go on and off duty'],
-    cta: { href: '/register', label: 'Join with an invite code' },
-  },
-]
-
-const LAWS = [
-  { code: 'RA 7160', name: 'Local Government Code', desc: 'Blotter cases follow the Katarungang Pambarangay process, including which disputes the Lupon can take and when a case can be elevated.' },
-  { code: 'RA 11032', name: 'Ease of Doing Business Act', desc: 'Every document request shows the processing time the barangay commits to in its Citizen’s Charter.' },
-  { code: 'RA 9514 and more', name: 'Fire Code and related laws', desc: 'Incidents are classified with the law that applies, so a fire report shows that the Bureau of Fire Protection leads the response.' },
-]
-
-const HIGHLIGHTS = [
-  { icon: Smartphone, text: 'Works on any phone' },
-  { icon: WifiOff, text: 'Reports save even offline' },
-  { icon: BookOpen, text: 'Grounded in Philippine law' },
-]
-
-function SectionHeading({ icon: Icon, eyebrow, title, desc }: { icon: typeof Activity; eyebrow: string; title: string; desc?: string }) {
+/** The phone in the hero: an illustration of the resident home, not real data. */
+function PhoneMock() {
   return (
-    <div className="text-center mb-10 sm:mb-14">
-      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-4"
-        style={{ background: 'var(--brand-soft)', border: '1px solid var(--brand-border)' }}>
-        <Icon size={12} style={{ color: 'var(--brand)' }} aria-hidden="true" />
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--brand-dark)' }}>{eyebrow}</span>
+    <div aria-hidden="true" className="relative w-[300px] h-[560px] rounded-[40px] bg-[#1A1830] p-2.5 shadow-[var(--shadow-float)]">
+      <div className="relative isolate h-full overflow-hidden rounded-[32px] bg-page">
+        <div className="relative px-4 pt-6 pb-3">
+          <Band extend={10} fade={70} dots={8} seed={6} />
+          <div className="relative z-[1]">
+            <p className="text-[10px] font-bold tracking-[0.1em] text-white/75 uppercase">Today</p>
+            <p className="mt-1 text-[19px] font-extrabold tracking-[-0.4px] text-white">Magandang gabi.</p>
+          </div>
+        </div>
+        <div className="relative z-[1] space-y-2.5 px-3">
+          <div className="rounded-[12px] border border-line bg-surface px-3 py-2.5 shadow-[var(--shadow-lift)]">
+            <p className="text-[10px] font-bold text-ok">Tanod on the way</p>
+            <p className="mt-0.5 text-[12px] font-extrabold text-ink">Broken streetlight</p>
+            <div className="mt-2 flex gap-1">{[1, 2, 3, 4].map(i => <span key={i} className={`h-[3px] flex-1 rounded-sm ${i < 4 ? 'bg-ok' : 'bg-line'}`} />)}</div>
+          </div>
+          <div className="divide-y divide-line overflow-hidden rounded-[12px] border border-line bg-surface">
+            {[[DocumentsIcon, 'Request a document'], [TicketsIcon, 'Ask the barangay'], [BlotterIcon, 'My cases']].map(([Icon, label]) => (
+              <div key={label as string} className="flex items-center gap-2.5 px-3 py-2.5 text-brand-strong">
+                <Icon size={16} />
+                <span className="text-[11.5px] font-bold text-ink">{label as string}</span>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-[12px] border border-line bg-surface px-3 py-2.5">
+            <p className="text-[9px] font-bold tracking-[0.06em] text-muted-foreground uppercase">Announcement</p>
+            <p className="mt-0.5 text-[11.5px] font-extrabold text-ink">Water interruption on Saturday</p>
+            <p className="text-[10.5px] text-muted-foreground">Morning to afternoon</p>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-[12px] border border-line bg-surface px-3 py-2.5 text-brand-strong">
+            <InfrastructureIcon size={16} />
+            <span className="text-[11.5px] font-bold text-ink">Your reports</span>
+          </div>
+        </div>
       </div>
-      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-gray-800 mb-4 max-w-2xl mx-auto"
-        style={{ letterSpacing: '-1.5px', lineHeight: 1.1 }}>
-        {title}
-      </h2>
-      {desc && <p className="text-gray-600 max-w-xl mx-auto text-base leading-relaxed">{desc}</p>}
     </div>
   )
 }
 
 export default function LandingPage() {
   const router = useRouter()
-  const [scrolled, setScrolled] = useState(false)
   // false = show the branded splash instead of landing content.
   // Prevents the PWA cold-start flash: launching the installed app while
   // logged in used to show the full landing page for ~1s while the
   // Supabase session check round-tripped, then jump to the dashboard.
   const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20)
-    handleScroll() // correct initial state if the page loads mid-scroll
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
 
   useEffect(() => {
     const supabase = createClient()
@@ -205,381 +140,142 @@ export default function LandingPage() {
   // while a signed-in user is redirected to their dashboard.
   if (!ready) {
     return (
-      <div className="min-h-dvh bg-brand flex flex-col items-center justify-center gap-6">
-        <div style={{ animation: 'float 2.5s ease-in-out infinite' }}>
-          <Logo size={80} alt="BH360" />
-        </div>
-        <div className="text-center">
-          <p className="text-white font-bold text-sm">BarangayHub 360</p>
-          <p className="text-purple-100 text-xs mt-1">Loading your dashboard…</p>
+      <div className="relative isolate min-h-dvh flex flex-col items-center justify-center gap-5 text-white">
+        <Band mode="fill" dots={18} />
+        <div className="relative z-[1] flex flex-col items-center gap-4">
+          <Logo size={72} alt="BH360" />
+          <div className="text-center">
+            <p className="text-[15px] font-extrabold">BarangayHub 360</p>
+            <p className="mt-1 text-[13px] text-white/80" role="status">Opening your barangay…</p>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-dvh bg-white overflow-x-hidden">
+    <div className="relative isolate min-h-dvh overflow-x-hidden bg-page text-body">
 
-      {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
-        style={{
-          background: scrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
-          WebkitBackdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'blur(0px)',
-          borderBottom: scrolled ? '1px solid var(--brand-soft)' : '1px solid transparent',
-          boxShadow: scrolled ? '0 2px 12px rgba(91,84,232,0.06)' : 'none',
-        }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
-          <Link href="/" className="flex items-center gap-3 min-w-0" aria-label="BarangayHub 360 home">
-            <Logo size={38} alt="" />
-            <span className="min-w-0">
-              <span className={`block font-bold text-sm leading-tight transition-colors duration-300 ${scrolled ? 'text-gray-800' : 'text-white'}`}>BarangayHub 360</span>
-              <span className={`text-xs leading-tight hidden sm:block transition-colors duration-300 ${scrolled ? 'text-gray-500' : 'text-purple-100'}`}>Smart barangay management</span>
-            </span>
-          </Link>
-          {/* Real links (crawlable, prefetched, cmd/long-press-able)
-              instead of onClick router.push buttons */}
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-            <Link href="/login"
-              className={`text-sm font-semibold transition-colors duration-300 px-3 py-2.5 rounded-xl ${scrolled ? 'text-gray-700 hover:bg-gray-100' : 'text-white hover:bg-white/10'}`}>
-              Sign in
+      {/* ---------- Hero on the band (fades over 200px) ---------- */}
+      <header className="relative text-white">
+        <Band extend={0} fade={200} dots={24} seed={1} />
+        <div className="relative z-[1] mx-auto max-w-[1180px] px-4 sm:px-8">
+          <nav aria-label="Main" className="flex items-center gap-4 sm:gap-6 py-5">
+            <Link href="/" className="flex items-center gap-2.5 rounded-lg text-[15px] font-extrabold" aria-label="BarangayHub 360 home">
+              <Logo size={30} />
+              <span className="hidden min-[380px]:inline whitespace-nowrap">BarangayHub 360</span>
             </Link>
-            <Link href="/register"
-              className="text-sm font-semibold text-white px-4 py-2.5 rounded-xl transition-transform hover:scale-105 hidden min-[400px]:flex items-center gap-1.5"
-              style={{ background: 'linear-gradient(135deg, var(--brand-dark), var(--brand))', boxShadow: '0 4px 20px rgba(91,84,232,0.4)' }}>
-              Get started <ArrowRight size={14} aria-hidden="true" />
-            </Link>
+            <div className="hidden md:flex items-center gap-6 text-[14px] font-semibold text-white/90">
+              <a href="#features" className="hover:text-white">Features</a>
+              <a href="#how" className="hover:text-white">How it works</a>
+              <a href="#barangays" className="hover:text-white">For barangays</a>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <Button asChild variant="onband" size="sm"><Link href="/login">Sign in</Link></Button>
+              <Button asChild variant="white" size="sm" className="hidden min-[360px]:inline-flex"><Link href="/register">Get started</Link></Button>
+            </div>
+          </nav>
+
+          <div className="grid items-center gap-10 pt-8 pb-16 lg:grid-cols-[1fr_auto] lg:pt-14 lg:pb-10">
+            <div className="max-w-[560px]">
+              <p className="text-xs font-bold tracking-[0.1em] text-white/75 uppercase">For residents, officials and tanods</p>
+              <h1 className="mt-4 text-[40px] sm:text-[56px] lg:text-[64px] font-extrabold leading-[1.02] tracking-[-2px]">
+                Your barangay, one tap away.
+              </h1>
+              <p className="mt-5 text-[15px] sm:text-[17px] leading-[1.6] text-white/90">
+                Report a problem and watch help arrive. Request a clearance without the long line. Hear from your barangay the moment something happens.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild variant="white" size="lg"><Link href="/register">Create a free account</Link></Button>
+                <Button asChild variant="onband" size="lg"><Link href="/resident/report"><Phone aria-hidden="true" />Report an emergency</Link></Button>
+              </div>
+              <p className="mt-4 text-[13px] text-white/80">Works on any phone browser. Install it like an app.</p>
+            </div>
+            <div className="hidden lg:block">
+              <PhoneMock />
+            </div>
           </div>
         </div>
-      </nav>
+      </header>
 
-      <main>
-        {/* Hero */}
-        <section className="pt-28 sm:pt-32 pb-24 sm:pb-32 relative overflow-hidden bg-brand">
-          <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-            <div className="absolute top-20 right-20 w-[500px] h-[500px] rounded-full opacity-20"
-              style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }} />
-            <div className="absolute bottom-0 left-20 w-[400px] h-[400px] rounded-full opacity-15"
-              style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }} />
-          </div>
-          <AnimatedDots />
-
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-10">
-            <div className="text-center max-w-3xl mx-auto">
-
-              <p className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-6 text-xs font-bold text-white fade-up"
-                style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" aria-hidden="true" />
-                For residents, officials and tanods
-              </p>
-
-              <h1 className="text-[42px] sm:text-6xl lg:text-7xl font-black text-white mb-6 fade-up-1"
-                style={{ letterSpacing: '-2px', lineHeight: 1.05 }}>
-                The Future of{' '}
-                <span style={{
-                  background: 'linear-gradient(135deg, #fff 0%, #ddd6fe 50%, #fff 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}>Barangay</span>{' '}Management
-              </h1>
-
-              <p className="text-purple-50 text-lg sm:text-xl mb-9 fade-up-2 max-w-2xl mx-auto leading-relaxed">
-                Residents report incidents and request documents from their phone. Officials dispatch tanods,
-                track every case and keep everyone informed, all in one place.
-              </p>
-
-              <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center justify-center gap-3 fade-up-3 mb-5">
-                <Link href="/register"
-                  className="flex items-center justify-center gap-2 px-7 py-4 rounded-2xl text-sm font-bold transition-transform hover:scale-105"
-                  style={{ background: 'white', color: 'var(--brand-dark)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
-                  Create an account <ArrowRight size={16} aria-hidden="true" />
-                </Link>
-                <Link href="/login"
-                  className="flex items-center justify-center gap-2 px-7 py-4 rounded-2xl text-sm font-bold text-white transition-colors hover:bg-white/20"
-                  style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.55)' }}>
-                  Sign in
-                </Link>
+      <main className="relative z-[1]">
+        {/* ---------- Features ---------- */}
+        <section id="features" className="mx-auto max-w-[1180px] px-4 sm:px-8 pt-16 pb-16 scroll-mt-6">
+          <p className="text-xs font-bold tracking-[0.1em] text-brand-strong uppercase">What you can do</p>
+          <h2 className="mt-2 max-w-[560px] text-[30px] sm:text-[36px] font-extrabold leading-[1.12] tracking-[-1px] text-ink">
+            Everything the barangay hall does, now on your phone.
+          </h2>
+          <div className="mt-7 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+            {FEATURES.map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="bg-surface p-6">
+                <Icon size={24} className="text-brand-strong" />
+                <h3 className="mt-4 text-[16px] font-extrabold text-ink">{title}</h3>
+                <p className="mt-1.5 text-[14px] leading-[1.6] text-body">{desc}</p>
               </div>
-
-              <p className="text-purple-50 text-sm fade-up-4 mb-8">
-                Barangay official?{' '}
-                <Link href="/request-access" className="font-bold text-white underline underline-offset-4 decoration-white/50 hover:decoration-white">
-                  Request access for your barangay
-                </Link>
-              </p>
-
-              <ul className="fade-up-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-purple-50">
-                {HIGHLIGHTS.map(({ icon: Icon, text }) => (
-                  <li key={text} className="flex items-center gap-1.5 whitespace-nowrap">
-                    <Icon size={15} aria-hidden="true" /> {text}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Dashboard preview */}
-            <div className="relative fade-up-4 mx-auto mt-14 sm:mt-20" style={{ maxWidth: '900px' }}>
-              <div className="rounded-3xl overflow-hidden relative"
-                style={{
-                  background: 'rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(255,255,255,0.2)',
-                  backdropFilter: 'blur(20px)',
-                  boxShadow: '0 50px 100px rgba(0,0,0,0.35)',
-                }}>
-                {/* Browser frame */}
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10">
-                  <div className="w-3 h-3 rounded-full bg-red-400 opacity-80" aria-hidden="true" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400 opacity-80" aria-hidden="true" />
-                  <div className="w-3 h-3 rounded-full bg-green-400 opacity-80" aria-hidden="true" />
-                  <p className="flex-1 text-center text-xs text-white/80">Official dashboard · sample data</p>
-                </div>
-
-                {/* Dashboard mockup */}
-                <div className="p-4 sm:p-6 bg-white" aria-hidden="true">
-                  <div className="flex items-center justify-between mb-5">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--brand)' }}>Good morning</p>
-                      <p className="text-xl font-bold text-gray-800">Kapitan Santos</p>
-                    </div>
-                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-bold"
-                      style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}>S</div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-5">
-                    {[
-                      { label: 'Open reports', value: '6', color: '#4A43D4', icon: AlertTriangle },
-                      { label: 'Resolved', value: '18', color: '#16a34a', icon: CheckCircle },
-                      { label: 'Tickets', value: '7', color: '#ea580c', icon: FileText },
-                      { label: 'Avg. response', value: '9m', color: '#e11d48', icon: TrendingUp },
-                    ].map((s) => (
-                      <div key={s.label} className="rounded-2xl p-3 border" style={{ borderColor: 'var(--brand-soft)' }}>
-                        <s.icon size={14} style={{ color: s.color }} />
-                        <p className="text-xl font-bold mt-2" style={{ color: s.color }}>{s.value}</p>
-                        <p className="text-xs text-gray-500">{s.label}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-2">
-                    {[
-                      { title: 'Streetlight broken — Sitio 3', status: 'pending' },
-                      { title: 'Noise complaint — Block 5', status: 'assigned' },
-                      { title: 'Flooding — Riverside', status: 'resolved' },
-                    ].map((inc) => (
-                      <div key={inc.title} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border" style={{ borderColor: 'var(--brand-soft)' }}>
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: '#fff7ed' }}>
-                          <AlertTriangle size={14} className="text-orange-500" />
-                        </div>
-                        <p className="flex-1 min-w-0 text-sm font-medium text-gray-700 truncate">{inc.title}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${MOCK_STATUS_CLASSES[inc.status]}`}>{inc.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating badges */}
-              <div className="absolute -top-4 -left-4 px-4 py-2 rounded-2xl items-center gap-2 hidden sm:flex" aria-hidden="true"
-                style={{ background: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', animation: 'float 4s ease-in-out infinite' }}>
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#f0fdf4' }}>
-                  <Activity size={14} className="text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-800">Live updates</p>
-                  <p className="text-xs text-gray-500">No refresh needed</p>
-                </div>
-              </div>
-
-              <div className="absolute -bottom-4 -right-4 px-4 py-2 rounded-2xl items-center gap-2 hidden sm:flex" aria-hidden="true"
-                style={{ background: 'white', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', animation: 'floatReverse 5s ease-in-out infinite' }}>
-                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'var(--brand-soft)' }}>
-                  <BarChart2 size={14} style={{ color: 'var(--brand)' }} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-800">AI summaries</p>
-                  <p className="text-xs text-gray-500">Trends and hotspots</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Smooth bottom edge */}
-          <div className="absolute bottom-0 left-0 right-0" style={{ height: '100px', background: 'linear-gradient(to bottom, transparent, white)', zIndex: 10 }} aria-hidden="true" />
-        </section>
-
-        {/* Features */}
-        <section id="features" className="py-16 sm:py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, var(--app-surface) 100%)' }}>
-          <div className="max-w-6xl mx-auto">
-            <SectionHeading icon={Activity} eyebrow="Features" title="Everything your barangay handles, in one app"
-              desc="Built around how Filipino barangays actually work, from the first report to the final settlement." />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {FEATURES.map(({ icon: Icon, title, desc, color, bg }) => (
-                <div key={title} className="p-5 sm:p-6 rounded-3xl"
-                  style={{ background: 'white', border: '1px solid var(--brand-soft)', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: bg }}>
-                    <Icon size={22} style={{ color }} aria-hidden="true" />
-                  </div>
-                  <h3 className="font-bold text-gray-800 text-lg mb-2">{title}</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">{desc}</p>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* How it works */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-white">
-          <div className="max-w-5xl mx-auto">
-            <SectionHeading icon={TrendingUp} eyebrow="How it works" title="From sign-up to a working barangay" />
-
-            <ol className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {STEPS.map(({ icon: Icon, title, desc }, i) => (
-                <li key={title} className="flex items-start gap-4 p-5 sm:p-6 rounded-3xl"
-                  style={{ background: 'white', border: '1px solid var(--brand-soft)', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-white font-black"
-                    style={{ background: 'linear-gradient(135deg, var(--brand-dark), var(--brand))', boxShadow: '0 8px 24px rgba(91,84,232,0.3)' }}>
-                    {String(i + 1).padStart(2, '0')}
+        {/* ---------- How it works ---------- */}
+        <section id="how" className="mx-auto max-w-[1180px] px-4 sm:px-8 pb-16 scroll-mt-6">
+          <div className="grid gap-8 lg:grid-cols-[1fr_2fr]">
+            <div>
+              <p className="text-xs font-bold tracking-[0.1em] text-brand-strong uppercase">How it works</p>
+              <h2 className="mt-2 text-[30px] sm:text-[36px] font-extrabold leading-[1.12] tracking-[-1px] text-ink">Three steps, then you’re in.</h2>
+            </div>
+            <ol className="grid gap-6 sm:grid-cols-3">
+              {STEPS.map((step, i) => (
+                <li key={step.title} className="flex gap-3">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[13px] font-extrabold text-brand-strong" aria-hidden="true">{i + 1}</span>
+                  <div>
+                    <h3 className="text-[15px] font-extrabold text-ink">{step.title}</h3>
+                    <p className="mt-1 text-[14px] leading-[1.55] text-body">{step.desc}</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-gray-800 text-lg mb-1 flex items-center gap-2">
-                      {title}
-                    </h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">{desc}</p>
-                  </div>
-                  <Icon size={20} className="hidden sm:block flex-shrink-0 mt-1" style={{ color: 'var(--brand)', opacity: 0.45 }} aria-hidden="true" />
                 </li>
               ))}
             </ol>
           </div>
         </section>
 
-        {/* Roles */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6" style={{ background: 'linear-gradient(180deg, white 0%, var(--app-surface) 100%)' }}>
-          <div className="max-w-5xl mx-auto">
-            <SectionHeading icon={Shield} eyebrow="For everyone" title="A view for every role in the barangay" />
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {ROLES.map(({ icon: Icon, role, subtitle, color, bg, perks, cta, inviteNote }) => (
-                <div key={role} className="p-6 rounded-3xl flex flex-col"
-                  style={{ background: 'white', border: '1px solid var(--brand-soft)', boxShadow: '0 4px 20px rgba(91,84,232,0.06)' }}>
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: bg }}>
-                    <Icon size={22} style={{ color }} aria-hidden="true" />
-                  </div>
-                  <h3 className="font-bold text-lg" style={{ color }}>{role}</h3>
-                  <p className="text-sm text-gray-500 mb-4">{subtitle}</p>
-                  <ul className="space-y-2.5 mb-6">
-                    {perks.map(perk => (
-                      <li key={perk} className="flex items-start gap-2 text-sm text-gray-700">
-                        <CheckCircle size={15} className="flex-shrink-0 mt-0.5" style={{ color }} aria-hidden="true" />
-                        {perk}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-auto">
-                    {inviteNote && (
-                      <p className="text-xs text-gray-500 mb-3 text-center">
-                        Joining an existing barangay?{' '}
-                        <Link href="/register" className="font-bold underline underline-offset-2" style={{ color }}>Sign up with your invite code</Link>
-                      </p>
-                    )}
-                    <Link href={cta.href}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-bold transition-colors"
-                      style={{ background: bg, color }}>
-                      {cta.label} <ArrowRight size={15} aria-hidden="true" />
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* ---------- The law behind it ---------- */}
+        <section className="mx-auto max-w-[1180px] px-4 sm:px-8 pb-16">
+          <p className="text-xs font-bold tracking-[0.1em] text-brand-strong uppercase">Grounded in Philippine law</p>
+          <div className="mt-4 grid overflow-hidden rounded-[14px] border border-line bg-surface md:grid-cols-3">
+            {LAWS.map((law, i) => (
+              <div key={law.code} className={`p-5 border-line ${i > 0 ? 'border-t md:border-t-0 md:border-l' : ''}`}>
+                <p className="text-[13px] font-extrabold text-brand-strong">{law.code} · <span className="text-ink">{law.name}</span></p>
+                <p className="mt-1.5 text-[14px] leading-[1.55] text-body">{law.desc}</p>
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* Philippine law */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-white">
-          <div className="max-w-5xl mx-auto">
-            <SectionHeading icon={Scale} eyebrow="Grounded in Philippine law" title="Built on the rules barangays already follow"
-              desc="BarangayHub 360 cites the law behind what it shows, so residents and officials know why a case is handled the way it is." />
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {LAWS.map(({ code, name, desc }) => (
-                <div key={code} className="p-6 rounded-3xl"
-                  style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-                  <p className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-lg mb-3"
-                    style={{ background: 'var(--brand-soft)', color: 'var(--brand-dark)' }}>
-                    <Scale size={12} aria-hidden="true" /> {code}
-                  </p>
-                  <h3 className="font-bold text-gray-800 text-base mb-2">{name}</h3>
-                  <p className="text-gray-600 text-sm leading-relaxed">{desc}</p>
-                </div>
-              ))}
+        {/* ---------- For barangays ---------- */}
+        <section id="barangays" className="mx-auto max-w-[1180px] px-4 sm:px-8 pb-16 scroll-mt-6">
+          <div className="relative isolate overflow-hidden rounded-[14px] px-6 py-8 sm:px-9 text-white">
+            <Band mode="fill" dots={12} seed={7} />
+            <div className="relative z-[1] flex flex-wrap items-center gap-6">
+              <div className="min-w-[240px] flex-1">
+                <h2 className="text-[24px] sm:text-[28px] font-extrabold tracking-[-0.7px]">Run a barangay? Bring it online.</h2>
+                <p className="mt-2 text-[15px] text-white/88">Send a request. We review it and send your officials their invite codes.</p>
+              </div>
+              <Button asChild variant="white" size="lg"><Link href="/request-access">Request access</Link></Button>
             </div>
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="py-16 sm:py-24 px-4 sm:px-6 bg-brand relative overflow-hidden">
-          <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-            <div className="absolute top-0 right-0 w-[500px] h-[500px] rounded-full opacity-20"
-              style={{ background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)', filter: 'blur(80px)' }} />
-            <div className="absolute bottom-0 left-0 w-[400px] h-[400px] rounded-full opacity-15"
-              style={{ background: 'radial-gradient(circle, white 0%, transparent 70%)', filter: 'blur(60px)' }} />
-          </div>
-          <AnimatedDots />
-
-          <div className="max-w-3xl mx-auto text-center relative z-10">
-            <div className="mb-7" style={{ animation: 'float 6s ease-in-out infinite' }}>
-              <Logo size={76} alt="" />
-            </div>
-
-            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white mb-5" style={{ letterSpacing: '-2px', lineHeight: 1.05 }}>
-              Bring your barangay online
-            </h2>
-            <p className="text-purple-50 mb-9 leading-relaxed text-base sm:text-lg max-w-xl mx-auto">
-              Residents can sign up today. Barangay officials can request access to set up their barangay.
-            </p>
-
-            <div className="flex flex-col min-[420px]:flex-row items-stretch min-[420px]:items-center justify-center gap-3 mb-6">
-              <Link href="/register"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-sm font-bold transition-transform hover:scale-105"
-                style={{ background: 'white', color: 'var(--brand-dark)', boxShadow: '0 8px 40px rgba(0,0,0,0.25)' }}>
-                Create an account <ArrowRight size={16} aria-hidden="true" />
-              </Link>
-              <Link href="/request-access"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-2xl text-sm font-bold text-white transition-colors hover:bg-white/20"
-                style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.55)' }}>
-                Request access
-              </Link>
-            </div>
-
-            <p className="text-sm text-purple-50">
-              Already have an account?{' '}
-              <Link href="/login" className="font-bold text-white underline underline-offset-4 decoration-white/50 hover:decoration-white">Sign in</Link>
-            </p>
           </div>
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="py-10 px-4 sm:px-6 bg-white border-t border-gray-100">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <Logo size={36} alt="" />
-            <div>
-              <p className="text-sm font-bold text-gray-800">BarangayHub 360</p>
-              <p className="text-xs text-gray-500">Smart barangay management</p>
-            </div>
-          </div>
-          <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-semibold text-gray-600">
-            <Link href="/login" className="hover:text-gray-900">Sign in</Link>
-            <Link href="/register" className="hover:text-gray-900">Create an account</Link>
-            <Link href="/request-access" className="hover:text-gray-900">Request access</Link>
-          </nav>
-          <p className="text-xs text-gray-500 text-center">© 2026 BarangayHub 360</p>
+      <footer className="relative z-[1] mx-auto max-w-[1180px] px-4 sm:px-8">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-line py-7">
+          <span className="flex items-center gap-2.5 text-[15px] font-extrabold text-ink"><Logo size={26} />BarangayHub 360</span>
+          <span className="text-[13px] text-muted-foreground">A capstone project · Data handled under RA 10173</span>
+          <span className="ml-auto flex flex-wrap gap-5 text-[14px] text-body">
+            <Link href="/login" className="hover:text-brand-strong">Sign in</Link>
+            <Link href="/register" className="hover:text-brand-strong">Create an account</Link>
+            <Link href="/request-access" className="inline-flex items-center gap-0.5 hover:text-brand-strong">Request access <ChevronRight size={14} aria-hidden="true" /></Link>
+          </span>
         </div>
       </footer>
-
     </div>
   )
 }
