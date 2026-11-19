@@ -51,7 +51,8 @@ export default function TicketsSection({ tickets, filtered, search, onSearch, fi
       ? new Date(a.created_at) - new Date(b.created_at)
       : new Date(b.created_at) - new Date(a.created_at))
   })
-  const waiting = counts.open
+  // Open or being handled: the dashboard's "need a reply".
+  const waiting = tickets.filter(t => t.status !== 'closed').length
 
   return (
     <div className="grid items-stretch gap-3.5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">

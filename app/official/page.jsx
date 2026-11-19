@@ -679,7 +679,8 @@ function OfficialDashboard() {
   const officialStats = useMemo(() => {
     const unassigned = unassignedIncidents(incidents)
     const openIncidents = incidents.filter(i => !isSettled(i.status)).length
-    const openTickets = tickets.filter(t => t.status === 'open')
+    // Open or being handled: the same "needs a reply" as the summary line.
+    const openTickets = tickets.filter(t => !isSettled(t.status))
     const onDuty = tanods.filter(t => t.on_duty).length
     const oldest = rows => rows.reduce((min, r) => (!min || r.created_at < min ? r.created_at : min), null)
     const pending = users.filter(u =>
@@ -769,7 +770,7 @@ function OfficialDashboard() {
   // in plain words, one line from the data, and the section's actions.
   // The short name stays the phone title and the browser-tab title.
   function sectionHead(section) {
-    const openTickets = tickets.filter(t => t.status === 'open').length
+    const openTickets = tickets.filter(t => !isSettled(t.status)).length
     const onDuty = tanods.filter(t => t.on_duty).length
     const byRole = role => users.filter(u => u.role === role).length
     switch (section) {

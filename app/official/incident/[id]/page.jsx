@@ -8,7 +8,7 @@ import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
-  Phone, Shield, Scale, Check, Send, Pencil, Star, X, Navigation, FileText, Bell,
+  Phone, Shield, Scale, Check, Send, Pencil, Star, X, FileText, Bell,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
@@ -393,11 +393,6 @@ export default function IncidentDetail() {
             {hasMap ? (
               <div className="relative border-b border-line">
                 <MiniMap bare lat={incident.latitude} lng={incident.longitude} height="clamp(200px, 30dvh, 280px)" />
-                <a href={`https://www.google.com/maps/dir/?api=1&destination=${incident.latitude},${incident.longitude}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="absolute top-3 left-3 z-[500] inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-line bg-surface px-3 text-[13px] font-bold text-ink shadow-[var(--shadow-lift)] hover:border-line-strong">
-                  <Navigation size={15} aria-hidden="true" />Get directions
-                </a>
               </div>
             ) : (
               <Muted className="border-b border-line px-[18px] py-5">No map pin: this was reported without coordinates.</Muted>

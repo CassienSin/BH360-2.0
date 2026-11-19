@@ -50,9 +50,9 @@ export default function UsersSection({
         <div className="flex flex-wrap items-center gap-2.5 px-3.5 py-3 sm:px-[18px]">
           <Segmented label="Show" value={role} onChange={onRole}
             items={ROLES.map(r => ({ value: r.value, label: r.label, count: r.value === 'all' ? undefined : counts[r.value] }))}
-            className="w-full @3xl:w-auto [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" />
+            className="w-full @2xl:w-auto [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" />
           <SearchBox value={search} onChange={onSearch} label="Search people" placeholder="Search people" className="min-w-48 flex-1 @5xl:max-w-64" />
-          <span className="@3xl:ml-auto"><ExportMenu count={filtered.length} noun="people" onExport={onExport} /></span>
+          <span className="@2xl:ml-auto"><ExportMenu count={filtered.length} noun="people" onExport={onExport} /></span>
         </div>
 
         {filtered.length === 0 ? (
@@ -63,7 +63,7 @@ export default function UsersSection({
           </div>
         ) : (
           <>
-            <table className="hidden w-full table-fixed border-collapse text-left @3xl:table">
+            <table className="hidden w-full table-fixed border-collapse text-left @2xl:table">
               <thead>
                 <tr className="border-t border-line bg-surface-sunk text-xs font-bold text-muted-foreground">
                   <th scope="col" className="py-2.5 pl-[18px] font-bold">Name</th>
@@ -103,7 +103,7 @@ export default function UsersSection({
               </tbody>
             </table>
 
-            <Rows className="border-t border-line @3xl:hidden">
+            <Rows className="border-t border-line @2xl:hidden">
               {filtered.map(u => {
                 const v = verifyOf(u)
                 return (
@@ -111,7 +111,7 @@ export default function UsersSection({
                     <Avatar name={u.full_name} src={u.avatar_url} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold text-ink">{u.full_name || 'No name given'}</p>
-                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{[ROLE_LABEL[u.role], u.address, `joined ${joined(u.created_at).toLowerCase()}`].filter(Boolean).join(' · ')}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{[ROLE_LABEL[u.role], u.address, `joined ${joined(u.created_at).replace(/^(Today|Yesterday)$/, w => w.toLowerCase())}`].filter(Boolean).join(' · ')}</p>
                       {v && <Status tone={v.tone} className="mt-1">{v.label}</Status>}
                     </div>
                     {v && (u.verification_status || 'pending') === 'pending' && (

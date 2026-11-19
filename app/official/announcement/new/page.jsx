@@ -251,7 +251,11 @@ export default function NewAnnouncement() {
   }
 
   const backToList = () => goBack(router, '/official?section=announcements')
-  const clock = new Date(now).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '')
+  // The preview's lock-screen clock is the device's time, so it is drawn
+  // only after hydration (the server's minute can differ from the browser's).
+  const clock = hydrated
+    ? new Date(now).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '')
+    : ''
 
   if (success) {
     return (

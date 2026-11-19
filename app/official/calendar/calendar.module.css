@@ -6,9 +6,9 @@
 .page button { cursor: pointer; }
 .page button:focus-visible, .page select:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
 .navigation { display: flex; align-items: center; gap: 8px; }
-.primary, .secondary, .iconButton { width: 36px; padding: 0; color: var(--ink); flex-shrink: 0; }
+.primary, .secondary, .iconButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border-radius: 10px; border: 1px solid var(--line); padding: 0 12px; font-size: 13px !important; font-weight: 700 !important; background: var(--surface); color: var(--ink); transition: background-color .15s, border-color .15s; }
 .primary { background: var(--brand-strong); color: white; border-color: transparent; }
-.iconButton { width: 36px; padding: 8px; border-color: transparent; color: var(--ink); flex-shrink: 0; }
+.iconButton { width: 36px; padding: 0; flex-shrink: 0; }
 .secondary:hover, .iconButton:hover { background: var(--surface-sunk); }
 /* Touch screens: the month arrows sit side by side, so their tap areas must
    be real 44px boxes (expanded hit areas would overlap each other). */
@@ -44,13 +44,13 @@
 .colorFilter select { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--ink); max-width: 130px; }
 .weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); background: var(--surface-sunk); padding: 8px 12px; text-align: left; font-size: 12px; font-weight: 700; color: var(--text-muted); }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; padding: 0; background: var(--line); border-top: 1px solid var(--line); }
-.day, .blank { background: var(--surface-sunk); }
-.blank { background: transparent; border-color: transparent; }
+.day, .blank { min-width: 0; height: 92px; background: var(--surface); border: 0; border-radius: 0; text-align: left; padding: 8px; }
+.blank { background: var(--surface-sunk); }
 .day { display: flex; flex-direction: column; gap: 3px; position: relative; }
 .day:hover { background: var(--surface-sunk); }
 .day.selected { background: var(--brand-soft); box-shadow: inset 0 0 0 2px var(--brand-strong); color: var(--ink); }
 .selected .dayCount, .selected .more { color: var(--brand-strong); }
-.selected .cellEvent { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 700; line-height: 18px; border-left: 3px solid; padding: 0 6px; color: var(--ink); background: var(--surface-sunk); border-radius: 4px; }
+.selected .cellEvent { background: var(--surface); }
 .selected .mobileDots > span { box-shadow: 0 0 0 1px rgba(255,255,255,.8); }
 .dayTop { display: flex; align-items: center; justify-content: space-between; }
 .dayNumber { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 800; }
@@ -59,7 +59,7 @@
 .selected.today .dayNumber { background: var(--brand-strong); }
 .dayCount { font-size: 11px; color: var(--text-muted); padding-right: 3px; }
 .cellEvents { display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; }
-.cellEvent { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; line-height: 14px; border-left: 2px solid; padding-left: 4px; color: var(--body); background: var(--surface-sunk); border-radius: 2px; }
+.cellEvent { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; font-weight: 700; line-height: 18px; border-left: 3px solid; padding: 0 6px; color: var(--ink); background: var(--surface-sunk); border-radius: 4px; }
 .more { font-size: 11px; color: var(--brand-strong); line-height: 9px; padding-left: 5px; }
 .mobileDots { display: none; }
 .footer { padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; color: var(--text-muted); line-height: 1.5; }

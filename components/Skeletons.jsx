@@ -28,10 +28,12 @@ import TabBar from '@/components/crafted/TabBar'
 import PageShell from '@/components/crafted/PageShell'
 
 /** One shimmering block. tone="brand" for use on the purple background. */
-export function Skeleton({ className = '', style, tone }) {
+export function Skeleton({ className = '', style, tone, as: Tag = 'div' }) {
+  // as="span" (displayed as a block) where the bar stands in for text inside
+  // a heading or paragraph: a <div> there is invalid HTML.
   return (
-    <div
-      className={`skeleton-shimmer ${tone === 'brand' ? 'skeleton-on-brand' : ''} ${className}`}
+    <Tag
+      className={`skeleton-shimmer ${tone === 'brand' ? 'skeleton-on-brand' : ''} ${Tag === 'span' ? 'block' : ''} ${className}`}
       style={style}
       aria-hidden="true"
     />
@@ -769,7 +771,7 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
     // band, the status, then the progress card.
     return (
       <div role="status" aria-label="Loading" aria-busy="true">
-        <PageShell title={<Skeleton tone="brand" className="h-4 w-48 max-w-full" />} onBack={true}
+        <PageShell title={<Skeleton as="span" tone="brand" className="h-4 w-48 max-w-full" />} onBack={true}
           bandContent={<div className="white-card shadow-[var(--shadow-lift)] h-[clamp(180px,26dvh,300px)]" />}>
           <Skeleton className="h-[62px] w-full rounded-[10px]" />
           <RowsCard rows={4} />
@@ -784,8 +786,8 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
   return (
     <div role="status" aria-label="Loading" aria-busy="true">
       <PageShell maxWidth={1120} onBack={true}
-        title={<Skeleton tone="brand" className="h-[30px] w-72 max-w-full rounded-lg" />}
-        sub={<Skeleton tone="brand" className="mt-1 h-3.5 w-56 max-w-full" />}>
+        title={<Skeleton as="span" tone="brand" className="h-[30px] w-72 max-w-full rounded-lg" />}
+        sub={<Skeleton as="span" tone="brand" className="mt-1 h-3.5 w-56 max-w-full" />}>
         <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-3.5">
             <div className="white-card shadow-[var(--shadow-lift)] px-[18px] py-4 space-y-3">
