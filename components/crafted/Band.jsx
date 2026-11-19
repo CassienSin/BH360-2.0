@@ -21,6 +21,9 @@ import styles from './band.module.css'
  *
  * Decoration only: aria-hidden, no pointer events. With reduced motion the
  * weave and dots hold still.
+ *
+ * @param {{ mode?: 'extend' | 'fill', extend?: number | string, fade?: number | string,
+ *   dots?: number, seed?: number, className?: string, style?: import('react').CSSProperties }} props
  */
 export default function Band({ mode = 'extend', extend, fade, dots = 14, seed = 1, className = '', style }) {
   const vars = {}

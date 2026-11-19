@@ -24,6 +24,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 function Field({
   label,
   icon,
+  trailing,
   hint,
   error,
   optional,
@@ -34,6 +35,8 @@ function Field({
 }: React.ComponentProps<"input"> & {
   label: React.ReactNode
   icon?: React.ReactNode
+  /** A control at the end of the input (show/hide password). */
+  trailing?: React.ReactNode
   hint?: React.ReactNode
   error?: React.ReactNode
   optional?: boolean
@@ -69,9 +72,10 @@ function Field({
             id={controlId}
             aria-invalid={error ? true : undefined}
             aria-describedby={note ? noteId : undefined}
-            className={icon ? "pl-10" : undefined}
+            className={cn(icon && "pl-10", trailing && "pr-12")}
             {...inputProps}
           />
+          {trailing && <span className="absolute top-1/2 right-1 flex -translate-y-1/2">{trailing}</span>}
         </div>
       )}
       {note && (

@@ -112,12 +112,12 @@ export default function SearchSelect({
         aria-haspopup="listbox"
         aria-controls={listId}
         aria-required={required || undefined}
-        className="input-field w-full rounded-2xl pl-9 pr-9 py-3 text-sm text-left flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
-        <MapPin size={13} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-        <span className={`truncate ${display ? 'text-gray-800' : 'text-gray-500'}`}>
+        className="input-field w-full rounded-[10px] h-[46px] pl-10 pr-10 text-sm text-left flex items-center disabled:opacity-60 disabled:bg-surface-sunk disabled:cursor-not-allowed">
+        <MapPin size={16} strokeWidth={1.9} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <span className={`truncate ${display ? 'text-ink' : 'text-muted-foreground'}`}>
           {display || placeholder}
         </span>
-        <ChevronDown size={13} className={`absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} strokeWidth={1.9} aria-hidden="true" className={`absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Invisible input so the `required` prop participates in native form validation */}
@@ -134,13 +134,12 @@ export default function SearchSelect({
       )}
 
       {open && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-white rounded-2xl overflow-hidden fade-up"
-          style={{ boxShadow: '0 16px 48px rgba(91,84,232,0.2)', border: '1px solid var(--brand-border)' }}>
+        <div className="absolute z-50 left-0 right-0 mt-1 bg-surface rounded-[14px] overflow-hidden border border-line shadow-[var(--shadow-float)]">
 
           {/* Search */}
-          <div className="p-2 border-b border-gray-100">
+          <div className="p-2 border-b border-line">
             <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <Search size={16} strokeWidth={1.9} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
               <input
                 ref={inputRef}
                 value={search}
@@ -148,8 +147,7 @@ export default function SearchSelect({
                 onKeyDown={handleKeyDown}
                 placeholder="Search..."
                 aria-label="Search options"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl outline-none"
-                style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}
+                className="w-full h-10 pl-9 pr-3 text-sm rounded-[10px] outline-none border border-line bg-surface text-ink focus:border-brand-strong"
               />
             </div>
           </div>
@@ -157,7 +155,7 @@ export default function SearchSelect({
           {/* Options list */}
           <div ref={listRef} id={listId} role="listbox" className="max-h-64 overflow-y-auto">
             {filtered.length === 0 && (
-              <p className="text-center text-gray-500 text-sm py-6">
+              <p className="text-center text-muted-foreground text-[13px] py-6">
                 {search ? `No results for "${search}"` : 'No options available'}
               </p>
             )}
@@ -174,14 +172,14 @@ export default function SearchSelect({
                   aria-selected={selected}
                   onClick={() => selectOption(option)}
                   onMouseEnter={() => setHighlighted(i)}
-                  className="w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center justify-between gap-2"
+                  className="w-full px-3.5 py-2.5 text-left text-sm transition-colors flex items-center justify-between gap-2"
                   style={{
-                    background: selected ? 'var(--brand-soft)' : isHighlighted ? '#faf5ff' : 'transparent',
-                    color: selected ? 'var(--brand)' : '#374151',
-                    fontWeight: selected ? 600 : 400,
+                    background: selected ? 'var(--brand-soft)' : isHighlighted ? 'var(--surface-sunk)' : 'transparent',
+                    color: selected ? 'var(--brand-strong)' : 'var(--ink)',
+                    fontWeight: selected ? 700 : 400,
                   }}>
                   <span className="truncate">{optLabel || '—'}</span>
-                  {selected && <Check size={14} style={{ color: 'var(--brand)' }} className="flex-shrink-0" />}
+                  {selected && <Check size={16} strokeWidth={2.2} style={{ color: 'var(--brand-strong)' }} className="flex-shrink-0" aria-hidden="true" />}
                 </button>
               )
             })}
@@ -189,7 +187,7 @@ export default function SearchSelect({
 
           {/* Count footer */}
           {filtered.length > 0 && (
-            <div className="px-3 py-2 border-t border-gray-100 text-xs text-gray-500 text-center">
+            <div className="px-3 py-2 border-t border-line bg-surface-sunk text-xs text-muted-foreground text-center">
               {filtered.length} {filtered.length === 1 ? 'result' : 'results'}
             </div>
           )}
