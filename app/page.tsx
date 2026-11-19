@@ -200,19 +200,25 @@ export default function LandingPage() {
 
       <main className="relative z-[1]">
         {/* ---------- Features ---------- */}
-        <section id="features" className="mx-auto max-w-[1180px] px-4 sm:px-8 pt-16 pb-16 scroll-mt-6">
-          <p className="text-xs font-bold tracking-[0.1em] text-brand-strong uppercase">What you can do</p>
-          <h2 className="mt-2 max-w-[560px] text-[30px] sm:text-[36px] font-extrabold leading-[1.12] tracking-[-1px] text-ink">
-            Everything the barangay hall does, now on your phone.
-          </h2>
-          <div className="mt-7 grid gap-px overflow-hidden rounded-[14px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="bg-surface p-6">
-                <Icon size={24} className="text-brand-strong" />
-                <h3 className="mt-4 text-[16px] font-extrabold text-ink">{title}</h3>
-                <p className="mt-1.5 text-[14px] leading-[1.6] text-body">{desc}</p>
-              </div>
-            ))}
+        {/* The heading sits inside the white card: nothing grey goes on the
+            band's fade (DESIGN.md §3). */}
+        <section id="features" className="mx-auto max-w-[1180px] px-4 sm:px-8 pt-4 pb-16 scroll-mt-6">
+          <div className="overflow-hidden rounded-[14px] border border-line bg-surface shadow-[var(--shadow-lift)]">
+            <div className="px-6 pt-7 pb-6 sm:px-8">
+              <p className="text-xs font-bold tracking-[0.1em] text-brand-strong uppercase">What you can do</p>
+              <h2 className="mt-2 max-w-[560px] text-[30px] sm:text-[36px] font-extrabold leading-[1.12] tracking-[-1px] text-ink">
+                Everything the barangay hall does, now on your phone.
+              </h2>
+            </div>
+            <div className="grid gap-px border-t border-line bg-line sm:grid-cols-2 lg:grid-cols-3">
+              {FEATURES.map(({ icon: Icon, title, desc }) => (
+                <div key={title} className="bg-surface p-6 sm:px-8">
+                  <Icon size={24} className="text-brand-strong" />
+                  <h3 className="mt-4 text-[16px] font-extrabold text-ink">{title}</h3>
+                  <p className="mt-1.5 text-[14px] leading-[1.6] text-body">{desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
