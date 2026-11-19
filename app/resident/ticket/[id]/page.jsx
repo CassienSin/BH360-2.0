@@ -1,56 +1,34 @@
 'use client'
 import { TicketDetailSkeleton } from '@/components/Skeletons'
-import desktop from '@/components/desktop-pages.module.css'
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { loginHref } from '@/lib/loginRedirect'
 import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
-import { ArrowLeft, Send, Clock, CheckCircle, AlertCircle, Sparkles, Shield, FileQuestion, FileText, AlertCircle as AlertIcon, Star, Loader2 } from 'lucide-react'
+import { ChevronLeft, MoreHorizontal, Send, Loader2 } from 'lucide-react'
+import Band from '@/components/crafted/Band'
+import PageShell from '@/components/crafted/PageShell'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
+import { Avatar } from '@/components/ui/avatar'
+import { Tag } from '@/components/ui/tag'
+import { Notice } from '@/components/ui/notice'
+import { SectionLabel, Muted } from '@/components/ui/text'
 import toast from 'react-hot-toast'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
-const DOTS = Array.from({ length: 15 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
-
 const CATEGORY_CONFIG = {
-  inquiry: { label: 'Inquiry', icon: FileQuestion, color: '#3b82f6', bg: '#eff6ff' },
-  request: { label: 'Request', icon: FileText, color: '#5B54E8', bg: '#f0effe' },
-  complaint: { label: 'Complaint', icon: AlertIcon, color: '#f97316', bg: '#fff7ed' },
-  feedback: { label: 'Feedback', icon: Star, color: '#22c55e', bg: '#f0fdf4' },
+  inquiry: { label: 'Inquiry' },
+  request: { label: 'Request' },
+  complaint: { label: 'Complaint' },
+  feedback: { label: 'Feedback' },
 }
 
 const STATUS_CONFIG = {
-  open: { color: '#f59e0b', bg: '#fef3c7', label: 'Open', icon: AlertCircle, desc: 'Awaiting response' },
-  in_progress: { color: '#3b82f6', bg: '#dbeafe', label: 'In Progress', icon: Clock, desc: 'Being handled' },
-  closed: { color: '#22c55e', bg: '#dcfce7', label: 'Closed', icon: CheckCircle, desc: 'Resolved' },
+  open: { label: 'Open', desc: 'Waiting for an official' },
+  in_progress: { label: 'In progress', desc: 'An official is handling it' },
+  closed: { label: 'Closed', desc: 'Resolved' },
 }
 
 const MESSAGE_SELECT = '*, profiles(full_name, avatar_url, role)'
@@ -203,282 +181,146 @@ export default function TicketChat() {
   }, [newMessage, sending, user, id, supabase])
 
   const sc = STATUS_CONFIG[ticket?.status] || STATUS_CONFIG.open
-  const StatusIcon = sc.icon
   const cat = CATEGORY_CONFIG[ticket?.category] || null
-  const CategoryIcon = cat?.icon
+  // Who answers: the first official in the thread.
+  const handler = messages.find(m => m.profiles?.role === 'official' && m.sender_id !== user?.id)?.profiles?.full_name
 
   // ---- Loading state ----
-  if (pageLoading) return <TicketDetailSkeleton />
+  if (pageLoading) return <TicketDetailSkeleton variant="resident" />
 
   // ---- Not found state ----
   if (notFound) {
     return (
-      <div className="h-dvh flex items-center justify-center bg-brand relative overflow-hidden px-4">
-        <AnimatedDots />
-        <div className="glass-card px-8 py-6 flex flex-col items-center gap-3 text-center relative z-10">
-          <AlertCircle size={28} className="text-white opacity-90" />
-          <p className="text-white text-sm font-bold">Ticket not found</p>
-          <p className="text-purple-200 text-xs">It may have been deleted, or you may not have access to it.</p>
-          <button
-            onClick={() => goBack(router, '/resident?section=tickets')}
-            className="mt-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:scale-105"
-            style={{ background: 'white', color: 'var(--brand)' }}
-          >
-            Go back
-          </button>
-        </div>
-      </div>
+      <PageShell title="Ticket not found" onBack={() => goBack(router, '/resident?section=tickets')}>
+        <Card lift className="px-[18px] py-5">
+          <Muted>It may have been deleted, or you may not have access to it.</Muted>
+          <Button className="mt-3" onClick={() => goBack(router, '/resident?section=tickets')}>Back to my tickets</Button>
+        </Card>
+      </PageShell>
     )
   }
 
   return (
-    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
-      <AnimatedDots />
-
-      {/* Background effects */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(80px)', animation: 'float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute inset-0 opacity-5"
-          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px)', backgroundSize: '60px 60px' }}
-        />
-      </div>
-
-      {/* Header */}
-      <header
-        className={`bg-white relative z-20 px-3 sm:px-6 py-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] flex items-center gap-2 sm:gap-3 sticky top-0 ${desktop.header}`}
-        style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderBottom: '1px solid var(--brand-soft)' }}
-      >
-        <button
-          onClick={() => goBack(router, '/resident?section=tickets')}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-        >
-          <ArrowLeft size={18} />
-        </button>
-
-        <div
-          className="w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0"
-          style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-        >
-          {cat ? <CategoryIcon size={16} className="text-white" /> : <FileText size={16} className="text-white" />}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <h1 className="text-sm sm:text-base font-bold text-gray-800 truncate" style={{ letterSpacing: '-0.3px' }}>
-            {ticket?.title}
-          </h1>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            {ticket && (
-              <span
-                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
-                style={{ background: sc.bg, color: sc.color }}
-              >
-                <StatusIcon size={9} />
-                <span>{sc.label}</span>
-              </span>
-            )}
-            {cat && (
-              <span
-                className="text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5 flex-shrink-0"
-                style={{ background: cat.bg, color: cat.color }}
-              >
-                <CategoryIcon size={9} />
-                <span className="hidden sm:inline">{cat.label}</span>
-              </span>
-            )}
+    <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page">
+      {/* Header on the band */}
+      <header className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3 text-white">
+        <Band extend={0} fade={56} dots={10} seed={4} />
+        <div className="relative z-[1] mx-auto flex max-w-2xl items-center gap-2.5">
+          <IconButton kind="onband" label="Go back" onClick={() => goBack(router, '/resident?section=tickets')}>
+            <ChevronLeft size={18} strokeWidth={1.9} />
+          </IconButton>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[17px] font-extrabold">{ticket?.title}</h1>
+            <p className="truncate text-xs text-white/80">
+              {['Ticket', sc.label.toLowerCase(), cat?.label, handler].filter(Boolean).join(' · ')}
+            </p>
           </div>
+          <IconButton kind="onband" label="Ticket details" aria-expanded={showDetails} onClick={() => setShowDetails(v => !v)}>
+            <MoreHorizontal size={18} strokeWidth={1.9} />
+          </IconButton>
         </div>
-
-        <button
-          onClick={() => setShowDetails(v => !v)}
-          aria-label="Toggle ticket details"
-          aria-expanded={showDetails}
-          className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100 hover:text-gray-600 transition-colors flex-shrink-0"
-          title="Ticket details"
-        >
-          <Sparkles size={14} />
-        </button>
       </header>
 
-      {/* Details panel (collapsible) */}
+      {/* Details (collapsible) */}
       {showDetails && ticket && (
-        <div className={`bg-white relative z-10 px-4 sm:px-6 py-3 fade-up ${desktop.chatDetails}`} style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-          <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Description</p>
-          <p className="text-sm text-gray-700 leading-relaxed">{ticket.description}</p>
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <Clock size={11} />
-              Created {new Date(ticket.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-            <span>·</span>
-            <span>{sc.desc}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Status banner */}
-      {ticket?.status === 'in_progress' && (
-        <div className="relative z-10 px-4 py-2 fade-up">
-          <div
-            className={`max-w-2xl mx-auto rounded-xl px-3 py-2 flex items-center gap-2 ${desktop.chatDetails}`}
-            style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', backdropFilter: 'blur(10px)' }}
-          >
-            <Shield size={12} className="text-white flex-shrink-0" />
-            <p className="text-xs text-white">A barangay official is handling your ticket</p>
-          </div>
+        <div className="relative z-[2] mx-auto w-full max-w-2xl px-4">
+          <Card lift className="px-[18px] py-3.5">
+            <SectionLabel as="h2" className="mb-1">What you asked</SectionLabel>
+            <p className="text-sm leading-[1.55] text-body whitespace-pre-wrap">{ticket.description}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Opened {new Date(ticket.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })} · {sc.desc}
+            </p>
+          </Card>
         </div>
       )}
 
       {/* Messages */}
-      <main className={`flex-1 relative z-10 flex flex-col max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 overflow-hidden ${desktop.chatPage}`}>
-        <div className="flex-1 space-y-3 overflow-y-auto pb-4 px-1" role="log" aria-live="polite" aria-label="Ticket messages">
+      <main className="relative z-[1] flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-2xl flex-col gap-3 px-4 pt-2 pb-4" role="log" aria-live="polite" aria-label="Ticket messages">
           {messages.length === 0 && (
-            <div className="text-center mt-12">
-              <div className="glass-card inline-block px-6 py-5 text-center">
-                <div
-                  className="w-12 h-12 rounded-2xl mx-auto mb-3 flex items-center justify-center"
-                  style={{ background: 'rgba(255,255,255,0.2)' }}
-                >
-                  <Send size={20} className="text-white" />
-                </div>
-                <p className="text-white text-sm font-bold">No messages yet</p>
-                <p className="text-purple-200 text-xs mt-1">Send a message to start the conversation!</p>
-              </div>
-            </div>
+            <Card className="mx-auto mt-8 max-w-xs px-5 py-4 text-center">
+              <p className="text-sm font-bold text-ink">No messages yet</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Write below and an official will answer here.</p>
+            </Card>
           )}
 
           {messages.map((msg, i) => {
             const isMe = msg.sender_id === user?.id
             const prevMsg = messages[i - 1]
+            const nextMsg = messages[i + 1]
             const showSender = !prevMsg || prevMsg.sender_id !== msg.sender_id
+            const lastInRun = !nextMsg || nextMsg.sender_id !== msg.sender_id
             const isOfficial = msg.profiles?.role === 'official'
             const showDaySeparator = !prevMsg || dayLabel(prevMsg.created_at) !== dayLabel(msg.created_at)
+            const time = new Date(msg.created_at).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
 
             return (
               <div key={msg.id}>
-                {/* Day separator */}
                 {showDaySeparator && (
-                  <div className="flex items-center justify-center my-4">
-                    <span
-                      className="text-xs font-bold px-3 py-1 rounded-full text-white"
-                      style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}
-                    >
+                  <div className="my-2 flex justify-center">
+                    <span className="rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-bold tracking-[0.06em] text-muted-foreground uppercase">
                       {dayLabel(msg.created_at)}
                     </span>
                   </div>
                 )}
 
-                <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                  {/* Avatar (only for others' first message in a run) */}
-                  {!isMe && showSender && (
-                    <div className="relative flex-shrink-0 mb-1">
-                      <div
-                        className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-bold text-white overflow-hidden"
-                        style={{ background: 'linear-gradient(135deg, #f97316, #ea580c)' }}
-                      >
-                        {msg.profiles?.avatar_url ? (
-                          <img loading="lazy" decoding="async" src={msg.profiles.avatar_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          msg.profiles?.full_name?.[0]?.toUpperCase() || '?'
-                        )}
-                      </div>
-                      {isOfficial && (
-                        <div
-                          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full flex items-center justify-center"
-                          style={{ background: 'white', border: '2px solid white' }}
-                        >
-                          <Shield size={6} className="text-orange-500" />
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {!isMe && !showSender && <div className="w-7 flex-shrink-0" />}
-
-                  <div
-                    className={`max-w-[75%] sm:max-w-md lg:max-w-2xl px-4 py-2.5 rounded-2xl text-sm ${
-                      isMe ? 'text-white rounded-br-md' : 'bg-white text-gray-800 rounded-bl-md'
-                    }`}
-                    style={
-                      isMe
-                        ? { background: 'linear-gradient(135deg, #5B54E8, #7C75F0)', boxShadow: '0 4px 16px rgba(91,84,232,0.3)' }
-                        : { boxShadow: '0 4px 16px rgba(91,84,232,0.08)' }
-                    }
-                  >
-                    {!isMe && showSender && (
-                      <p className="text-xs font-bold mb-1 flex items-center gap-1" style={{ color: isOfficial ? '#f97316' : 'var(--brand)' }}>
-                        {msg.profiles?.full_name || 'Unknown user'}
-                        {isOfficial && (
-                          <span className="text-xs px-1 py-0.5 rounded-md font-bold" style={{ background: '#fff7ed', color: '#f97316' }}>
-                            Official
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.message}</p>
-                    <p className={`text-xs mt-1 ${isMe ? 'text-purple-200' : 'text-gray-500'}`}>
-                      {new Date(msg.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}
+                {isMe ? (
+                  <div className="flex flex-col items-end">
+                    <p className="max-w-[78%] rounded-[16px] rounded-br-[6px] bg-[var(--brand-fill)] px-4 py-2.5 text-[15px] leading-[1.5] text-white break-words whitespace-pre-wrap">
+                      {msg.message}
                     </p>
+                    {lastInRun && <p className="mt-1 text-xs text-muted-foreground">{time}</p>}
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <span className="w-8 shrink-0">
+                      {lastInRun && <Avatar name={msg.profiles?.full_name} src={msg.profiles?.avatar_url} size="sm" />}
+                    </span>
+                    <div className="flex min-w-0 max-w-[78%] flex-col items-start">
+                      {showSender && (
+                        <p className="mb-1 flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
+                          {msg.profiles?.full_name || 'Unknown user'}
+                          {isOfficial && <Tag tone="brand" className="h-[18px] px-1.5 text-[10px]">Official</Tag>}
+                        </p>
+                      )}
+                      <p className="rounded-[16px] rounded-bl-[6px] border border-line bg-surface px-4 py-2.5 text-[15px] leading-[1.5] text-ink break-words whitespace-pre-wrap">
+                        {msg.message}
+                      </p>
+                      {lastInRun && <p className="mt-1 text-xs text-muted-foreground">{time}</p>}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
           <div ref={bottomRef} />
         </div>
-
-        {ticket?.status !== 'closed' ? (
-          <form onSubmit={sendMessage} className="flex gap-2 mt-3 sticky bottom-0 pb-[env(safe-area-inset-bottom,0px)]">
-            <input
-              ref={inputRef}
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              maxLength={MAX_MESSAGE_LENGTH}
-              aria-label="Message"
-              className="flex-1 rounded-2xl px-4 py-3 text-sm outline-none transition-all"
-              style={{
-                background: 'rgba(255,255,255,0.15)',
-                border: '1px solid rgba(255,255,255,0.25)',
-                color: 'white',
-                backdropFilter: 'blur(10px)',
-              }}
-              placeholder="Type a message..."
-              onFocus={e => {
-                e.target.style.background = 'rgba(255,255,255,0.25)'
-                e.target.style.borderColor = 'rgba(255,255,255,0.4)'
-              }}
-              onBlur={e => {
-                e.target.style.background = 'rgba(255,255,255,0.15)'
-                e.target.style.borderColor = 'rgba(255,255,255,0.25)'
-              }}
-            />
-            <button
-              type="submit"
-              disabled={sending || !newMessage.trim()}
-              aria-label="Send message"
-              className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-50 transition-all hover:scale-105"
-              style={{ background: 'white', color: 'var(--brand)', boxShadow: '0 8px 24px rgba(255,255,255,0.3)' }}
-            >
-              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            </button>
-          </form>
-        ) : (
-          <div className="mt-4">
-            <div className="glass-card px-6 py-4 text-center flex flex-col items-center gap-2">
-              <CheckCircle size={24} className="text-white opacity-90" />
-              <p className="text-white text-sm font-bold">This ticket has been resolved!</p>
-              <p className="text-purple-200 text-xs">Thank you for using our support system</p>
-            </div>
-          </div>
-        )}
       </main>
+
+      {/* Composer */}
+      <footer className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom,0px))]">
+        <div className="mx-auto max-w-2xl">
+          {ticket?.status !== 'closed' ? (
+            <form onSubmit={sendMessage} className="flex gap-2">
+              <label htmlFor="ticket-message" className="sr-only">Message</label>
+              <input
+                id="ticket-message"
+                ref={inputRef}
+                value={newMessage}
+                onChange={e => setNewMessage(e.target.value)}
+                maxLength={MAX_MESSAGE_LENGTH}
+                placeholder="Write a message"
+                className="h-11 min-w-0 flex-1 rounded-[10px] border border-transparent bg-track px-4 text-[15px] text-ink outline-none placeholder:text-muted-foreground focus:border-brand-strong focus:bg-surface"
+              />
+              <Button type="submit" size="icon" className="size-11" disabled={sending || !newMessage.trim()} aria-label="Send message">
+                {sending ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
+              </Button>
+            </form>
+          ) : (
+            <Notice tone="ok" title="This ticket is closed.">Open a new ticket if you need the barangay again.</Notice>
+          )}
+        </div>
+      </footer>
     </div>
   )
 }

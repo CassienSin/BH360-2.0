@@ -2,5 +2,5 @@
 import { TicketDetailSkeleton } from '@/components/Skeletons'
 
 export default function Loading() {
-  return <TicketDetailSkeleton />
+  return <TicketDetailSkeleton variant="resident" />
 }

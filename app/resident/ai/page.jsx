@@ -1,12 +1,14 @@
 'use client'
-import desktop from '@/components/desktop-pages.module.css'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { goBack } from '@/lib/goBack'
-import { ArrowLeft, Send, Bot, Lightbulb, FileText, Bell, MessageCircle, Trash2 } from 'lucide-react'
-import Image from 'next/image'
+import { ChevronLeft, Send, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import toast from 'react-hot-toast'
+import Band from '@/components/crafted/Band'
+import { AiIcon } from '@/components/icons/BhIcons'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 
 const MAX_INPUT_LENGTH = 500
 
@@ -14,65 +16,27 @@ const WELCOME_MESSAGE = {
   id: 'welcome',
   role: 'assistant',
   content:
-    'Magandang araw! 👋 I am the BarangayHub AI Assistant. I can help you with common barangay questions like clearances, permits, complaints, and more. How can I help you today?',
+    'Kumusta! I’m the BarangayHub assistant. I can answer questions about barangay services: clearances, permits, complaints and more. What do you need?',
 }
 
 const QUICK_QUESTIONS = [
-  { icon: FileText, text: 'How do I get a barangay clearance?', color: '#5B54E8', bg: '#f0effe' },
-  { icon: Bell, text: 'What documents do I need for a permit?', color: '#f97316', bg: '#fff7ed' },
-  { icon: MessageCircle, text: 'How do I file a complaint?', color: '#f43f5e', bg: '#fff1f2' },
-  { icon: Lightbulb, text: 'What are the barangay office hours?', color: '#22c55e', bg: '#f0fdf4' },
+  'What are the office hours?',
+  'How do I get a barangay clearance?',
+  'What documents do I need for a permit?',
+  'How do I file a complaint?',
 ]
-
-// Stable pseudo-random dots, computed once at module load
-const DOTS = Array.from({ length: 20 }, (_, i) => ({
-  size: ((i * 7) % 6) + 3,
-  left: (i * 17 + 13) % 100,
-  top: (i * 23 + 7) % 100,
-  duration: ((i * 3) % 6) + 4,
-  delay: (i * 0.7) % 4,
-}))
-
-const AnimatedDots = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-    {DOTS.map((dot, i) => (
-      <div
-        key={i}
-        style={{
-          position: 'absolute',
-          width: `${dot.size}px`,
-          height: `${dot.size}px`,
-          borderRadius: '50%',
-          background: 'rgba(255,255,255,0.4)',
-          left: `${dot.left}%`,
-          top: `${dot.top}%`,
-          animation: `float ${dot.duration}s ease-in-out infinite`,
-          animationDelay: `${dot.delay}s`,
-          filter: 'blur(0.5px)',
-        }}
-      />
-    ))}
-  </div>
-)
 
 let messageId = 0
 const nextId = () => `msg-${++messageId}-${Date.now()}`
 
 export default function AIAssistant() {
   const router = useRouter()
-  const [scrolled, setScrolled] = useState(false)
   const [messages, setMessages] = useState([WELCOME_MESSAGE])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const abortRef = useRef(null)
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
 
   // Abort any in-flight request on unmount to avoid setState-after-unmount
   useEffect(() => {
@@ -152,208 +116,85 @@ export default function AIAssistant() {
   const clearChat = useCallback(() => {
     abortRef.current?.abort()
     setLoading(false)
-    setMessages([{ ...WELCOME_MESSAGE, id: nextId(), content: 'Chat cleared! How can I help you today?' }])
-    toast.success('Chat cleared!')
+    setMessages([{ ...WELCOME_MESSAGE, id: nextId(), content: 'Cleared. What else can I help with?' }])
+    toast.success('Conversation cleared')
     inputRef.current?.focus()
   }, [])
 
   const showWelcome = messages.length === 1
 
   return (
-    <div className="h-dvh flex flex-col relative overflow-hidden bg-brand">
-      {/* Animated background */}
-      <AnimatedDots />
-
-      {/* Background effects */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div
-          className="absolute top-20 right-20 w-96 h-96 rounded-full opacity-15"
-          style={{
-            background: 'radial-gradient(circle, #a78bfa 0%, transparent 70%)',
-            filter: 'blur(80px)',
-            animation: 'float 8s ease-in-out infinite',
-          }}
-        />
-        <div
-          className="absolute bottom-20 left-20 w-72 h-72 rounded-full opacity-10"
-          style={{ background: 'white', filter: 'blur(60px)', animation: 'floatReverse 10s ease-in-out infinite' }}
-        />
-      </div>
-
-      {/* Header */}
-      <header
-        className={`fixed top-0 left-0 right-0 z-20 px-4 sm:px-6 py-4 flex items-center gap-3 flex-shrink-0 transition-all duration-300 ${desktop.header}`}
-        style={{
-          background: scrolled ? 'rgba(255,255,255,0.85)' : 'white',
-          backdropFilter: scrolled ? 'blur(20px)' : 'none',
-          boxShadow: '0 2px 12px rgba(91,84,232,0.08)',
-          borderBottom: '1px solid var(--brand-soft)',
-        }}
-      >
-        <button
-          onClick={() => goBack(router, '/resident')}
-          aria-label="Go back"
-          className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors hover:bg-gray-100 flex-shrink-0"
-        >
-          <ArrowLeft size={18} className="text-gray-600" />
-        </button>
-
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="relative flex-shrink-0">
-            <Image src="/logo.png" alt="BH360 logo" width={32} height={32} className="object-contain" />
-            <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white animate-pulse" />
+    <div className="relative isolate flex h-dvh flex-col overflow-hidden bg-page">
+      {/* Header on the band */}
+      <header className="relative px-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-3 text-white">
+        <Band extend={0} fade={56} dots={10} seed={6} />
+        <div className="relative z-[1] mx-auto flex max-w-3xl items-center gap-2.5">
+          <IconButton kind="onband" label="Go back" onClick={() => goBack(router, '/resident')}>
+            <ChevronLeft size={18} strokeWidth={1.9} />
+          </IconButton>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-[17px] font-extrabold">AI Assistant</h1>
+            <p className="flex items-center gap-1.5 truncate text-xs text-white/80">
+              <span className="size-[7px] rounded-full bg-[#3DC48A]" aria-hidden="true" />Barangay helper · answers about services
+            </p>
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-gray-800 truncate">BH360 AI</h1>
-              <span
-                className="text-xs font-bold px-2 py-0.5 rounded-full hidden sm:inline-flex"
-                style={{ background: '#f0fdf4', color: '#16a34a' }}
-              >
-                Online
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 truncate">Your virtual barangay helper</p>
-          </div>
+          {messages.length > 1 && (
+            <Button variant="onband" size="sm" onClick={clearChat}><Trash2 aria-hidden="true" />Clear</Button>
+          )}
         </div>
-
-        {messages.length > 1 && (
-          <button
-            onClick={clearChat}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors hover:bg-red-50"
-            style={{ color: '#ef4444', border: '1px solid #fecaca' }}
-          >
-            <Trash2 size={12} /> <span className="hidden sm:inline">Clear</span>
-          </button>
-        )}
       </header>
 
       {/* Messages */}
-      <main className={`flex-1 relative z-10 flex flex-col max-w-3xl w-full mx-auto px-4 py-6 overflow-hidden pt-24 ${desktop.aiPage}`}>
-        <div className="flex-1 space-y-4 overflow-y-auto pb-4 pr-1" role="log" aria-live="polite" aria-label="Chat messages">
-          {/* Welcome with quick questions */}
-          {showWelcome && (
-            <div className={`fade-up space-y-5 mb-6 ${desktop.aiWelcome}`}>
-              <div className="white-card p-6 text-center">
-                <div className="relative w-24 h-24 mx-auto mb-4" style={{ animation: 'float 4s ease-in-out infinite' }}>
-                  <Image src="/logo.png" alt="" fill sizes="96px" className="object-contain" />
-                </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-1">Hi there! 👋</h2>
-                <p className="text-sm text-gray-500">I&apos;m here to help with all your barangay questions. Try one of these:</p>
-              </div>
-
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-wider text-white opacity-70 px-2 mb-2 flex items-center gap-2">
-                  <Lightbulb size={12} /> Quick Questions
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {QUICK_QUESTIONS.map((q, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(null, q.text)}
-                      disabled={loading}
-                      className="white-card text-left p-4 flex items-start gap-3 group disabled:opacity-60"
-                    >
-                      <div
-                        className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110"
-                        style={{ background: q.bg }}
-                      >
-                        <q.icon size={16} style={{ color: q.color }} />
-                      </div>
-                      <span className="text-sm text-gray-700 leading-snug">{q.text}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Messages */}
+      <main className="relative z-[1] flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 pt-2 pb-4" role="log" aria-live="polite" aria-label="Chat messages">
           {messages.map(msg => (
-            <div key={msg.id} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} fade-up`}>
-              {msg.role === 'assistant' && (
-                <div
-                  className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))', boxShadow: '0 4px 12px rgba(91,84,232,0.3)' }}
-                >
-                  <Bot size={15} className="text-white" />
-                </div>
-              )}
-
-              <div
-                className={`max-w-[85%] sm:max-w-md lg:max-w-2xl px-4 py-3 rounded-2xl text-sm shadow-sm ${
-                  msg.role === 'user' ? 'text-white' : 'bg-white text-gray-800'
-                }`}
-                style={
-                  msg.role === 'user'
-                    ? {
-                        background: 'linear-gradient(135deg, #5B54E8, #7C75F0)',
-                        boxShadow: '0 8px 24px rgba(91,84,232,0.35)',
-                        borderTopRightRadius: '6px',
-                      }
-                    : {
-                        boxShadow: '0 4px 16px rgba(91,84,232,0.08)',
-                        borderTopLeftRadius: '6px',
-                      }
-                }
-              >
-                {msg.role === 'user' ? (
-                  <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                ) : (
-                  <div className="markdown leading-relaxed">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  </div>
-                )}
+            msg.role === 'user' ? (
+              <div key={msg.id} className="flex justify-end">
+                <p className="max-w-[80%] rounded-[16px] rounded-br-[6px] bg-[var(--brand-fill)] px-4 py-2.5 text-[15px] leading-[1.5] text-white whitespace-pre-wrap break-words">
+                  {msg.content}
+                </p>
               </div>
-
-              {msg.role === 'user' && (
-                <div
-                  className="w-9 h-9 rounded-2xl flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-0.5"
-                  style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
-                >
-                  You
+            ) : (
+              <div key={msg.id} className="flex items-end gap-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-strong" aria-hidden="true">
+                  <AiIcon size={18} />
+                </span>
+                <div className="markdown max-w-[80%] rounded-[16px] rounded-bl-[6px] bg-track px-4 py-2.5 text-[15px] leading-[1.55] text-ink break-words">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
-              )}
-            </div>
+              </div>
+            )
           ))}
 
           {/* Typing indicator */}
           {loading && (
-            <div className="flex gap-2.5 justify-start fade-up">
-              <div
-                className="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ background: 'linear-gradient(135deg, var(--brand), var(--brand-light))' }}
-              >
-                <Bot size={15} className="text-white" />
-              </div>
-              <div
-                className="bg-white px-5 py-4 rounded-2xl text-sm flex items-center gap-3"
-                style={{ boxShadow: '0 4px 16px rgba(91,84,232,0.08)', borderTopLeftRadius: '6px' }}
-              >
-                <div className="flex gap-1.5">
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand)', animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: 'var(--brand-light)', animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce" style={{ background: '#a78bfa', animationDelay: '300ms' }} />
-                </div>
-                <span className="text-gray-500 text-xs">Thinking...</span>
-              </div>
+            <div className="flex items-end gap-2" role="status">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-strong" aria-hidden="true">
+                <AiIcon size={18} />
+              </span>
+              <p className="rounded-[16px] rounded-bl-[6px] bg-track px-4 py-3 text-sm text-muted-foreground">Thinking…</p>
             </div>
           )}
 
           <div ref={bottomRef} />
         </div>
+      </main>
 
-        {/* Input */}
-        <form onSubmit={sendMessage} className="flex-shrink-0 fade-up pb-[env(safe-area-inset-bottom,0px)]">
-          <div
-            className="flex items-end gap-2 rounded-3xl p-2 pl-3"
-            style={{
-              background: 'rgba(255,255,255,0.15)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              backdropFilter: 'blur(20px)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-            }}
-          >
+      {/* Quick questions, then the composer */}
+      <footer className="relative z-[2] border-t border-line bg-surface px-4 pt-3 pb-[max(10px,env(safe-area-inset-bottom,0px))]">
+        <div className="mx-auto max-w-3xl">
+          {showWelcome && (
+            <div className="mb-3 flex gap-2 overflow-x-auto rail-fade [scrollbar-width:none]! [&::-webkit-scrollbar]:hidden" role="group" aria-label="Quick questions">
+              {QUICK_QUESTIONS.map(q => (
+                <button key={q} type="button" onClick={() => sendMessage(null, q)} disabled={loading}
+                  className="h-9 shrink-0 rounded-[9px] border border-line bg-surface px-3 text-[13px] font-bold whitespace-nowrap text-brand-strong outline-none hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-strong disabled:opacity-60">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+          <form onSubmit={sendMessage} className="flex items-end gap-2">
+            <label htmlFor="ai-input" className="sr-only">Message</label>
             <textarea
               ref={inputRef}
               id="ai-input"
@@ -370,38 +211,17 @@ export default function AIAssistant() {
               }}
               rows={1}
               maxLength={MAX_INPUT_LENGTH}
-              aria-label="Message"
-              className="flex-1 min-w-0 bg-transparent border-none outline-none resize-none text-sm text-white py-2.5 placeholder-white/50 placeholder:text-sm [&::placeholder]:whitespace-nowrap [&::placeholder]:overflow-hidden [&::placeholder]:text-ellipsis"
+              className="min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-transparent bg-track px-4 py-2.5 text-[15px] leading-[1.45] text-ink outline-none [scrollbar-width:none]! placeholder:text-muted-foreground focus:border-brand-strong focus:bg-surface [&::-webkit-scrollbar]:hidden"
               style={{ maxHeight: '120px' }}
-              placeholder="Ask me anything about your barangay..."
+              placeholder="Ask about the barangay"
             />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              aria-label="Send message"
-              className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 disabled:opacity-40 transition-all hover:scale-105 disabled:hover:scale-100"
-              style={{
-                background: input.trim() ? 'linear-gradient(135deg, #fff, #f5f4ff)' : 'rgba(255,255,255,0.3)',
-                color: 'var(--brand)',
-                boxShadow: input.trim() ? '0 4px 16px rgba(255,255,255,0.4)' : 'none',
-              }}
-            >
-              <Send size={16} />
-            </button>
-          </div>
-
-          {/* Footer hint */}
-          <div className="flex items-center justify-end mt-2 px-2">
-            <p className="text-xs text-purple-200 opacity-60 hidden sm:block">
-              {input.length}/{MAX_INPUT_LENGTH} · Press{' '}
-              <kbd className="px-1.5 py-0.5 rounded text-xs" style={{ background: 'rgba(255,255,255,0.15)' }}>
-                Enter
-              </kbd>{' '}
-              to send
-            </p>
-          </div>
-        </form>
-      </main>
+            <Button type="submit" size="icon" className="size-11" disabled={loading || !input.trim()} aria-label="Send message">
+              <Send aria-hidden="true" />
+            </Button>
+          </form>
+          <p className="mt-2 text-xs text-muted-foreground">The assistant can make mistakes. For emergencies, call 911.</p>
+        </div>
+      </footer>
     </div>
   )
 }
