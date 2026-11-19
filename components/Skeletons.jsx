@@ -720,73 +720,10 @@ export function PageSkeleton({ header = {}, layout, cards = 3, maxWidth = 768, t
   return <PageFrame header={header}>{body}</PageFrame>
 }
 
-/** Header of a detail page: back, the category tile, title lines, and (from
- *  640px) the status pills — like PageHeader with actionsDesktopOnly. */
-function DetailHeaderSkeleton({ pills = true, maxWidth }) {
-  return (
-    <header className={ui.header} aria-hidden="true">
-      <Band mode="fill" dots={8} seed={3} />
-      <div className={ui.headerInner} style={maxWidth ? { maxWidth } : undefined}>
-        <span className={ui.back}><ArrowLeft size={18} strokeWidth={1.9} /></span>
-        <span className={ui.headerIcon}><Skeleton tone="brand" className="w-5 h-5 rounded-md" /></span>
-        <div className={`${ui.heading} space-y-2`}>
-          <Skeleton tone="brand" className="h-5 w-48 max-w-full" />
-          <Skeleton tone="brand" className="h-3 w-40 max-w-full" />
-        </div>
-        {pills && (
-          <div className={`${ui.headerActions} ${ui.desktopOnly}`}>
-            <Skeleton tone="brand" className="h-[26px] w-20 rounded-[9px]" />
-            <Skeleton tone="brand" className="h-[26px] w-20 rounded-[9px]" />
-          </div>
-        )}
-      </div>
-    </header>
-  )
-}
-
-/** "What was reported": text, the reporter facts, an action. */
-function ReportCardSkeleton() {
-  return (
-    <div className="white-card p-5 space-y-3">
-      <Skeleton className="h-3 w-32" />
-      <Skeleton className="h-3.5 w-full" />
-      <Skeleton className="h-3.5 w-3/4" />
-      <div className="flex flex-wrap gap-2 pt-2">
-        <Skeleton className="h-11 w-32 rounded-xl" />
-        <Skeleton className="h-11 w-44 rounded-xl" />
-      </div>
-      <Skeleton className="h-11 w-full rounded-[10px]" />
-    </div>
-  )
-}
-
-/** Location: address line, the map (same fluid height as MiniMap there), directions. */
-function LocationCardSkeleton() {
-  return (
-    <div className="white-card p-5 space-y-3">
-      <Skeleton className="h-3 w-20" />
-      <Skeleton className="h-3.5 w-40" />
-      <Skeleton className="w-full rounded-[10px]" style={{ height: 'clamp(180px, 32dvh, 340px)' }} />
-      <Skeleton className="h-11 w-full rounded-[10px]" />
-    </div>
-  )
-}
-
-function FactsCardSkeleton({ lines = 4 }) {
-  return (
-    <div className="white-card p-5 space-y-3">
-      <Skeleton className="h-3 w-28" />
-      {[...Array(lines)].map((_, i) => <Skeleton key={i} className={`h-3 ${i % 3 === 2 ? 'w-2/3' : 'w-full'}`} />)}
-    </div>
-  )
-}
-
 /**
  * Incident detail, matching each page's layout:
- * - official: two columns (1fr / 340px) from 1024px; pills under the header
- *   on phones (app/official/incident/[id]).
- * - resident: the status panel across the top, then the report and side
- *   columns of desktop.incidentPage (app/resident/incident/[id]).
+ * - official: the PageShell with two columns from 1024px (app/official/incident/[id]).
+ * - resident: the PageShell with the map on the band (app/resident/incident/[id]).
  */
 export function IncidentDetailSkeleton({ variant = 'official' }) {
   if (variant === 'resident') {
@@ -804,25 +741,33 @@ export function IncidentDetailSkeleton({ variant = 'official' }) {
       </div>
     )
   }
+  // app/official/incident/[id] on the PageShell (O03): the report card and
+  // the activity on the left; the map and the dispatch list on the right.
   return (
-    <div className="min-h-dvh bg-brand" role="status" aria-label="Loading" aria-busy="true">
-      <DetailHeaderSkeleton maxWidth={1040} />
-      <main className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
-        <div className="flex sm:hidden items-center gap-1.5 mb-3">
-          <Skeleton tone="brand" className="h-[26px] w-20 rounded-full" />
-          <Skeleton tone="brand" className="h-[26px] w-20 rounded-full" />
-        </div>
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-          <div className="space-y-4">
-            <ReportCardSkeleton />
-            <LocationCardSkeleton />
+    <div role="status" aria-label="Loading" aria-busy="true">
+      <PageShell maxWidth={1120} onBack={true}
+        title={<Skeleton tone="brand" className="h-[30px] w-72 max-w-full rounded-lg" />}
+        sub={<Skeleton tone="brand" className="mt-1 h-3.5 w-56 max-w-full" />}>
+        <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-3.5">
+            <div className="white-card shadow-[var(--shadow-lift)] px-[18px] py-4 space-y-3">
+              <div className="flex gap-1.5"><Skeleton className="h-[22px] w-16 rounded-md" /><Skeleton className="h-[22px] w-20 rounded-md" /></div>
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-4/5" />
+              <Skeleton className="h-3 w-1/2" />
+              <Skeleton className="h-16 w-full rounded-[10px]" />
+            </div>
+            <RowsCard rows={3} label />
           </div>
-          <div className="space-y-4">
-            <FactsCardSkeleton lines={6} />
-            <FactsCardSkeleton lines={3} />
+          <div className="flex flex-col gap-3.5">
+            <div className="white-card shadow-[var(--shadow-lift)] overflow-hidden">
+              <Skeleton className="h-[clamp(200px,30dvh,280px)] w-full rounded-none" />
+              <div className="px-[18px] py-3"><Skeleton className="h-3.5 w-3/5" /></div>
+            </div>
+            <RowsCard rows={2} label trailing={<Skeleton className="h-[34px] w-20 rounded-[10px]" />} />
           </div>
         </div>
-      </main>
+      </PageShell>
       <div id="page-shell-end" hidden />
     </div>
   )

@@ -8,15 +8,21 @@ import { goBack } from '@/lib/goBack'
 import { createClient } from '@/lib/supabase'
 import dynamic from 'next/dynamic'
 import {
-  MapPin, Phone, Clock, Shield, Scale, ShieldAlert, Check, Send,
-  Pencil, Star, User, X, Navigation, FileText, Bell, AlertTriangle,
+  Phone, Shield, Scale, Check, Send, Pencil, Star, X, Navigation, FileText, Bell,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { timeAgo, fullDate } from '@/lib/timeAgo'
 import { LEGAL_BASIS } from '@/lib/legalBasis'
 import { computeStanding, activeWindowLabel } from '@/lib/triage'
 import { useSignedIncidentUrl } from '@/lib/useSignedUrl'
-import { PageHeader } from '@/components/AppUI'
+import PageShell from '@/components/crafted/PageShell'
+import { Card, CardHead } from '@/components/ui/card'
+import { Rows, Row } from '@/components/ui/table'
+import { Tag, Status } from '@/components/ui/tag'
+import { Button } from '@/components/ui/button'
+import { Avatar } from '@/components/ui/avatar'
+import { Notice } from '@/components/ui/notice'
+import { Muted } from '@/components/ui/text'
 import { CategoryIcon } from '@/lib/categoryIcons'
 import { subscribeWhenSignedIn } from '@/lib/realtime'
 
@@ -36,28 +42,6 @@ const MiniMap = dynamic(() => import('@/components/MiniMap'), { ssr: false })
  * with a stated reason, a resident rates the result. Read top to bottom,
  * it is the chain of custody for a public-safety report.
  */
-
-const CATEGORY = {
-  Noise: { icon: '🔊', color: '#f97316' }, Theft: { icon: '🚨', color: '#ef4444' },
-  Violence: { icon: '⚠️', color: '#dc2626' }, Fire: { icon: '🔥', color: '#ea580c' },
-  Flood: { icon: '🌊', color: '#3b82f6' }, Infrastructure: { icon: '🛠️', color: '#8b5cf6' },
-  Animals: { icon: '🐕', color: '#a16207' }, Medical: { icon: '🚑', color: '#dc2626' },
-  Traffic: { icon: '🚦', color: '#0891b2' }, Vandalism: { icon: '🎨', color: '#7c3aed' },
-  Drugs: { icon: '💊', color: '#be185d' }, Other: { icon: '📝', color: '#6b7280' },
-}
-
-const PRIORITY = {
-  Critical: { color: '#dc2626', bg: '#fef2f2', icon: '🔴' },
-  High: { color: '#f97316', bg: '#fff7ed', icon: '🟠' },
-  Medium: { color: '#3b82f6', bg: '#eff6ff', icon: '🔵' },
-  Low: { color: '#22c55e', bg: '#f0fdf4', icon: '🟢' },
-}
-
-const STATUS = {
-  pending: { label: 'Awaiting response', color: '#c2410c', bg: '#fff7ed' },
-  assigned: { label: 'Tanod dispatched', color: '#1d4ed8', bg: '#eff6ff' },
-  resolved: { label: 'Resolved', color: '#15803d', bg: '#f0fdf4' },
-}
 
 /* ---------------------------------------------------------------------------
    Timeline construction. Each entry is a fact the database recorded, not a
@@ -161,14 +145,6 @@ function buildTimeline(inc, people) {
   })
 }
 
-const TONE = {
-  neutral: { dot: '#5B54E8', bg: '#f0effe' },
-  legal: { dot: '#7C75F0', bg: '#f0effe' },
-  warn: { dot: '#dc2626', bg: '#fef2f2' },
-  override: { dot: '#d97706', bg: '#fffbeb' },
-  good: { dot: '#16a34a', bg: '#f0fdf4' },
-}
-
 export default function IncidentDetail() {
   const router = useRouter()
   const params = useParams()
@@ -259,9 +235,12 @@ export default function IncidentDetail() {
   const timeline = useMemo(() => buildTimeline(incident, people), [incident, people])
   const basis = incident ? LEGAL_BASIS[incident.category] : null
   const standing = incident ? computeStanding(incident) : null
-  const cat = incident ? (CATEGORY[incident.category] || CATEGORY.Other) : CATEGORY.Other
-  const pri = incident ? (PRIORITY[incident.priority] || PRIORITY.Medium) : PRIORITY.Medium
-  const st = incident ? (STATUS[incident.status] || STATUS.pending) : STATUS.pending
+  // The dispatch list: on duty first, then by name.
+  const sortedTanods = useMemo(
+    () => [...tanods].sort((a, b) => (b.on_duty === true) - (a.on_duty === true) ||
+      (a.full_name || '').localeCompare(b.full_name || '')),
+    [tanods]
+  )
 
   async function resolve() {
     setBusy(true)
@@ -294,357 +273,230 @@ export default function IncidentDetail() {
 
   if (notFound) {
     return (
-      <div className="min-h-dvh bg-brand flex items-center justify-center p-6">
-        <div className="white-card p-8 text-center max-w-sm">
-          <AlertTriangle size={28} className="mx-auto mb-3 text-orange-400" />
-          <h1 className="text-lg font-bold text-gray-800">Incident not found</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            It may have been deleted, or the link is wrong.
-          </p>
-          <button onClick={() => router.replace('/official')}
-            className="btn-primary mt-5 px-5 py-2.5 rounded-2xl text-white text-sm font-bold">
-            Back to dashboard
-          </button>
-        </div>
-      </div>
+      <PageShell title="Incident" onBack={() => goBack(router, '/official?section=incidents')}>
+        <Card className="px-[18px] py-5">
+          <h2 className="text-[15px] font-extrabold text-ink">Incident not found</h2>
+          <Muted className="mt-1">It may have been deleted, or the link is wrong.</Muted>
+          <Button variant="secondary" className="mt-4" onClick={() => router.replace('/official?section=incidents')}>Back to incidents</Button>
+        </Card>
+      </PageShell>
     )
   }
 
   const assignedTanod = incident.assigned_to ? people[incident.assigned_to] : null
+  const resolved = incident.status === 'resolved'
+  const pending = incident.status === 'pending'
+  const hasMap = Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
+  const reporter = incident.profiles?.full_name || 'a resident'
+  const stateLabel = resolved ? 'Resolved' : pending ? 'Unassigned' : incident.arrived_at ? 'Tanod on scene' : incident.acknowledged_at ? 'Tanod on the way' : 'Dispatched'
+  const stateTone = resolved ? 'quiet' : pending ? (incident.priority === 'Critical' ? 'danger' : 'warn') : incident.acknowledged_at ? 'ok' : 'info'
+  const resolveButton = (variant, extra = {}) => (
+    <Button variant={variant} onClick={resolve} disabled={busy} aria-busy={busy || undefined} {...extra}>
+      <Check aria-hidden="true" />Mark resolved
+    </Button>
+  )
 
   return (
-    <div className="min-h-dvh bg-brand">
-      <style>{`
-        .idt-line::before {
-          content: ''; position: absolute; left: 15px; top: 30px; bottom: -14px;
-          width: 2px; background: var(--brand-border);
-        }
-        .idt-item:last-child .idt-line::before { display: none; }
-        .idt-press { transition: transform 120ms ease; }
-        .idt-press:active { transform: scale(0.97); }
-        @media (prefers-reduced-motion: no-preference) {
-          @keyframes idtIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-          .idt-item { animation: idtIn 340ms cubic-bezier(0.22,1,0.36,1) both; }
-        }
-      `}</style>
+    <PageShell
+      maxWidth={1120}
+      eyebrow={`Reported ${timeAgo(incident.created_at)}`}
+      title={incident.title}
+      sub={`${incident.location || 'No location given'} · reported by ${reporter}`}
+      onBack={() => goBack(router, '/official?section=incidents')}
+      backLabel="Back to incidents"
+      actions={!resolved && <span className="hidden desk:flex">{resolveButton('white')}</span>}
+      footer={!resolved && resolveButton('primary', { size: 'lg', className: 'w-full' })}
+      footerPhoneOnly>
+      <div ref={mainRef} className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
 
-      {/* Header */}
-      <PageHeader
-        title={incident.title}
-        description={`${incident.category} · reported ${timeAgo(incident.created_at)}`}
-        iconElement={<CategoryIcon category={incident.category} size={21} />}
-        iconStyle={{ background: `${cat.color}18`, color: cat.color }}
-        onBack={() => goBack(router, '/official?section=incidents')}
-        actionsDesktopOnly
-        maxWidth={1040}
-        actions={<>
-          <Pill bg={pri.bg} color={pri.color}>{pri.icon} {incident.priority}</Pill>
-          <Pill bg={st.bg} color={st.color}>{st.label}</Pill>
-        </>}
-      />
+        {/* ---------------- LEFT: the incident itself ---------------- */}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <Card lift>
+            {incident.image_url && (
+              <PhotoCard src={incident.image_url} label="Photo from the reporter"
+                onOpen={(url) => setLightbox({ src: url, alt: 'Reported photo' })} />
+            )}
+            <div className="space-y-3 px-[18px] py-4">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Tag tone={PRIORITY_TONE[incident.priority] || 'quiet'}>{incident.priority}</Tag>
+                <Tag tone="brand"><CategoryIcon category={incident.category} size={13} />{incident.category}</Tag>
+                <Status tone={stateTone} className="ml-1">{stateLabel}</Status>
+              </div>
+              <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-body">{incident.description}</p>
+              <p className="text-xs text-muted-foreground">
+                Reported by {reporter}
+                {incident.profiles?.phone ? <> · <a href={`tel:${incident.profiles.phone.replace(/[^0-9+]/g, '')}`} className="font-bold text-brand-strong hover:underline">{incident.profiles.phone}</a></> : null}
+                {' · '}<time dateTime={incident.created_at} title={fullDate(incident.created_at)}>{fullDate(incident.created_at)}</time>
+              </p>
 
-      <main ref={mainRef} className="max-w-5xl mx-auto px-4 py-5 pb-28 lg:pb-8">
-        {/* Mobile pills */}
-        <div className="flex sm:hidden items-center gap-1.5 mb-3">
-          <Pill bg={pri.bg} color={pri.color}>{pri.icon} {incident.priority}</Pill>
-          <Pill bg={st.bg} color={st.color}>{st.label}</Pill>
-          {standing?.aged && incident.status !== 'resolved' && (
-            <Pill bg="#fffbeb" color="#b45309"><Clock size={9} /> {standing.label}</Pill>
-          )}
-        </div>
+              {standing?.aged && !resolved && (
+                <Notice tone={standing.level >= 2 ? 'danger' : 'warn'} title={standing.label}>
+                  {incident.priority} reports target {activeWindowLabel(incident)}. This one has waited {timeAgo(incident.created_at).replace(' ago', '')}.
+                  {standing.phase === 'response' && ' Nobody has acknowledged it or chosen the responder yet; an automatic assignment does not count.'}
+                </Notice>
+              )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
-
-          {/* ---------------- LEFT: the incident itself ---------------- */}
-          <div className="space-y-4">
-
-            {/* Overdue banner */}
-            {standing?.aged && incident.status !== 'resolved' && (
-              <div className="rounded-2xl px-4 py-3 flex items-start gap-2.5"
-                style={{ background: '#fffbeb', border: '1px solid #fef3c7' }}>
-                <Clock size={15} className="flex-shrink-0 mt-0.5 text-amber-600" />
-                <div>
-                  <p className="text-xs font-black text-amber-800">{standing.label}</p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    {incident.priority} incidents target {activeWindowLabel(incident)}.
-                    This one has been waiting {timeAgo(incident.created_at).replace(' ago', '')}.
-                    {standing.phase === 'response' && ' Nobody has acknowledged it or chosen the responder yet — an automatic assignment does not count.'}
+              {basis?.law && (
+                <div className="rounded-[10px] bg-info-soft px-3.5 py-3">
+                  <p className="text-xs font-extrabold tracking-[0.04em] text-info uppercase">
+                    Who leads · {basis.law}{basis.sections ? `, ${basis.sections}` : ''}
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-ink">{basis.reason}</p>
+                  {basis.responseMode === 'refer_to_agency' && basis.agency && (
+                    <p className="mt-1.5 text-sm font-bold text-ink">{basis.agency} has authority here. Tanods document and assist only.</p>
+                  )}
+                  {basis.provision && <p className="mt-1.5 text-xs leading-relaxed text-body">{basis.provision}</p>}
+                  <p className="mt-1.5 text-xs text-muted-foreground">
+                    {basis.lawTitle}
+                    {basis.source && <> · <a href={basis.source} target="_blank" rel="noopener noreferrer" className="font-bold text-brand-strong hover:underline">Read the law</a></>}
                   </p>
                 </div>
-              </div>
-            )}
-
-            <div className="white-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
-                What was reported
-              </p>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                {incident.description}
-              </p>
-
-              <div className="flex flex-wrap gap-2 mt-4 pt-4" style={{ borderTop: '1px solid #f7f6ff' }}>
-                <Meta icon={User} label="Reporter" value={incident.profiles?.full_name || 'Unknown'} />
-                <Meta icon={Clock} label="Reported" value={fullDate(incident.created_at)} />
-              </div>
-
-              {incident.profiles?.phone && (
-                <a href={`tel:${incident.profiles.phone.replace(/[^0-9+]/g, '')}`}
-                  className="idt-press mt-3 flex items-center justify-center gap-2 h-10 rounded-2xl text-xs font-bold"
-                  style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #dcfce7' }}>
-                  <Phone size={13} /> Call {incident.profiles.full_name?.split(' ')[0] || 'reporter'}
-                </a>
               )}
             </div>
+          </Card>
 
-            {/* Photos */}
-            {(incident.image_url || incident.resolution_image_url) && (
-              <div className="white-card p-5">
-                <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-3">Photos</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {incident.image_url && (
-                    <PhotoCard src={incident.image_url} label="Reported by resident"
-                      onOpen={(url) => setLightbox({ src: url, alt: 'Reported photo' })} />
-                  )}
-                  {incident.resolution_image_url && (
-                    <PhotoCard src={incident.resolution_image_url} label="Resolution proof"
-                      onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Location */}
-            <div className="white-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">Location</p>
-              <p className="text-sm text-gray-700 flex items-start gap-1.5 mb-3">
-                <MapPin size={14} className="flex-shrink-0 mt-0.5" style={{ color: cat.color }} />
-                {incident.location || 'No location description given'}
-              </p>
-              {Number.isFinite(incident.latitude) ? (
-                <>
-                  <MiniMap lat={incident.latitude} lng={incident.longitude} height="clamp(180px, 32dvh, 340px)" />
-                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${incident.latitude},${incident.longitude}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="idt-press mt-3 flex items-center justify-center gap-2 h-10 rounded-2xl text-xs font-bold"
-                    style={{ background: 'var(--app-surface)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-                    <Navigation size={13} /> Open directions
-                  </a>
-                </>
-              ) : (
-                <p className="text-xs text-gray-500 px-3 py-6 rounded-2xl text-center"
-                  style={{ background: 'var(--app-surface)', border: '1px dashed var(--brand-border)' }}>
-                  No map pin — this was reported without coordinates.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ---------------- RIGHT: audit trail + actions ---------------- */}
-          <div className="space-y-4">
-
-            {/* Legal basis */}
-            {basis?.law && (
-              <div className="white-card p-4">
-                <div className="flex items-start gap-2">
-                  <Scale size={14} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--brand)' }} />
+          {/* What happened, in order: every fact the database recorded. */}
+          <Card>
+            <CardHead title="Activity" />
+            <ol className="border-t border-line">
+              {timeline.map((e, i) => (
+                <li key={i} className="grid grid-cols-[74px_minmax(0,1fr)] gap-3 border-b border-line px-[18px] py-3 last:border-b-0">
+                  <time className="pt-px text-xs font-bold text-muted-foreground" dateTime={e.at || undefined} title={e.at ? fullDate(e.at) : undefined}>
+                    {e.at ? clock(e.at) : '—'}
+                  </time>
                   <div className="min-w-0">
-                    <p className="text-xs font-black uppercase tracking-wider" style={{ color: 'var(--brand)' }}>
-                      Legal basis
-                    </p>
-                    <p className="text-xs font-bold text-gray-800 mt-1">
-                      {basis.law}{basis.sections ? `, ${basis.sections}` : ''}
-                    </p>
-                    <p className="text-xs text-gray-500">{basis.lawTitle}</p>
-                    {/* The text of the cited provision, so an official can
-                        check the classification instead of trusting it. */}
-                    {basis.provision && (
-                      <p className="text-xs text-gray-600 mt-2 leading-relaxed">{basis.provision}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2 leading-relaxed">{basis.reason}</p>
-                    {basis.source && (
-                      <a href={basis.source} target="_blank" rel="noopener noreferrer"
-                        className="inline-block text-xs font-semibold mt-2 underline" style={{ color: 'var(--brand)' }}>
-                        Read the law
-                      </a>
+                    <p className="text-sm font-bold" style={{ color: TONE_COLOR[e.tone] || 'var(--ink)' }}>{e.title}</p>
+                    {e.body && <p className="mt-0.5 text-[13px] leading-relaxed text-body">{e.body}</p>}
+                    {e.quote && <p className="mt-1 text-[13px] text-body italic">&ldquo;{e.quote}&rdquo;</p>}
+                    {e.note && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{e.note}</p>}
+                    {e.photo && (
+                      <TimelinePhoto stored={e.photo}
+                        onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
                     )}
                   </div>
-                </div>
+                </li>
+              ))}
+              {/* An unfinished incident says so, rather than just ending. */}
+              {!resolved && (
+                <li className="grid grid-cols-[74px_minmax(0,1fr)] gap-3 px-[18px] py-3">
+                  <span className="text-xs font-bold text-muted-foreground">Now</span>
+                  <p className="text-[13px] text-muted-foreground">{pending ? 'Waiting for a responder.' : 'Response in progress.'}</p>
+                </li>
+              )}
+            </ol>
+          </Card>
+        </div>
 
-                {basis.responseMode === 'refer_to_agency' && basis.agency && (
-                  <div className="mt-3 px-3 py-2 rounded-xl flex items-start gap-2"
-                    style={{ background: '#fff7ed', border: '1px solid #fed7aa' }}>
-                    <ShieldAlert size={12} className="flex-shrink-0 mt-0.5 text-orange-600" />
-                    <p className="text-xs text-orange-800 leading-relaxed">
-                      <strong>{basis.agency}</strong> has authority here. Tanods document and assist only.
-                    </p>
-                  </div>
-                )}
+        {/* ---------------- RIGHT: where, and who responds ---------------- */}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <Card lift>
+            {hasMap ? (
+              <div className="relative border-b border-line">
+                <MiniMap bare lat={incident.latitude} lng={incident.longitude} height="clamp(200px, 30dvh, 280px)" />
+                <a href={`https://www.google.com/maps/dir/?api=1&destination=${incident.latitude},${incident.longitude}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="absolute top-3 left-3 z-[500] inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-line bg-surface px-3 text-[13px] font-bold text-ink shadow-[var(--shadow-lift)] hover:border-line-strong">
+                  <Navigation size={15} aria-hidden="true" />Get directions
+                </a>
               </div>
+            ) : (
+              <Muted className="border-b border-line px-[18px] py-5">No map pin: this was reported without coordinates.</Muted>
             )}
-
-            {/* Assigned responder */}
-            {assignedTanod && (
-              <div className="white-card p-4">
-                <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-2">
-                  Assigned responder
-                </p>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-xs flex-shrink-0"
-                    style={{ background: assignedTanod.on_duty ? '#22c55e' : '#9ca3af' }}>
-                    {assignedTanod.full_name?.[0]?.toUpperCase() || 'T'}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-gray-800 truncate">{assignedTanod.full_name}</p>
-                    <p className="text-xs text-gray-500">
-                      {assignedTanod.on_duty ? 'On duty' : 'Off duty'}
-                      {incident.assignment_method === 'auto' && ' · auto-assigned'}
-                      {incident.assignment_method === 'auto_offduty' && ' · fallback assignment'}
-                      {incident.assignment_method === 'manual' && ' · dispatched by an official'}
-                    </p>
-                  </div>
-                  {assignedTanod.phone && (
-                    <a href={`tel:${assignedTanod.phone.replace(/[^0-9+]/g, '')}`}
-                      aria-label={`Call ${assignedTanod.full_name}`}
-                      className="idt-press w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: '#eff6ff' }}>
-                      <Phone size={13} className="text-blue-500" />
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* ===== THE TIMELINE — the reason this page exists ===== */}
-            <div className="white-card p-5">
-              <p className="text-xs font-black uppercase tracking-wider text-gray-500 mb-4">
-                What happened, in order
+            <div className="px-[18px] py-3">
+              <p className="text-sm text-ink">
+                <strong>{incident.location || 'No location description'}</strong>
+                {hasMap && <span className="text-body"> · {incident.latitude.toFixed(4)}, {incident.longitude.toFixed(4)}</span>}
               </p>
-              <div className="space-y-4">
-                {timeline.map((e, i) => {
-                  const tone = TONE[e.tone] || TONE.neutral
-                  const Icon = e.icon
-                  return (
-                    <div key={i} className="idt-item relative flex gap-3"
-                      style={{ animationDelay: `${Math.min(i, 8) * 55}ms` }}>
-                      <div className="idt-line relative flex-shrink-0">
-                        <div className="w-8 h-8 rounded-xl flex items-center justify-center relative z-10"
-                          style={{ background: tone.bg }}>
-                          <Icon size={14} style={{ color: tone.dot }} />
-                        </div>
-                      </div>
-                      <div className="min-w-0 flex-1 pb-1">
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                          <p className="text-xs font-black text-gray-800">{e.title}</p>
-                          {e.at && (
-                            <time className="text-xs text-gray-500 flex-shrink-0" title={fullDate(e.at)}>
-                              {timeAgo(e.at)}
-                            </time>
-                          )}
-                        </div>
-                        {e.body && (
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{e.body}</p>
-                        )}
-                        {e.quote && (
-                          <p className="text-xs italic mt-1.5 px-2.5 py-1.5 rounded-lg"
-                            style={{ background: tone.bg, color: tone.dot }}>
-                            &quot;{e.quote}&quot;
-                          </p>
-                        )}
-                        {e.note && (
-                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">{e.note}</p>
-                        )}
-                        {e.photo && (
-                          <TimelinePhoto stored={e.photo}
-                            onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+            </div>
+          </Card>
 
-                {/* An unfinished incident says so, rather than just ending */}
-                {incident.status !== 'resolved' && (
-                  <div className="relative flex gap-3">
-                    <div className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center"
-                      style={{ background: 'var(--app-surface)', border: '1px dashed var(--brand-border)' }}>
-                      <Clock size={13} className="text-gray-300" />
-                    </div>
-                    <p className="text-xs text-gray-500 self-center">
-                      {incident.status === 'pending' ? 'Waiting for a responder…' : 'Response in progress…'}
-                    </p>
-                  </div>
+          {pending ? (
+            <Card>
+              <CardHead title="Dispatch a tanod" sub="On duty first, then the fewest active reports" />
+              {sortedTanods.length === 0 ? (
+                <Muted className="border-t border-line px-[18px] py-5">No tanods yet. Tanods join with an invite code from Users.</Muted>
+              ) : (
+                <Rows className="border-t border-line">
+                  {sortedTanods.map((t, i) => (
+                    <Row key={t.id} className="flex items-center gap-3">
+                      <Avatar name={t.full_name} size="sm" tone={t.on_duty ? 'ok' : 'brand'} />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 truncate text-sm font-bold text-ink">
+                          <span className="truncate">{t.full_name}</span>
+                          {i === 0 && t.on_duty && <Tag tone="ok" className="shrink-0">Best match</Tag>}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{t.on_duty ? 'On duty' : 'Off duty'}{t.phone ? ` · ${t.phone}` : ''}</p>
+                      </div>
+                      <Button size="sm" variant={t.on_duty ? 'primary' : 'secondary'} disabled={busy}
+                        onClick={() => dispatchTo(t.id)} aria-label={`Dispatch ${t.full_name}`}>
+                        Dispatch
+                      </Button>
+                    </Row>
+                  ))}
+                </Rows>
+              )}
+            </Card>
+          ) : assignedTanod && (
+            <Card>
+              <CardHead title="Responder" />
+              <div className="flex items-center gap-3 border-t border-line px-[18px] py-3">
+                <Avatar name={assignedTanod.full_name} src={assignedTanod.avatar_url} size="sm" tone={assignedTanod.on_duty ? 'ok' : 'brand'} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-ink">{assignedTanod.full_name}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {assignedTanod.on_duty ? 'On duty' : 'Off duty'}
+                    {incident.assignment_method === 'auto' && ' · auto-assigned'}
+                    {incident.assignment_method === 'auto_offduty' && ' · fallback assignment'}
+                    {incident.assignment_method === 'manual' && ' · dispatched by an official'}
+                  </p>
+                </div>
+                {assignedTanod.phone && (
+                  <Button asChild variant="secondary" size="sm">
+                    <a href={`tel:${assignedTanod.phone.replace(/[^0-9+]/g, '')}`} aria-label={`Call ${assignedTanod.full_name}`}>
+                      <Phone aria-hidden="true" />Call
+                    </a>
+                  </Button>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      </main>
+            </Card>
+          )}
 
-      {/* Action bar — sticky on mobile, where the buttons are hardest to reach */}
-      {incident.status !== 'resolved' && (
-        <div className="fixed bottom-0 left-0 right-0 lg:sticky lg:bottom-4 z-30 px-4 py-3 lg:max-w-5xl lg:mx-auto"
-          style={{
-            background: 'rgba(255,255,255,0.96)',
-            backdropFilter: 'blur(10px)',
-            borderTop: '1px solid var(--brand-soft)',
-            paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-          }}>
-          <div className="flex gap-2 max-w-5xl mx-auto">
-            {incident.status === 'pending' && (
-              <TanodSelect tanods={tanods} onPick={dispatchTo} busy={busy} />
-            )}
-            <button onClick={resolve} disabled={busy}
-              className="idt-press flex-1 h-11 rounded-2xl text-xs font-black text-white flex items-center justify-center gap-1.5 disabled:opacity-50"
-              style={{ background: '#22c55e', boxShadow: '0 6px 20px rgba(34,197,94,0.3)' }}>
-              <Check size={14} /> Mark resolved
-            </button>
-          </div>
+          {incident.resolution_image_url && (
+            <Card>
+              <CardHead title="Resolution proof" />
+              <PhotoCard src={incident.resolution_image_url} label="Photo from the responder"
+                onOpen={(url) => setLightbox({ src: url, alt: 'Resolution photo' })} />
+            </Card>
+          )}
         </div>
-      )}
+      </div>
 
       {lightbox && (
-        <div className="fixed inset-0 flex items-center justify-center p-4"
-          style={{
-            background: 'rgba(0,0,0,0.8)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 9999,                                   
-          }}
-          onClick={() => setLightbox(null)} role="dialog" aria-modal="true">
-          <button onClick={() => setLightbox(null)} aria-label="Close"
-            className="absolute top-4 right-4 w-10 h-10 rounded-2xl flex items-center justify-center text-white"
-            style={{ background: 'rgba(255,255,255,0.15)', zIndex: 10000 }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[rgba(10,9,30,0.82)] p-4"
+          onClick={() => setLightbox(null)} role="dialog" aria-modal="true" aria-label={lightbox.alt}>
+          <button type="button" onClick={() => setLightbox(null)} aria-label="Close"
+            className="absolute top-4 right-4 flex size-10 items-center justify-center rounded-[10px] bg-[var(--onband)] text-white">
             <X size={18} />
           </button>
           <img src={lightbox.src} alt={lightbox.alt} onClick={e => e.stopPropagation()}
-            style={{ maxWidth: '100%', maxHeight: '85dvh', borderRadius: 16, objectFit: 'contain' }} />
+            className="max-h-[85dvh] max-w-full rounded-[14px] object-contain" />
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }
 
 /* ------------------------------- bits ------------------------------- */
 
-function Pill({ children, bg, color }) {
-  return (
-    <span className="px-2 py-1 rounded-lg text-xs font-black flex items-center gap-1 flex-shrink-0"
-      style={{ background: bg, color }}>
-      {children}
-    </span>
-  )
-}
+const PRIORITY_TONE = { Critical: 'danger', High: 'warn', Medium: 'quiet', Low: 'quiet' }
+const TONE_COLOR = { warn: 'var(--danger)', override: 'var(--warn)', good: 'var(--ok)' }
 
-function Meta({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl"
-      style={{ background: 'var(--app-surface)', border: '1px solid var(--brand-soft)' }}>
-      <Icon size={12} className="text-gray-500 flex-shrink-0" />
-      <div className="min-w-0">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-500 leading-none">{label}</p>
-        <p className="text-xs font-semibold text-gray-700 truncate mt-0.5">{value}</p>
-      </div>
-    </div>
-  )
+/** "7:42 PM" today, "Nov 16" before that. */
+function clock(at) {
+  const d = new Date(at)
+  return d.toDateString() === new Date().toDateString()
+    ? d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })
 }
 
 // `src` is the stored path; the bucket is private, so sign it here and hand
@@ -653,12 +505,10 @@ function PhotoCard({ src, label, onOpen }) {
   const signed = useSignedIncidentUrl(src)
   if (!signed) return null
   return (
-    <button onClick={() => onOpen(signed)} className="idt-press text-left rounded-2xl overflow-hidden w-full"
-      style={{ border: '1px solid var(--brand-soft)' }}>
-      <img src={signed} alt={label} className="w-full h-32 object-cover" loading="lazy" />
-      <p className="text-xs font-bold text-gray-500 px-2.5 py-1.5" style={{ background: 'var(--app-surface)' }}>
-        {label}
-      </p>
+    <button type="button" onClick={() => onOpen(signed)} aria-label={`View ${label.toLowerCase()}`}
+      className="relative block w-full border-b border-line outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-strong">
+      <img src={signed} alt={label} className="h-56 w-full object-cover" loading="lazy" />
+      <span className="absolute bottom-3 left-3 rounded-md bg-surface px-2 py-1 text-xs font-bold text-body">{label}</span>
     </button>
   )
 }
@@ -667,74 +517,10 @@ function TimelinePhoto({ stored, onOpen }) {
   const signed = useSignedIncidentUrl(stored)
   if (!signed) return null
   return (
-    <button onClick={() => onOpen(signed)}
+    <button type="button" onClick={() => onOpen(signed)}
       aria-label="View resolution photo"
-      className="idt-press mt-2 w-16 h-16 rounded-lg overflow-hidden block"
-      style={{ border: '1px solid var(--brand-soft)' }}>
-      <img loading="lazy" decoding="async" src={signed} alt="" className="w-full h-full object-cover" />
+      className="mt-2 block size-16 overflow-hidden rounded-lg border border-line">
+      <img loading="lazy" decoding="async" src={signed} alt="" className="size-full object-cover" />
     </button>
-  )
-}
-
-function TanodSelect({ tanods, onPick, busy }) {
-  const [open, setOpen] = useState(false)
-  const sorted = useMemo(
-    () => [...tanods].sort((a, b) => (b.on_duty === true) - (a.on_duty === true) ||
-      (a.full_name || '').localeCompare(b.full_name || '')),
-    [tanods]
-  )
-
-  return (
-    <>
-      <button onClick={() => setOpen(true)} disabled={busy}
-        className="idt-press flex-1 h-11 rounded-2xl text-xs font-black flex items-center justify-center gap-1.5 disabled:opacity-50"
-        style={{ background: 'var(--brand-soft)', color: 'var(--brand)', border: '1px solid var(--brand-border)' }}>
-        <Send size={14} /> Dispatch tanod
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4"
-          style={{ background: 'rgba(17,17,27,0.45)', backdropFilter: 'blur(6px)' }}
-          onClick={() => setOpen(false)}>
-          <div onClick={e => e.stopPropagation()}
-            className="w-full sm:max-w-sm bg-white flex flex-col"
-            style={{ borderRadius: '24px 24px 0 0', maxHeight: '80dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-            <div className="px-4 py-3 flex items-center justify-between flex-shrink-0"
-              style={{ borderBottom: '1px solid var(--brand-soft)' }}>
-              <h3 className="text-sm font-bold text-gray-800">Dispatch a tanod</h3>
-              <button onClick={() => setOpen(false)} aria-label="Close"
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-100">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {sorted.length === 0 && (
-                <p className="px-4 py-8 text-center text-sm text-gray-500">No tanods registered.</p>
-              )}
-              {sorted.map(t => (
-                <button key={t.id} onClick={() => { onPick(t.id); setOpen(false) }}
-                  className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 active:bg-gray-100">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-black text-xs flex-shrink-0"
-                    style={{ background: t.on_duty ? '#22c55e' : '#9ca3af' }}>
-                    {t.full_name?.[0]?.toUpperCase() || 'T'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-800 truncate">{t.full_name}</p>
-                    <p className="text-xs text-gray-500">{t.phone || 'No phone on file'}</p>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-                    style={{
-                      background: t.on_duty ? '#f0fdf4' : '#f3f4f6',
-                      color: t.on_duty ? '#16a34a' : '#9ca3af',
-                    }}>
-                    {t.on_duty ? 'On duty' : 'Off duty'}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </>
   )
 }

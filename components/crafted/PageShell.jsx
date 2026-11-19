@@ -19,16 +19,17 @@ import styles from './shell.module.css'
  *   bandContent   more content on the band, under the title (a segmented
  *                 control, a greeting…)
  *   footer        the bottom action bar
+ *   footerPhoneOnly  the bar only on phones (desktop puts the action on the band)
  *   maxWidth      the content column (default 640; the band spans the page)
  *   extend/fade   how far the band reaches under the content (Band props)
  */
 export default function PageShell({
   title, sub, subOnDesktop = false, eyebrow, onBack, backLabel = 'Back', actions, bandContent, footer, children,
-  maxWidth = 640, extend, fade, large = false, className = '',
+  maxWidth = 640, extend, fade, large = false, footerPhoneOnly = false, className = '',
 }) {
   const column = { maxWidth }
   return (
-    <div className={`${styles.page} ${className}`} data-footer={footer ? '' : undefined}>
+    <div className={`${styles.page} ${className}`} data-footer={footer ? (footerPhoneOnly ? 'phone' : '') : undefined}>
       <div className={styles.pageHead}>
         <Band seed={5} dots={12} extend={extend} fade={fade} />
         <div className={styles.pageHeadInner} style={column}>
@@ -61,7 +62,7 @@ export default function PageShell({
         </div>
       </div>
       <div className={styles.pageBody} style={column}>{children}</div>
-      {footer && <div className={styles.footerBar}><div className={styles.footerInner} style={column}>{footer}</div></div>}
+      {footer && <div className={`${styles.footerBar} ${footerPhoneOnly ? styles.phoneOnlyBar : ''}`}><div className={styles.footerInner} style={column}>{footer}</div></div>}
     </div>
   )
 }

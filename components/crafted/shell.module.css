@@ -133,6 +133,8 @@
 .footerInner { margin-inline: auto; display: flex; flex-direction: column; gap: 10px; }
 
 @media (min-width: 768px) and (min-height: 500px) {
+  .phoneOnlyBar { display: none; }
+  .page[data-footer='phone'] .pageBody { padding-bottom: 32px; }
   .pageHead { padding: 22px 28px 20px; }
   .pageTop { align-items: flex-end; gap: 16px; }
   .pageEyebrow { display: block; }
